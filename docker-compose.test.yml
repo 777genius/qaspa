@@ -1,0 +1,95 @@
+# Docker Compose for ML-DSA Testing
+#
+# Usage:
+#   docker-compose -f docker-compose.test.yml up mldsa-transaction-test
+#   docker-compose -f docker-compose.test.yml up mldsa-propagation-test
+#   docker-compose -f docker-compose.test.yml up all-mldsa-tests
+
+version: '3.8'
+
+services:
+  # Base service with build configuration
+  base:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: kaspa-mldsa-test:latest
+    volumes:
+      # Mount cargo cache for faster rebuilds (optional)
+      - cargo-cache:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+    environment:
+      - RUST_BACKTRACE=1
+      - RUST_LOG=info
+
+  # ML-DSA Transaction Creation and Mining Test
+  mldsa-transaction-test:
+    extends: base
+    command: >
+      cargo test -p kaspa-txscript --release
+      test_mldsa_transaction_creation_and_mining
+      -- --ignored --nocapture
+
+  # ML-DSA Transaction Propagation Test
+  mldsa-propagation-test:
+    extends: base
+    command: >
+      cargo test -p kaspa-txscript --release
+      test_mldsa_transaction_propagation
+      -- --ignored --nocapture
+
+  # All ML-DSA E2E Tests
+  all-mldsa-tests:
+    extends: base
+    command: >
+      cargo test -p kaspa-txscript --release
+      mldsa_transactions_e2e
+      -- --ignored --nocapture
+
+  # Network Integration Tests
+  network-tests:
+    extends: base
+    command: >
+      bash -c "
+      echo '🚀 Running Network E2E Tests' &&
+      ./tests/network_e2e.sh
+      "
+
+  # All E2E Tests (ML-DSA signature tests)
+  e2e-comprehensive:
+    extends: base
+    command: >
+      cargo test -p kaspa-txscript --release
+      e2e_comprehensive
+      -- --ignored --nocapture
+
+  # All Integration Tests
+  all-integration-tests:
+    extends: base
+    command: >
+      bash -c "
+      echo '===== ML-DSA Unit Tests =====' &&
+      cargo test -p kaspa-mldsa --release &&
+      echo '' &&
+      echo '===== ML-DSA Integration Tests =====' &&
+      cargo test -p kaspa-txscript --release integration_mldsa -- --ignored --nocapture &&
+      echo '' &&
+      echo '===== ML-DSA E2E Comprehensive Tests =====' &&
+      cargo test -p kaspa-txscript --release e2e_comprehensive -- --ignored --nocapture &&
+      echo '' &&
+      echo '===== ML-DSA Transaction E2E Tests =====' &&
+      cargo test -p kaspa-txscript --release mldsa_transactions_e2e -- --ignored --nocapture &&
+      echo '' &&
+      echo '🎉 All tests completed!'
+      "
+
+  # Interactive shell for debugging
+  shell:
+    extends: base
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+
+volumes:
+  cargo-cache:
+  cargo-git:
