@@ -174,15 +174,17 @@ impl TestNode {
         let mut utxos = Vec::new();
         for entry in entries {
             let outpoint = &entry["outpoint"];
+            let utxo_entry = &entry["utxoEntry"];
             utxos.push(UtxoInfo {
                 transaction_id: outpoint["transactionId"].as_str().unwrap_or("").to_string(),
                 index: outpoint["index"].as_u64().unwrap_or(0) as u32,
-                amount: entry["utxoEntry"]["amount"].as_u64().unwrap_or(0),
-                script_public_key: entry["utxoEntry"]["scriptPublicKey"]["scriptPublicKey"]
+                amount: utxo_entry["amount"].as_u64().unwrap_or(0),
+                script_public_key: utxo_entry["scriptPublicKey"]["scriptPublicKey"]
                     .as_str()
                     .unwrap_or("")
                     .to_string(),
-                block_daa_score: entry["utxoEntry"]["blockDaaScore"].as_u64().unwrap_or(0),
+                block_daa_score: utxo_entry["blockDaaScore"].as_u64().unwrap_or(0),
+                is_coinbase: utxo_entry["isCoinbase"].as_bool().unwrap_or(false),
             });
         }
 
@@ -222,6 +224,7 @@ struct UtxoInfo {
     amount: u64,
     script_public_key: String,
     block_daa_score: u64,
+    is_coinbase: bool,
 }
 
 /// Test wallet with ML-DSA keypair
@@ -294,7 +297,7 @@ impl MLDSAWallet {
             let script_bytes = hex::decode(&utxo.script_public_key)?;
             let script_pubkey = ScriptPublicKey::new(0, script_bytes.into());
 
-            utxo_entries.push(UtxoEntry::new(utxo.amount, script_pubkey, utxo.block_daa_score, false));
+            utxo_entries.push(UtxoEntry::new(utxo.amount, script_pubkey, utxo.block_daa_score, utxo.is_coinbase));
         }
 
         // Sign transaction

@@ -77,10 +77,13 @@ impl TestNode {
 
     fn check_rpc(&self) -> bool {
         // Try to connect to RPC
-        let client = reqwest::blocking::Client::builder()
+        let client = match reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(2))
             .build()
-            .ok()?;
+        {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
 
         let response = client
             .post(&format!("http://127.0.0.1:{}", self.rpc_port))
@@ -137,6 +140,7 @@ impl Drop for TestNode {
 
 struct TestNetwork {
     nodes: Vec<TestNode>,
+    next_id: usize,
 }
 
 impl TestNetwork {
@@ -147,11 +151,13 @@ impl TestNetwork {
 
         TestNetwork {
             nodes: Vec::new(),
+            next_id: 1,
         }
     }
 
     fn add_node(&mut self, seed_port: Option<u16>) -> Result<(), Box<dyn std::error::Error>> {
-        let id = self.nodes.len() + 1;
+        let id = self.next_id;
+        self.next_id += 1;
         println!("  Starting node {}...", id);
 
         let node = TestNode::spawn(id, seed_port)?;
