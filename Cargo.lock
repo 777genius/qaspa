@@ -3212,6 +3212,7 @@ dependencies = [
  "kaspa-addresses",
  "kaspa-consensus-core",
  "kaspa-hashes",
+ "kaspa-mldsa",
  "kaspa-txscript-errors",
  "kaspa-utils",
  "kaspa-wasm-core",

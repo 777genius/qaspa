@@ -128,7 +128,7 @@ impl TryFrom<&str> for Prefix {
 }
 
 ///
-///  Kaspa `Address` version (`PubKey`, `PubKey ECDSA`, `ScriptHash`)
+///  Kaspa `Address` version (`PubKey`, `PubKey ECDSA`, `PubKey ML-DSA`, `ScriptHash`)
 ///
 /// @category Address
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -140,6 +140,9 @@ pub enum Version {
     PubKey = 0,
     /// PubKey ECDSA addresses always have the version byte set to 1
     PubKeyECDSA = 1,
+    /// PubKey ML-DSA addresses always have the version byte set to 2
+    /// Uses ML-DSA Level 2 (1312 bytes) for post-quantum security
+    PubKeyMLDSA = 2,
     /// ScriptHash addresses always have the version byte set to 8
     ScriptHash = 8,
 }
@@ -151,6 +154,7 @@ impl TryFrom<&str> for Version {
         match value {
             "PubKey" => Ok(Version::PubKey),
             "PubKeyECDSA" => Ok(Version::PubKeyECDSA),
+            "PubKeyMLDSA" => Ok(Version::PubKeyMLDSA),
             "ScriptHash" => Ok(Version::ScriptHash),
             _ => Err(AddressError::InvalidVersionString(value.to_owned())),
         }
@@ -162,6 +166,7 @@ impl Version {
         match self {
             Version::PubKey => 32,
             Version::PubKeyECDSA => 33,
+            Version::PubKeyMLDSA => 1312, // ML-DSA Level 2 public key size
             Version::ScriptHash => 32,
         }
     }
@@ -174,6 +179,7 @@ impl TryFrom<u8> for Version {
         match value {
             0 => Ok(Version::PubKey),
             1 => Ok(Version::PubKeyECDSA),
+            2 => Ok(Version::PubKeyMLDSA),
             8 => Ok(Version::ScriptHash),
             _ => Err(AddressError::InvalidVersion(value)),
         }
@@ -185,6 +191,7 @@ impl Display for Version {
         match self {
             Version::PubKey => write!(f, "PubKey"),
             Version::PubKeyECDSA => write!(f, "PubKeyECDSA"),
+            Version::PubKeyMLDSA => write!(f, "PubKeyMLDSA"),
             Version::ScriptHash => write!(f, "ScriptHash"),
         }
     }
@@ -193,10 +200,10 @@ impl Display for Version {
 /// Size of the payload vector of an address.
 ///
 /// This size is the smallest SmallVec supported backing store size greater or equal to the largest
-/// possible payload, which is 33 for [`Version::PubKeyECDSA`].
-pub const PAYLOAD_VECTOR_SIZE: usize = 36;
+/// possible payload, which is 1312 for [`Version::PubKeyMLDSA`].
+pub const PAYLOAD_VECTOR_SIZE: usize = 1312;
 
-/// Used as the underlying type for address payload, optimized for the largest version length (33).
+/// Used as the underlying type for address payload, optimized for the largest version length (1312).
 pub type PayloadVec = SmallVec<[u8; PAYLOAD_VECTOR_SIZE]>;
 
 /// Kaspa [`Address`] struct that serializes to and from an address format string: `kaspa:qz0s...t8cv`.

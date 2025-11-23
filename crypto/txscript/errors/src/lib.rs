@@ -59,6 +59,8 @@ pub enum TxScriptError {
     PubKeyFormat,
     #[error("invalid signature length {0}")]
     SigLength(usize),
+    #[error("invalid public key length {0}")]
+    InvalidPublicKeyLen(usize),
     #[error("no scripts to run")]
     NoScripts,
     #[error("signature script is not push only")]

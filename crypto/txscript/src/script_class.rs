@@ -26,6 +26,8 @@ pub enum ScriptClass {
     PubKey,
     /// Pay to pubkey ECDSA
     PubKeyECDSA,
+    /// Pay to pubkey ML-DSA (post-quantum)
+    PubKeyMLDSA,
     /// Pay to script hash
     ScriptHash,
 }
@@ -33,6 +35,7 @@ pub enum ScriptClass {
 const NON_STANDARD: &str = "nonstandard";
 const PUB_KEY: &str = "pubkey";
 const PUB_KEY_ECDSA: &str = "pubkeyecdsa";
+const PUB_KEY_MLDSA: &str = "pubkeymldsa";
 const SCRIPT_HASH: &str = "scripthash";
 
 impl ScriptClass {
@@ -43,6 +46,8 @@ impl ScriptClass {
                 ScriptClass::PubKey
             } else if Self::is_pay_to_pubkey_ecdsa(script_public_key_) {
                 Self::PubKeyECDSA
+            } else if Self::is_pay_to_pubkey_mldsa(script_public_key_) {
+                Self::PubKeyMLDSA
             } else if Self::is_pay_to_script_hash(script_public_key_) {
                 Self::ScriptHash
             } else {
@@ -71,6 +76,19 @@ impl ScriptClass {
         (script_public_key[34] == opcodes::codes::OpCheckSigECDSA)
     }
 
+    /// Returns true if the script passed is an ML-DSA pay-to-pubkey
+    /// transaction, false otherwise.
+    #[inline(always)]
+    pub fn is_pay_to_pubkey_mldsa(script_public_key: &[u8]) -> bool {
+        // OpPushData2 (1) + length bytes (2) + 1312 data + OpCheckSigMLDSA (1) = 1316 bytes
+        (script_public_key.len() == 1316) &&
+        (script_public_key[0] == opcodes::codes::OpPushData2) &&
+        // Check length is 1312 (0x0520 in little-endian)
+        (script_public_key[1] == 0x20) &&
+        (script_public_key[2] == 0x05) &&
+        (script_public_key[1315] == opcodes::codes::OpCheckSigMLDSA)
+    }
+
     /// Returns true if the script is in the standard
     /// pay-to-script-hash (P2SH) format, false otherwise.
     #[inline(always)]
@@ -86,6 +104,7 @@ impl ScriptClass {
             ScriptClass::NonStandard => NON_STANDARD,
             ScriptClass::PubKey => PUB_KEY,
             ScriptClass::PubKeyECDSA => PUB_KEY_ECDSA,
+            ScriptClass::PubKeyMLDSA => PUB_KEY_MLDSA,
             ScriptClass::ScriptHash => SCRIPT_HASH,
         }
     }
@@ -95,6 +114,7 @@ impl ScriptClass {
             ScriptClass::NonStandard => 0,
             ScriptClass::PubKey => MAX_SCRIPT_PUBLIC_KEY_VERSION,
             ScriptClass::PubKeyECDSA => MAX_SCRIPT_PUBLIC_KEY_VERSION,
+            ScriptClass::PubKeyMLDSA => MAX_SCRIPT_PUBLIC_KEY_VERSION,
             ScriptClass::ScriptHash => MAX_SCRIPT_PUBLIC_KEY_VERSION,
         }
     }
@@ -114,6 +134,7 @@ impl FromStr for ScriptClass {
             NON_STANDARD => Ok(ScriptClass::NonStandard),
             PUB_KEY => Ok(ScriptClass::PubKey),
             PUB_KEY_ECDSA => Ok(ScriptClass::PubKeyECDSA),
+            PUB_KEY_MLDSA => Ok(ScriptClass::PubKeyMLDSA),
             SCRIPT_HASH => Ok(ScriptClass::ScriptHash),
             _ => Err(Error::InvalidScriptClass(script_class.to_string())),
         }
@@ -133,6 +154,7 @@ impl From<Version> for ScriptClass {
         match value {
             Version::PubKey => ScriptClass::PubKey,
             Version::PubKeyECDSA => ScriptClass::PubKeyECDSA,
+            Version::PubKeyMLDSA => ScriptClass::PubKeyMLDSA,
             Version::ScriptHash => ScriptClass::ScriptHash,
         }
     }
