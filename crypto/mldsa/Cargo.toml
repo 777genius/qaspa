@@ -29,6 +29,7 @@ kaspa-hashes.workspace = true
 [dev-dependencies]
 criterion.workspace = true
 rand.workspace = true
+serde_json.workspace = true
 
 [features]
 default = []

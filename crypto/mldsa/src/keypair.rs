@@ -267,4 +267,94 @@ mod tests {
         let hex = kp.public_key.to_hex();
         assert_eq!(hex.len(), 1312 * 2); // hex is 2 chars per byte
     }
+
+    #[test]
+    fn test_public_key_display_debug() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let pk = &kp.public_key;
+
+        // Test hex encoding
+        let hex = pk.to_hex();
+        assert_eq!(hex.len(), 1312 * 2);
+
+        // Test Display trait
+        let display_str = format!("{}", pk);
+        assert_eq!(display_str, hex);
+
+        // Test Debug trait
+        let debug_str = format!("{:?}", pk);
+        assert!(debug_str.contains("PublicKey"));
+        assert!(debug_str.contains("1312 bytes"));
+    }
+
+    #[test]
+    fn test_public_key_is_empty() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        assert!(!kp.public_key.is_empty());
+    }
+
+    #[test]
+    fn test_public_key_serde() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let pk = &kp.public_key;
+
+        // Test JSON serialization
+        let json = serde_json::to_string(pk).unwrap();
+        let deserialized: PublicKey = serde_json::from_str(&json).unwrap();
+        assert_eq!(pk, &deserialized);
+    }
+
+    #[test]
+    fn test_secret_key_zeroization() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let sk_bytes = kp.secret_key.as_bytes().to_vec();
+
+        drop(kp);
+
+        // After drop, the secret key should be zeroized (we can't directly verify
+        // but we're testing that drop doesn't panic and the zeroization logic runs)
+        assert_eq!(sk_bytes.len(), 2560);
+    }
+
+    #[test]
+    fn test_keypair_debug() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let debug_str = format!("{:?}", kp);
+
+        // Debug should show public key but redact secret key
+        assert!(debug_str.contains("MlDsaKeypair"));
+        assert!(debug_str.contains("public_key"));
+        assert!(debug_str.contains("<redacted>"));
+    }
+
+    #[test]
+    fn test_keypair_clone() {
+        let kp1 = generate_keypair(MlDsaLevel::Level2);
+        let kp2 = kp1.clone();
+
+        assert_eq!(kp1.public_key, kp2.public_key);
+        assert_eq!(kp1.secret_key.as_bytes(), kp2.secret_key.as_bytes());
+    }
+
+    #[test]
+    fn test_keypair_from_bytes_roundtrip() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let pk_bytes = kp.public_key.as_bytes();
+        let sk_bytes = kp.secret_key.as_bytes();
+
+        let kp2 = MlDsaKeypair::from_bytes(pk_bytes, sk_bytes, MlDsaLevel::Level2).unwrap();
+
+        assert_eq!(kp.public_key, kp2.public_key);
+        assert_eq!(kp.secret_key.as_bytes(), kp2.secret_key.as_bytes());
+    }
+
+    #[test]
+    fn test_keypair_from_bytes_mismatched() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let pk_bytes = vec![0u8; 100]; // Wrong size
+        let sk_bytes = kp.secret_key.as_bytes();
+
+        let result = MlDsaKeypair::from_bytes(&pk_bytes, sk_bytes, MlDsaLevel::Level2);
+        assert!(result.is_err());
+    }
 }

@@ -129,6 +129,59 @@ mod tests {
     fn test_default() {
         assert_eq!(MlDsaLevel::default(), MlDsaLevel::Level2);
     }
+
+    #[test]
+    fn test_nist_category() {
+        assert_eq!(MlDsaLevel::Level2.nist_category(), 2);
+        assert_eq!(MlDsaLevel::Level3.nist_category(), 3);
+        assert_eq!(MlDsaLevel::Level5.nist_category(), 5);
+    }
+
+    #[test]
+    fn test_description() {
+        assert_eq!(MlDsaLevel::Level2.description(), "ML-DSA-44: 128-bit PQ security (recommended for blockchain)");
+        assert_eq!(MlDsaLevel::Level3.description(), "ML-DSA-65: 192-bit PQ security (higher margin)");
+        assert_eq!(MlDsaLevel::Level5.description(), "ML-DSA-87: 256-bit PQ security (maximum)");
+    }
+
+    #[test]
+    fn test_display() {
+        assert_eq!(format!("{}", MlDsaLevel::Level2), "Level2");
+        assert_eq!(format!("{}", MlDsaLevel::Level3), "Level3");
+        assert_eq!(format!("{}", MlDsaLevel::Level5), "Level5");
+    }
+
+    #[test]
+    fn test_serde() {
+        // Test serialization/deserialization
+        let level = MlDsaLevel::Level2;
+        let json = serde_json::to_string(&level).unwrap();
+        let deserialized: MlDsaLevel = serde_json::from_str(&json).unwrap();
+        assert_eq!(level, deserialized);
+    }
+
+    #[test]
+    fn test_hash() {
+        use std::collections::HashMap;
+        let mut map = HashMap::new();
+        map.insert(MlDsaLevel::Level2, "level2");
+        map.insert(MlDsaLevel::Level3, "level3");
+        map.insert(MlDsaLevel::Level5, "level5");
+
+        assert_eq!(map.get(&MlDsaLevel::Level2), Some(&"level2"));
+        assert_eq!(map.get(&MlDsaLevel::Level3), Some(&"level3"));
+        assert_eq!(map.get(&MlDsaLevel::Level5), Some(&"level5"));
+    }
+
+    #[test]
+    fn test_copy_clone() {
+        let level = MlDsaLevel::Level2;
+        let copied = level;
+        let cloned = level.clone();
+
+        assert_eq!(level, copied);
+        assert_eq!(level, cloned);
+    }
 }
 
 #[cfg(test)]

@@ -44,3 +44,73 @@ pub enum MlDsaError {
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_display() {
+        let err = MlDsaError::InvalidPublicKeyLength { expected: 1312, actual: 100 };
+        assert_eq!(err.to_string(), "Invalid public key length: expected 1312, got 100");
+
+        let err = MlDsaError::InvalidSecretKeyLength { expected: 2560, actual: 200 };
+        assert_eq!(err.to_string(), "Invalid secret key length: expected 2560, got 200");
+
+        let err = MlDsaError::InvalidSignatureLength { expected: 2420, actual: 64 };
+        assert_eq!(err.to_string(), "Invalid signature length: expected 2420, got 64");
+
+        let err = MlDsaError::VerificationFailed;
+        assert_eq!(err.to_string(), "Signature verification failed");
+
+        let err = MlDsaError::InvalidSecurityLevel(4);
+        assert_eq!(err.to_string(), "Invalid security level: 4");
+    }
+
+    #[test]
+    fn test_error_clone_eq() {
+        let err1 = MlDsaError::InvalidPublicKeyLength { expected: 1312, actual: 100 };
+        let err2 = err1.clone();
+        assert_eq!(err1, err2);
+
+        let err3 = MlDsaError::VerificationFailed;
+        let err4 = err3.clone();
+        assert_eq!(err3, err4);
+    }
+
+    #[test]
+    fn test_result_type() {
+        let ok_result: Result<u32> = Ok(42);
+        assert!(ok_result.is_ok());
+        assert_eq!(ok_result.unwrap(), 42);
+
+        let err_result: Result<u32> = Err(MlDsaError::VerificationFailed);
+        assert!(err_result.is_err());
+        assert_eq!(err_result.unwrap_err(), MlDsaError::VerificationFailed);
+    }
+
+    #[test]
+    fn test_all_error_variants() {
+        // Test all error variants for completeness
+        let errors = vec![
+            MlDsaError::InvalidPublicKeyLength { expected: 100, actual: 50 },
+            MlDsaError::InvalidSecretKeyLength { expected: 200, actual: 100 },
+            MlDsaError::InvalidSignatureLength { expected: 300, actual: 150 },
+            MlDsaError::VerificationFailed,
+            MlDsaError::InvalidSecurityLevel(7),
+            MlDsaError::KeyGenerationFailed("test".into()),
+            MlDsaError::SigningFailed("test".into()),
+            MlDsaError::SerializationError("test".into()),
+            MlDsaError::DeserializationError("test".into()),
+        ];
+
+        for err in errors {
+            // All errors should be cloneable
+            let _cloned = err.clone();
+            // All errors should have a string representation
+            let _string = err.to_string();
+            // All errors should be debug formattable
+            let _debug = format!("{:?}", err);
+        }
+    }
+}

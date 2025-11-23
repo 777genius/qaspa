@@ -175,4 +175,64 @@ mod tests {
         let result = Signature::from_bytes(&bytes, MlDsaLevel::Level2);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_signature_display_debug() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let msg = b"test";
+        let sig = sign(msg, &kp.secret_key);
+
+        // Test hex encoding
+        let hex = sig.to_hex();
+        assert_eq!(hex.len(), 2420 * 2); // 2 chars per byte
+
+        // Test Display trait
+        let display_str = format!("{}", sig);
+        assert_eq!(display_str, hex);
+
+        // Test Debug trait
+        let debug_str = format!("{:?}", sig);
+        assert!(debug_str.contains("Signature"));
+        assert!(debug_str.contains("2420 bytes"));
+        assert!(debug_str.contains("Level2"));
+    }
+
+    #[test]
+    fn test_signature_is_empty() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let sig = sign(b"test", &kp.secret_key);
+
+        assert!(!sig.is_empty());
+        assert_eq!(sig.len(), 2420);
+    }
+
+    #[test]
+    fn test_signature_level() {
+        for level in [MlDsaLevel::Level2, MlDsaLevel::Level3, MlDsaLevel::Level5] {
+            let kp = generate_keypair(level);
+            let sig = sign(b"test", &kp.secret_key);
+            assert_eq!(sig.level(), level);
+        }
+    }
+
+    #[test]
+    fn test_signature_from_bytes_valid() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let sig = sign(b"test", &kp.secret_key);
+
+        // Recreate from bytes
+        let sig2 = Signature::from_bytes(sig.as_bytes(), MlDsaLevel::Level2).unwrap();
+        assert_eq!(sig, sig2);
+    }
+
+    #[test]
+    fn test_signature_serde() {
+        let kp = generate_keypair(MlDsaLevel::Level2);
+        let sig = sign(b"test", &kp.secret_key);
+
+        // Test JSON serialization
+        let json = serde_json::to_string(&sig).unwrap();
+        let deserialized: Signature = serde_json::from_str(&json).unwrap();
+        assert_eq!(sig, deserialized);
+    }
 }
