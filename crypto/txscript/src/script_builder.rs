@@ -467,13 +467,12 @@ mod tests {
                 expected: Ok(once(OpPushData2).chain([8, 2]).chain(repeat_n(0x49, 520)).collect()),
                 unchecked: false,
             },
-            // BIP0062: OP_PUSHDATA4 can never be used, as pushes over 520
-            // bytes are not allowed, and those below can be done using
-            // other operators.
+            // Test that pushes over MAX_SCRIPT_ELEMENT_SIZE (2500) are rejected
+            // Updated from 520 to 2500 to support ML-DSA post-quantum signatures
             Test {
-                name: "push data len 521",
-                data: vec![0x49; 521],
-                expected: Err(ScriptBuilderError::ElementExceedsMaxSize(521)),
+                name: "push data len 2501",
+                data: vec![0x49; 2501],
+                expected: Err(ScriptBuilderError::ElementExceedsMaxSize(2501)),
                 unchecked: false,
             },
             Test {

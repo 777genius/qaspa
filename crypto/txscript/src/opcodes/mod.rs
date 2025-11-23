@@ -691,7 +691,29 @@ opcode_list! {
 
     // Undefined opcodes.
     opcode OpUnknown166<0xa6, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
-    opcode OpUnknown167<0xa7, 1>(self, vm) Err(TxScriptError::InvalidOpcode(format!("{self:?}")))
+
+    opcode OpCheckSigMLDSA<0xa7, 1>(self, vm) {
+        let [mut sig, key] = vm.dstack.pop_raw()?;
+        // Hash type
+        match sig.pop() {
+            Some(typ) => {
+                let hash_type = SigHashType::from_u8(typ).map_err(|e| TxScriptError::InvalidSigHashType(typ))?;
+                match vm.check_mldsa_signature(hash_type, key.as_slice(), sig.as_slice()) {
+                    Ok(valid) => {
+                        vm.dstack.push_item(valid)?;
+                        Ok(())
+                    },
+                    Err(e) => {
+                        Err(e)
+                    }
+                }
+            }
+            None => {
+                vm.dstack.push_item(false)?;
+                Ok(())
+            }
+        }
+    }
 
     // Crypto opcodes.
     opcode OpSHA256<0xa8, 1>(self, vm) {
@@ -1200,7 +1222,7 @@ mod test {
     fn test_opcode_invalid() {
         let tests: Vec<Box<dyn OpCodeImplementation<PopulatedTransaction, SigHashReusedValuesUnsync>>> = vec![
             opcodes::OpUnknown166::empty().expect("Should accept empty"),
-            opcodes::OpUnknown167::empty().expect("Should accept empty"),
+            // OpUnknown167 (0xa7) is now OpCheckSigMLDSA, so we skip it
             opcodes::OpUnknown196::empty().expect("Should accept empty"),
             opcodes::OpUnknown197::empty().expect("Should accept empty"),
             opcodes::OpUnknown198::empty().expect("Should accept empty"),

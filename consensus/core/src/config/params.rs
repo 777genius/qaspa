@@ -662,13 +662,21 @@ pub const MAINNET_PARAMS: Params = Params {
     // These values should be lowered to more reasonable amounts on the next planned HF/SF.
     prior_max_tx_inputs: 1_000_000_000,
     prior_max_tx_outputs: 1_000_000_000,
-    prior_max_signature_script_len: 1_000_000_000,
-    prior_max_script_public_key_len: 1_000_000_000,
+    // Reduced from 1_000_000_000 to reasonable limit
+    // ML-DSA signature script is 2424 bytes, so 10_000 provides ample margin
+    prior_max_signature_script_len: 10_000,
+    // Reduced from 1_000_000_000 to prevent overflow with increased max_block_mass
+    // ML-DSA script pubkey is 1316 bytes, so 5000 provides ample margin
+    prior_max_script_public_key_len: 5_000,
 
+    // Mass parameters optimized for ML-DSA post-quantum signatures
+    // mass_per_script_pub_key_byte reduced from 10->2 to accommodate large ML-DSA pubkeys (1312 bytes)
+    // mass_per_sig_op reduced from 1000->800 to balance signature verification cost
+    // max_block_mass increased from 500_000->2_000_000 to maintain throughput with larger transactions
     mass_per_tx_byte: 1,
-    mass_per_script_pub_key_byte: 10,
-    mass_per_sig_op: 1000,
-    max_block_mass: 500_000,
+    mass_per_script_pub_key_byte: 2,
+    mass_per_sig_op: 800,
+    max_block_mass: 2_000_000,
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
 
@@ -722,13 +730,21 @@ pub const TESTNET_PARAMS: Params = Params {
     // These values should be lowered to more reasonable amounts on the next planned HF/SF.
     prior_max_tx_inputs: 1_000_000_000,
     prior_max_tx_outputs: 1_000_000_000,
-    prior_max_signature_script_len: 1_000_000_000,
-    prior_max_script_public_key_len: 1_000_000_000,
+    // Reduced from 1_000_000_000 to reasonable limit
+    // ML-DSA signature script is 2424 bytes, so 10_000 provides ample margin
+    prior_max_signature_script_len: 10_000,
+    // Reduced from 1_000_000_000 to prevent overflow with increased max_block_mass
+    // ML-DSA script pubkey is 1316 bytes, so 5000 provides ample margin
+    prior_max_script_public_key_len: 5_000,
 
+    // Mass parameters optimized for ML-DSA post-quantum signatures
+    // mass_per_script_pub_key_byte reduced from 10->2 to accommodate large ML-DSA pubkeys (1312 bytes)
+    // mass_per_sig_op reduced from 1000->800 to balance signature verification cost
+    // max_block_mass increased from 500_000->2_000_000 to maintain throughput with larger transactions
     mass_per_tx_byte: 1,
-    mass_per_script_pub_key_byte: 10,
-    mass_per_sig_op: 1000,
-    max_block_mass: 500_000,
+    mass_per_script_pub_key_byte: 2,
+    mass_per_sig_op: 800,
+    max_block_mass: 2_000_000,
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
     // deflationary_phase_daa_score is the DAA score after which the pre-deflationary period
@@ -783,10 +799,14 @@ pub const SIMNET_PARAMS: Params = Params {
     prior_max_signature_script_len: 1_000_000,
     prior_max_script_public_key_len: 1_000_000,
 
+    // Mass parameters optimized for ML-DSA post-quantum signatures
+    // mass_per_script_pub_key_byte reduced from 10->2 to accommodate large ML-DSA pubkeys (1312 bytes)
+    // mass_per_sig_op reduced from 1000->800 to balance signature verification cost
+    // max_block_mass increased from 500_000->2_000_000 to maintain throughput with larger transactions
     mass_per_tx_byte: 1,
-    mass_per_script_pub_key_byte: 10,
-    mass_per_sig_op: 1000,
-    max_block_mass: 500_000,
+    mass_per_script_pub_key_byte: 2,
+    mass_per_sig_op: 800,
+    max_block_mass: 2_000_000,
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
 
@@ -823,13 +843,21 @@ pub const DEVNET_PARAMS: Params = Params {
     // These values should be lowered to more reasonable amounts on the next planned HF/SF.
     prior_max_tx_inputs: 1_000_000_000,
     prior_max_tx_outputs: 1_000_000_000,
-    prior_max_signature_script_len: 1_000_000_000,
-    prior_max_script_public_key_len: 1_000_000_000,
+    // Reduced from 1_000_000_000 to reasonable limit
+    // ML-DSA signature script is 2424 bytes, so 10_000 provides ample margin
+    prior_max_signature_script_len: 10_000,
+    // Reduced from 1_000_000_000 to prevent overflow with increased max_block_mass
+    // ML-DSA script pubkey is 1316 bytes, so 5000 provides ample margin
+    prior_max_script_public_key_len: 5_000,
 
+    // Mass parameters optimized for ML-DSA post-quantum signatures
+    // mass_per_script_pub_key_byte reduced from 10->2 to accommodate large ML-DSA pubkeys (1312 bytes)
+    // mass_per_sig_op reduced from 1000->800 to balance signature verification cost
+    // max_block_mass increased from 500_000->2_000_000 to maintain throughput with larger transactions
     mass_per_tx_byte: 1,
-    mass_per_script_pub_key_byte: 10,
-    mass_per_sig_op: 1000,
-    max_block_mass: 500_000,
+    mass_per_script_pub_key_byte: 2,
+    mass_per_sig_op: 800,
+    max_block_mass: 2_000_000,
 
     storage_mass_parameter: STORAGE_MASS_PARAMETER,
 

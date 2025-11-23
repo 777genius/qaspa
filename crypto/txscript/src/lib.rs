@@ -23,6 +23,7 @@ use kaspa_consensus_core::hashing::sighash::{
 };
 use kaspa_consensus_core::hashing::sighash_type::SigHashType;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionInput, UtxoEntry, VerifiableTransaction};
+use kaspa_mldsa::{MlDsaLevel, PublicKey as MlDsaPublicKey, Signature as MlDsaSignature, verify as mldsa_verify};
 use kaspa_txscript_errors::TxScriptError;
 use log::trace;
 use opcodes::codes::OpReturn;
@@ -38,7 +39,9 @@ pub use standard::*;
 pub const MAX_SCRIPT_PUBLIC_KEY_VERSION: u16 = 0;
 pub const MAX_STACK_SIZE: usize = 244;
 pub const MAX_SCRIPTS_SIZE: usize = 10_000;
-pub const MAX_SCRIPT_ELEMENT_SIZE: usize = 520;
+// Increased from 520 to support ML-DSA (post-quantum) signatures
+// ML-DSA Level 2: 2420 bytes signature + 1 byte hash type = 2421 bytes
+pub const MAX_SCRIPT_ELEMENT_SIZE: usize = 2500;
 pub const MAX_OPS_PER_SCRIPT: i32 = 201;
 pub const MAX_TX_IN_SEQUENCE_NUM: u64 = u64::MAX;
 pub const SEQUENCE_LOCK_TIME_DISABLED: u64 = 1 << 63;
@@ -614,6 +617,37 @@ impl<'a, T: VerifiableTransaction, Reused: SigHashReusedValues> TxScriptEngine<'
                         }
                     }
                 }
+            }
+            _ => Err(TxScriptError::NotATransactionInput),
+        }
+    }
+
+    fn check_mldsa_signature(&mut self, hash_type: SigHashType, key: &[u8], sig: &[u8]) -> Result<bool, TxScriptError> {
+        self.runtime_sig_op_counter.consume_sig_op()?;
+        match self.script_source {
+            ScriptSource::TxInput { tx, idx, .. } => {
+                // ML-DSA Level 2 signatures are 2420 bytes
+                if sig.len() != 2420 {
+                    return Err(TxScriptError::SigLength(sig.len()));
+                }
+                // ML-DSA Level 2 public keys are 1312 bytes
+                if key.len() != 1312 {
+                    return Err(TxScriptError::InvalidPublicKeyLen(key.len()));
+                }
+
+                // Parse ML-DSA public key and signature
+                let pk = MlDsaPublicKey::from_bytes(key, MlDsaLevel::Level2)
+                    .map_err(|_e| TxScriptError::InvalidSignature(secp256k1::Error::InvalidPublicKey))?;
+                let signature = MlDsaSignature::from_bytes(sig, MlDsaLevel::Level2)
+                    .map_err(|_e| TxScriptError::InvalidSignature(secp256k1::Error::InvalidSignature))?;
+
+                // Calculate sighash using Schnorr sighash (reuse existing logic)
+                let sig_hash = calc_schnorr_signature_hash(tx, idx, hash_type, self.reused_values);
+
+                // Verify ML-DSA signature
+                let valid = mldsa_verify(sig_hash.as_bytes().as_slice(), &signature, &pk);
+
+                Ok(valid)
             }
             _ => Err(TxScriptError::NotATransactionInput),
         }

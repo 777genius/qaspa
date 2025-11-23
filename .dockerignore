@@ -1,2 +1,27 @@
-.git
-target
+# Docker ignore file for faster builds
+
+# Build artifacts
+target/
+!target/release/kaspad
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+/tmp/
+*.log
+
+# Test results
+/test-results/

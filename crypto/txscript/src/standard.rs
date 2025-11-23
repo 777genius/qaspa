@@ -1,5 +1,5 @@
 use crate::{
-    opcodes::codes::{OpBlake2b, OpCheckSig, OpCheckSigECDSA, OpData32, OpData33, OpEqual},
+    opcodes::codes::{OpBlake2b, OpCheckSig, OpCheckSigECDSA, OpCheckSigMLDSA, OpData32, OpData33, OpEqual, OpPushData2},
     script_builder::{ScriptBuilder, ScriptBuilderResult},
     script_class::ScriptClass,
 };
@@ -28,6 +28,20 @@ fn pay_to_pub_key_ecdsa(address_payload: &[u8]) -> ScriptVec {
     SmallVec::from_iter(once(OpData33).chain(address_payload.iter().copied()).chain(once(OpCheckSigECDSA)))
 }
 
+/// Creates a new script to pay a transaction output to a 1312-byte ML-DSA pubkey.
+fn pay_to_pub_key_mldsa(address_payload: &[u8]) -> ScriptVec {
+    // TODO: use ScriptBuilder when add_op and add_data fns or equivalents are available
+    assert_eq!(address_payload.len(), 1312);
+    // OpPushData2 + length (1312 = 0x0520 in little-endian) + data + OpCheckSigMLDSA
+    SmallVec::from_iter(
+        once(OpPushData2)
+            .chain(once(0x20)) // Low byte of 1312
+            .chain(once(0x05)) // High byte of 1312
+            .chain(address_payload.iter().copied())
+            .chain(once(OpCheckSigMLDSA))
+    )
+}
+
 /// Creates a new script to pay a transaction output to a script hash.
 /// It is expected that the input is a valid hash.
 fn pay_to_script_hash(script_hash: &[u8]) -> ScriptVec {
@@ -41,6 +55,7 @@ pub fn pay_to_address_script(address: &Address) -> ScriptPublicKey {
     let script = match address.version {
         Version::PubKey => pay_to_pub_key(address.payload.as_slice()),
         Version::PubKeyECDSA => pay_to_pub_key_ecdsa(address.payload.as_slice()),
+        Version::PubKeyMLDSA => pay_to_pub_key_mldsa(address.payload.as_slice()),
         Version::ScriptHash => pay_to_script_hash(address.payload.as_slice()),
     };
     ScriptPublicKey::new(ScriptClass::from(address.version).version(), script)
@@ -79,6 +94,7 @@ pub fn extract_script_pub_key_address(script_public_key: &ScriptPublicKey, prefi
         ScriptClass::NonStandard => Err(TxScriptError::PubKeyFormat),
         ScriptClass::PubKey => Ok(Address::new(prefix, Version::PubKey, &script[1..33])),
         ScriptClass::PubKeyECDSA => Ok(Address::new(prefix, Version::PubKeyECDSA, &script[1..34])),
+        ScriptClass::PubKeyMLDSA => Ok(Address::new(prefix, Version::PubKeyMLDSA, &script[3..1315])), // Skip OpPushData2 + 2 length bytes
         ScriptClass::ScriptHash => Ok(Address::new(prefix, Version::ScriptHash, &script[2..34])),
     }
 }
