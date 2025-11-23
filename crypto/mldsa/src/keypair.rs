@@ -143,6 +143,29 @@ pub struct MlDsaKeypair {
     pub secret_key: SecretKey,
 }
 
+impl Clone for MlDsaKeypair {
+    fn clone(&self) -> Self {
+        // Manual clone implementation to allow cloning even though SecretKey doesn't derive Clone
+        Self {
+            public_key: self.public_key.clone(),
+            secret_key: SecretKey {
+                bytes: self.secret_key.bytes.clone(),
+                level: self.secret_key.level,
+            },
+        }
+    }
+}
+
+impl fmt::Debug for MlDsaKeypair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Don't expose secret key material in debug output
+        f.debug_struct("MlDsaKeypair")
+            .field("public_key", &self.public_key)
+            .field("secret_key", &"<redacted>")
+            .finish()
+    }
+}
+
 impl MlDsaKeypair {
     /// Creates a new keypair from public and secret key bytes
     pub fn from_bytes(
