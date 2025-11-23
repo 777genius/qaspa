@@ -6,7 +6,7 @@
 # Build: docker build -f Dockerfile.test -t kaspa-mldsa-test .
 # Run:   docker run --rm kaspa-mldsa-test
 
-FROM rust:1.82-slim
+FROM rust:1.85-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
