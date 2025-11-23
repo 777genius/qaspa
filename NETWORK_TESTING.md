@@ -102,6 +102,123 @@ cargo test --test network_integration --release test_network_scaling -- --ignore
 
 ---
 
+### 3. ML-DSA Transactions E2E (`tests/mldsa_transactions_e2e.rs`)
+
+**Purpose:** Real ML-DSA transaction creation, submission, and mining
+
+**Available tests:**
+- `test_mldsa_transaction_creation_and_mining` - Full ML-DSA transaction lifecycle
+- `test_mldsa_transaction_propagation` - Transaction propagation across 3 nodes
+- `test_mixed_schnorr_mldsa_block` - Mixed signature types (planned)
+
+**Run:**
+```bash
+# All ML-DSA transaction tests
+cargo test --test mldsa_transactions_e2e --release -- --ignored --nocapture
+
+# Specific test
+cargo test --test mldsa_transactions_e2e --release test_mldsa_transaction_creation_and_mining -- --ignored --nocapture
+```
+
+**Duration:** ~120 seconds per test (includes mining for coinbase maturity)
+
+**Output:**
+```
+🚀 E2E Test: ML-DSA Transaction Creation and Mining
+
+📍 Phase 1: Starting network
+
+  Starting node 1...
+    Waiting for node 1 to be ready ✓
+  Starting node 2...
+    Waiting for node 2 to be ready ✓
+
+  Waiting for network connectivity...
+  ✓ All nodes connected
+
+📍 Phase 2: Creating ML-DSA wallet
+
+  ✓ Created ML-DSA wallet
+    Address: kaspadev:qz<1312-byte-address>
+    Public key size: 1312 bytes
+
+📍 Phase 3: Funding ML-DSA address
+
+  Mining 10 blocks to ML-DSA address...
+  ✓ Mined 10 blocks
+
+  Mining additional 100 blocks for coinbase maturity...
+
+📍 Phase 4: Checking UTXOs
+
+  ✓ Found 110 UTXOs
+    Total balance: 1100000000000 sompi
+
+📍 Phase 5: Creating recipient wallet
+
+  ✓ Created recipient wallet
+    Address: kaspadev:qz<another-address>
+
+📍 Phase 6: Creating ML-DSA transaction
+
+  Creating transaction:
+    From: kaspadev:qz...
+    To: kaspadev:qz...
+    Amount: 1000000000 sompi
+    Fee: 1000 sompi
+  ✓ Transaction created
+    Size: 3847 bytes
+
+📍 Phase 7: Submitting transaction to network
+
+  ✓ Transaction submitted
+    TX ID: abc123...
+
+  Checking transaction propagation to node 2...
+  ✓ Transaction propagated to node 2
+
+📍 Phase 8: Mining block with ML-DSA transaction
+
+  ✓ Mined block: def456...
+
+📍 Phase 9: Verifying recipient balance
+
+  Recipient UTXOs: 1
+  Recipient balance: 1000000000 sompi
+
+🎉 ML-DSA Transaction E2E Test PASSED!
+
+Summary:
+  ✓ Created ML-DSA wallets
+  ✓ Funded ML-DSA address via mining
+  ✓ Created ML-DSA signed transaction
+  ✓ Submitted to network
+  ✓ Transaction mined in block
+  ✓ Recipient received funds
+  ✓ Multi-node network functioning
+```
+
+**What this test does:**
+1. Spawns 2 kaspad nodes
+2. Generates ML-DSA Level 2 keypair
+3. Creates ML-DSA address
+4. Mines blocks to fund the address
+5. Waits for coinbase maturity (100 blocks)
+6. Creates a second ML-DSA wallet (recipient)
+7. Creates a real ML-DSA transaction
+8. Signs with ML-DSA (2420-byte signature)
+9. Submits to network via RPC
+10. Verifies propagation to all nodes
+11. Mines a block containing the transaction
+12. Verifies recipient received the funds
+
+**Requirements:**
+- `kaspad` built with: `cargo build --release -p kaspad`
+- Ports 17210-17410 must be free
+- ~2 minutes runtime
+
+---
+
 ## Test Scenarios
 
 ### Scenario 1: Basic Network Formation
