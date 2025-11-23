@@ -171,7 +171,7 @@ impl MlDsaKeypair {
 ///
 /// let keypair = generate_keypair(MlDsaLevel::Level2);
 /// assert_eq!(keypair.public_key.len(), 1312);
-/// assert_eq!(keypair.secret_key.len(), 2528);
+/// assert_eq!(keypair.secret_key.len(), 2560);
 /// ```
 pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
     use pqcrypto_traits::sign::PublicKey as _;
