@@ -15,15 +15,14 @@ use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::hashing::sighash::SigHashReusedValuesUnsync;
 use kaspa_consensus_core::hashing::sighash_type::SIG_HASH_ALL;
 use kaspa_consensus_core::tx::{
-    MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput,
-    UtxoEntry, VerifiableTransaction,
+    MutableTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint,
+    TransactionOutput, UtxoEntry,
 };
 use kaspa_hashes::Hash;
 use kaspa_mldsa::{generate_keypair, sign, MlDsaKeypair, MlDsaLevel};
 use kaspa_txscript::pay_to_address_script;
 use kaspa_txscript::script_builder::ScriptBuilder;
 use serde_json::Value;
-use std::collections::HashMap;
 use std::fs;
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -293,10 +292,7 @@ impl MLDSAWallet {
         let mut utxo_entries = Vec::new();
         for utxo in &utxos {
             let script_bytes = hex::decode(&utxo.script_public_key)?;
-            let script_pubkey = kaspa_txscript::script_builder::ScriptBuilder::new()
-                .extend(script_bytes)
-                .unwrap()
-                .drain();
+            let script_pubkey = ScriptPublicKey::new(0, script_bytes.into());
 
             utxo_entries.push(UtxoEntry::new(utxo.amount, script_pubkey, utxo.block_daa_score, false));
         }
@@ -304,7 +300,8 @@ impl MLDSAWallet {
         // Sign transaction
         let mut mutable_tx = MutableTransaction::with_entries(tx, utxo_entries.clone());
 
-        for (i, _) in mutable_tx.tx.inputs.iter_mut().enumerate() {
+        let input_count = mutable_tx.tx.inputs.len();
+        for i in 0..input_count {
             // Calculate sighash
             let reused_values = SigHashReusedValuesUnsync::new();
             let sig_hash = kaspa_consensus_core::hashing::sighash::calc_schnorr_signature_hash(
