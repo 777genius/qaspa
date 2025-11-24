@@ -21,7 +21,7 @@
 //! }
 //! ```
 
-use kaspa_mldsa::{verify, MlDsaLevel, PublicKey as MlDsaPublicKey, Signature as MlDsaSignature, SecretKey as MlDsaSecretKey};
+use kaspa_mldsa::{verify, MlDsaLevel, PublicKey as MlDsaPublicKey, SecretKey as MlDsaSecretKey, Signature as MlDsaSignature};
 use std::ptr;
 use std::slice;
 
