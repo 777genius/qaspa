@@ -21,7 +21,7 @@
 //! }
 //! ```
 
-use kaspa_mldsa::{verify, MlDsaLevel, MlDsaPublicKey, MlDsaSignature};
+use kaspa_mldsa::{verify, MlDsaLevel, PublicKey as MlDsaPublicKey, Signature as MlDsaSignature, SecretKey as MlDsaSecretKey};
 use std::ptr;
 use std::slice;
 
@@ -64,14 +64,25 @@ pub extern "C" fn kaspa_mldsa_verify(
     let signature_slice = unsafe { slice::from_raw_parts(signature, signature_len) };
     let pubkey_slice = unsafe { slice::from_raw_parts(public_key, public_key_len) };
 
+    // Detect level from public key length
+    let level = match detect_level_from_pubkey(public_key_len) {
+        Some(l) => l,
+        None => return false,
+    };
+
+    // Verify signature length matches level
+    if detect_level_from_signature(signature_len) != Some(level) {
+        return false;
+    }
+
     // Parse signature
-    let sig = match MlDsaSignature::from_bytes(signature_slice) {
+    let sig = match MlDsaSignature::from_bytes(signature_slice, level) {
         Ok(s) => s,
         Err(_) => return false,
     };
 
     // Parse public key
-    let pk = match MlDsaPublicKey::from_bytes(pubkey_slice) {
+    let pk = match MlDsaPublicKey::from_bytes(pubkey_slice, level) {
         Ok(p) => p,
         Err(_) => return false,
     };
@@ -94,6 +105,36 @@ pub extern "C" fn kaspa_mldsa_detect_level(public_key_len: usize) -> u8 {
         1952 => 3,
         2592 => 5,
         _ => 0,
+    }
+}
+
+/// Helper: Detect MlDsaLevel from public key length
+fn detect_level_from_pubkey(len: usize) -> Option<MlDsaLevel> {
+    match len {
+        1312 => Some(MlDsaLevel::Level2),
+        1952 => Some(MlDsaLevel::Level3),
+        2592 => Some(MlDsaLevel::Level5),
+        _ => None,
+    }
+}
+
+/// Helper: Detect MlDsaLevel from signature length
+fn detect_level_from_signature(len: usize) -> Option<MlDsaLevel> {
+    match len {
+        2420 => Some(MlDsaLevel::Level2),
+        3309 => Some(MlDsaLevel::Level3),
+        4627 => Some(MlDsaLevel::Level5),
+        _ => None,
+    }
+}
+
+/// Helper: Detect MlDsaLevel from secret key length
+fn detect_level_from_secretkey(len: usize) -> Option<MlDsaLevel> {
+    match len {
+        2560 => Some(MlDsaLevel::Level2),
+        4032 => Some(MlDsaLevel::Level3),
+        4896 => Some(MlDsaLevel::Level5),
+        _ => None,
     }
 }
 
@@ -206,8 +247,14 @@ pub extern "C" fn kaspa_mldsa_sign(
     let message_slice = unsafe { slice::from_raw_parts(message, message_len) };
     let secret_key_slice = unsafe { slice::from_raw_parts(secret_key, secret_key_len) };
 
+    // Detect level from secret key length
+    let level = match detect_level_from_secretkey(secret_key_len) {
+        Some(l) => l,
+        None => return false,
+    };
+
     // Parse secret key
-    let sk = match kaspa_mldsa::MlDsaSecretKey::from_bytes(secret_key_slice) {
+    let sk = match MlDsaSecretKey::from_bytes(secret_key_slice, level) {
         Ok(s) => s,
         Err(_) => return false,
     };
