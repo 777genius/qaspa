@@ -82,11 +82,11 @@ mod tests {
     fn test_result_type() {
         let ok_result: Result<u32> = Ok(42);
         assert!(ok_result.is_ok());
-        assert_eq!(ok_result.unwrap(), 42);
+        assert_eq!(ok_result, Ok(42));
 
         let err_result: Result<u32> = Err(MlDsaError::VerificationFailed);
         assert!(err_result.is_err());
-        assert_eq!(err_result.unwrap_err(), MlDsaError::VerificationFailed);
+        assert_eq!(err_result, Err(MlDsaError::VerificationFailed));
     }
 
     #[test]

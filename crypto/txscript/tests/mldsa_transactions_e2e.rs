@@ -8,6 +8,8 @@
 //! 5. Submits to network
 //! 6. Verifies transactions are mined
 //! 7. Tests block propagation
+
+#![allow(dead_code)]
 //!
 //! Run with: cargo test --test mldsa_transactions_e2e --release -- --ignored --nocapture
 
@@ -87,7 +89,7 @@ impl TestNode {
         };
 
         let response = client
-            .post(&format!("http://127.0.0.1:{}", self.rpc_port))
+            .post(format!("http://127.0.0.1:{}", self.rpc_port))
             .header("Content-Type", "application/json")
             .body(r#"{"jsonrpc":"2.0","method":"getInfo","params":[],"id":1}"#)
             .send();
@@ -106,7 +108,7 @@ impl TestNode {
         });
 
         let response = client
-            .post(&format!("http://127.0.0.1:{}", self.rpc_port))
+            .post(format!("http://127.0.0.1:{}", self.rpc_port))
             .header("Content-Type", "application/json")
             .json(&body)
             .send()?;

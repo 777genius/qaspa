@@ -3,8 +3,8 @@
 //! ML-DSA (CRYSTALS-Dilithium) post-quantum digital signatures for QUBIC blockchain.
 //!
 //! This crate provides a clean, type-safe API for ML-DSA signatures based on the
-//! NIST FIPS 204 standard. It wraps the `pqcrypto-dilithium` implementation with
-//! additional safety and usability features.
+//! NIST FIPS 204 final standard. It wraps the `ml-dsa` RustCrypto implementation
+//! with additional safety and usability features.
 //!
 //! ## Security Levels
 //!
@@ -43,9 +43,6 @@ pub use keypair::{generate_keypair, MlDsaKeypair, PrivateKey, PublicKey, SecretK
 pub use params::MlDsaLevel;
 pub use sign::{sign, Signature};
 pub use verify::verify;
-
-// Re-export for convenience
-pub use pqcrypto_traits::sign::{DetachedSignature, PublicKey as PqPublicKey, SecretKey as PqSecretKey};
 
 #[cfg(test)]
 mod tests {

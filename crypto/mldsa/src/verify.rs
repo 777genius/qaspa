@@ -29,7 +29,8 @@ use crate::{keypair::PublicKey, sign::Signature};
 /// assert!(!verify(b"Wrong message", &signature, &keypair.public_key));
 /// ```
 pub fn verify(message: &[u8], signature: &Signature, public_key: &PublicKey) -> bool {
-    use pqcrypto_traits::sign::{DetachedSignature as _, PublicKey as _};
+    use ml_dsa::{MlDsa44, MlDsa65, MlDsa87};
+    use signature::Verifier;
 
     // Security check: signature and public key must be from same level
     if signature.level() != public_key.level() {
@@ -40,43 +41,58 @@ pub fn verify(message: &[u8], signature: &Signature, public_key: &PublicKey) -> 
 
     match level {
         crate::params::MlDsaLevel::Level2 => {
-            let pk = match pqcrypto_dilithium::dilithium2::PublicKey::from_bytes(public_key.as_bytes()) {
-                Ok(pk) => pk,
+            let pk_encoded = match ml_dsa::EncodedVerifyingKey::<MlDsa44>::try_from(public_key.as_bytes()) {
+                Ok(enc) => enc,
                 Err(_) => return false,
             };
+            let pk = ml_dsa::VerifyingKey::<MlDsa44>::decode(&pk_encoded);
 
-            let sig = match pqcrypto_dilithium::dilithium2::DetachedSignature::from_bytes(signature.as_bytes()) {
-                Ok(sig) => sig,
+            let sig_encoded = match ml_dsa::EncodedSignature::<MlDsa44>::try_from(signature.as_bytes()) {
+                Ok(enc) => enc,
                 Err(_) => return false,
             };
+            let sig = match ml_dsa::Signature::<MlDsa44>::decode(&sig_encoded) {
+                Some(sig) => sig,
+                None => return false,
+            };
 
-            pqcrypto_dilithium::dilithium2::verify_detached_signature(&sig, message, &pk).is_ok()
+            pk.verify(message, &sig).is_ok()
         }
         crate::params::MlDsaLevel::Level3 => {
-            let pk = match pqcrypto_dilithium::dilithium3::PublicKey::from_bytes(public_key.as_bytes()) {
-                Ok(pk) => pk,
+            let pk_encoded = match ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(public_key.as_bytes()) {
+                Ok(enc) => enc,
                 Err(_) => return false,
             };
+            let pk = ml_dsa::VerifyingKey::<MlDsa65>::decode(&pk_encoded);
 
-            let sig = match pqcrypto_dilithium::dilithium3::DetachedSignature::from_bytes(signature.as_bytes()) {
-                Ok(sig) => sig,
+            let sig_encoded = match ml_dsa::EncodedSignature::<MlDsa65>::try_from(signature.as_bytes()) {
+                Ok(enc) => enc,
                 Err(_) => return false,
             };
+            let sig = match ml_dsa::Signature::<MlDsa65>::decode(&sig_encoded) {
+                Some(sig) => sig,
+                None => return false,
+            };
 
-            pqcrypto_dilithium::dilithium3::verify_detached_signature(&sig, message, &pk).is_ok()
+            pk.verify(message, &sig).is_ok()
         }
         crate::params::MlDsaLevel::Level5 => {
-            let pk = match pqcrypto_dilithium::dilithium5::PublicKey::from_bytes(public_key.as_bytes()) {
-                Ok(pk) => pk,
+            let pk_encoded = match ml_dsa::EncodedVerifyingKey::<MlDsa87>::try_from(public_key.as_bytes()) {
+                Ok(enc) => enc,
                 Err(_) => return false,
             };
+            let pk = ml_dsa::VerifyingKey::<MlDsa87>::decode(&pk_encoded);
 
-            let sig = match pqcrypto_dilithium::dilithium5::DetachedSignature::from_bytes(signature.as_bytes()) {
-                Ok(sig) => sig,
+            let sig_encoded = match ml_dsa::EncodedSignature::<MlDsa87>::try_from(signature.as_bytes()) {
+                Ok(enc) => enc,
                 Err(_) => return false,
             };
+            let sig = match ml_dsa::Signature::<MlDsa87>::decode(&sig_encoded) {
+                Some(sig) => sig,
+                None => return false,
+            };
 
-            pqcrypto_dilithium::dilithium5::verify_detached_signature(&sig, message, &pk).is_ok()
+            pk.verify(message, &sig).is_ok()
         }
     }
 }

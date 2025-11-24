@@ -93,25 +93,29 @@ impl fmt::Display for Signature {
 /// assert!(verify(message, &signature, &keypair.public_key));
 /// ```
 pub fn sign(message: &[u8], secret_key: &SecretKey) -> Signature {
-    use pqcrypto_traits::sign::{DetachedSignature as _, SecretKey as _};
+    use ml_dsa::{MlDsa44, MlDsa65, MlDsa87};
+    use signature::Signer;
 
     let level = secret_key.level();
 
     let sig_bytes = match level {
         MlDsaLevel::Level2 => {
-            let sk = pqcrypto_dilithium::dilithium2::SecretKey::from_bytes(secret_key.as_bytes()).expect("valid secret key");
-            let sig = pqcrypto_dilithium::dilithium2::detached_sign(message, &sk);
-            sig.as_bytes().to_vec()
+            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa44>::try_from(secret_key.as_bytes()).expect("valid secret key bytes");
+            let sk = ml_dsa::SigningKey::<MlDsa44>::decode(&sk_encoded);
+            let sig: ml_dsa::Signature<MlDsa44> = sk.sign(message);
+            sig.encode()[..].to_vec()
         }
         MlDsaLevel::Level3 => {
-            let sk = pqcrypto_dilithium::dilithium3::SecretKey::from_bytes(secret_key.as_bytes()).expect("valid secret key");
-            let sig = pqcrypto_dilithium::dilithium3::detached_sign(message, &sk);
-            sig.as_bytes().to_vec()
+            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa65>::try_from(secret_key.as_bytes()).expect("valid secret key bytes");
+            let sk = ml_dsa::SigningKey::<MlDsa65>::decode(&sk_encoded);
+            let sig: ml_dsa::Signature<MlDsa65> = sk.sign(message);
+            sig.encode()[..].to_vec()
         }
         MlDsaLevel::Level5 => {
-            let sk = pqcrypto_dilithium::dilithium5::SecretKey::from_bytes(secret_key.as_bytes()).expect("valid secret key");
-            let sig = pqcrypto_dilithium::dilithium5::detached_sign(message, &sk);
-            sig.as_bytes().to_vec()
+            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa87>::try_from(secret_key.as_bytes()).expect("valid secret key bytes");
+            let sk = ml_dsa::SigningKey::<MlDsa87>::decode(&sk_encoded);
+            let sig: ml_dsa::Signature<MlDsa87> = sk.sign(message);
+            sig.encode()[..].to_vec()
         }
     };
 

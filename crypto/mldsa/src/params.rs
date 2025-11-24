@@ -177,30 +177,9 @@ mod tests {
     fn test_copy_clone() {
         let level = MlDsaLevel::Level2;
         let copied = level;
-        let cloned = level.clone();
+        let cloned = level;
 
         assert_eq!(level, copied);
         assert_eq!(level, cloned);
-    }
-}
-
-#[cfg(test)]
-mod size_tests {
-    use pqcrypto_dilithium::{dilithium2, dilithium3, dilithium5};
-    use pqcrypto_traits::sign::{DetachedSignature, PublicKey, SecretKey};
-
-    #[test]
-    fn print_actual_sizes() {
-        let (pk2, sk2) = dilithium2::keypair();
-        let sig2 = dilithium2::detached_sign(b"test", &sk2);
-        println!("Level 2: PK={}, SK={}, Sig={}", pk2.as_bytes().len(), sk2.as_bytes().len(), sig2.as_bytes().len());
-
-        let (pk3, sk3) = dilithium3::keypair();
-        let sig3 = dilithium3::detached_sign(b"test", &sk3);
-        println!("Level 3: PK={}, SK={}, Sig={}", pk3.as_bytes().len(), sk3.as_bytes().len(), sig3.as_bytes().len());
-
-        let (pk5, sk5) = dilithium5::keypair();
-        let sig5 = dilithium5::detached_sign(b"test", &sk5);
-        println!("Level 5: PK={}, SK={}, Sig={}", pk5.as_bytes().len(), sk5.as_bytes().len(), sig5.as_bytes().len());
     }
 }

@@ -11,9 +11,14 @@ repository.workspace = true
 crate-type = ["lib"]
 
 [dependencies]
-# Post-quantum cryptography
-pqcrypto-dilithium.workspace = true
-pqcrypto-traits.workspace = true
+# Post-quantum cryptography (FIPS 204 final)
+ml-dsa.workspace = true
+signature.workspace = true
+
+# Random number generation for keypair
+rand.workspace = true
+rand_core.workspace = true
+getrandom.workspace = true
 
 # Serialization
 borsh = { workspace = true, optional = true }

@@ -174,21 +174,30 @@ impl MlDsaKeypair {
 /// assert_eq!(keypair.secret_key.len(), 2560);
 /// ```
 pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
-    use pqcrypto_traits::sign::PublicKey as _;
-    use pqcrypto_traits::sign::SecretKey as _;
+    use ml_dsa::KeyGen;
+
+    // Generate 32 bytes of randomness using getrandom
+    let mut seed = [0u8; 32];
+    getrandom::getrandom(&mut seed).expect("failed to generate random seed");
 
     let (pk, sk) = match level {
         MlDsaLevel::Level2 => {
-            let (pk, sk) = pqcrypto_dilithium::dilithium2::keypair();
-            (pk.as_bytes().to_vec(), sk.as_bytes().to_vec())
+            let keypair = ml_dsa::MlDsa44::from_seed((&seed).into());
+            let pk_encoded = keypair.verifying_key().encode();
+            let sk_encoded = keypair.signing_key().encode();
+            (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
         MlDsaLevel::Level3 => {
-            let (pk, sk) = pqcrypto_dilithium::dilithium3::keypair();
-            (pk.as_bytes().to_vec(), sk.as_bytes().to_vec())
+            let keypair = ml_dsa::MlDsa65::from_seed((&seed).into());
+            let pk_encoded = keypair.verifying_key().encode();
+            let sk_encoded = keypair.signing_key().encode();
+            (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
         MlDsaLevel::Level5 => {
-            let (pk, sk) = pqcrypto_dilithium::dilithium5::keypair();
-            (pk.as_bytes().to_vec(), sk.as_bytes().to_vec())
+            let keypair = ml_dsa::MlDsa87::from_seed((&seed).into());
+            let pk_encoded = keypair.verifying_key().encode();
+            let sk_encoded = keypair.signing_key().encode();
+            (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
     };
 
