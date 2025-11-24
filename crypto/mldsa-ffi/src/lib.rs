@@ -41,7 +41,7 @@ use std::slice;
 /// - `public_key`: Pointer to public key bytes
 /// - `public_key_len`: Length of public key (1312 for Level 2, 1952 for Level 3, 2592 for Level 5)
 #[no_mangle]
-pub extern "C" fn kaspa_mldsa_verify(
+pub unsafe extern "C" fn kaspa_mldsa_verify(
     message: *const u8,
     message_len: usize,
     signature: *const u8,
@@ -184,7 +184,7 @@ pub extern "C" fn kaspa_mldsa_get_level5_signature_size() -> usize {
 ///
 /// Returns true on success, false on failure.
 #[no_mangle]
-pub extern "C" fn kaspa_mldsa_generate_keypair(
+pub unsafe extern "C" fn kaspa_mldsa_generate_keypair(
     level: u8,
     public_key_out: *mut u8,
     public_key_len: usize,
@@ -230,7 +230,7 @@ pub extern "C" fn kaspa_mldsa_generate_keypair(
 ///
 /// Returns true on success, false on failure.
 #[no_mangle]
-pub extern "C" fn kaspa_mldsa_sign(
+pub unsafe extern "C" fn kaspa_mldsa_sign(
     message: *const u8,
     message_len: usize,
     secret_key: *const u8,
