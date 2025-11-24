@@ -303,14 +303,16 @@ mod tests {
         let message = b"test message";
         let signature = kaspa_mldsa::sign(message, &keypair.secret_key);
 
-        let result = kaspa_mldsa_verify(
-            message.as_ptr(),
-            message.len(),
-            signature.as_bytes().as_ptr(),
-            signature.len(),
-            keypair.public_key.as_bytes().as_ptr(),
-            keypair.public_key.len(),
-        );
+        let result = unsafe {
+            kaspa_mldsa_verify(
+                message.as_ptr(),
+                message.len(),
+                signature.as_bytes().as_ptr(),
+                signature.len(),
+                keypair.public_key.as_bytes().as_ptr(),
+                keypair.public_key.len(),
+            )
+        };
 
         assert!(result, "Valid signature should verify");
     }
@@ -325,21 +327,23 @@ mod tests {
         let mut corrupted = signature.as_bytes().to_vec();
         corrupted[0] ^= 0xFF;
 
-        let result = kaspa_mldsa_verify(
-            message.as_ptr(),
-            message.len(),
-            corrupted.as_ptr(),
-            corrupted.len(),
-            keypair.public_key.as_bytes().as_ptr(),
-            keypair.public_key.len(),
-        );
+        let result = unsafe {
+            kaspa_mldsa_verify(
+                message.as_ptr(),
+                message.len(),
+                corrupted.as_ptr(),
+                corrupted.len(),
+                keypair.public_key.as_bytes().as_ptr(),
+                keypair.public_key.len(),
+            )
+        };
 
         assert!(!result, "Corrupted signature should fail");
     }
 
     #[test]
     fn test_null_pointers() {
-        let result = kaspa_mldsa_verify(std::ptr::null(), 0, std::ptr::null(), 0, std::ptr::null(), 0);
+        let result = unsafe { kaspa_mldsa_verify(std::ptr::null(), 0, std::ptr::null(), 0, std::ptr::null(), 0) };
         assert!(!result, "Null pointers should return false");
     }
 
@@ -356,33 +360,38 @@ mod tests {
         let mut public_key = vec![0u8; 1312];
         let mut secret_key = vec![0u8; 2560];
 
-        let gen_result =
-            kaspa_mldsa_generate_keypair(2, public_key.as_mut_ptr(), public_key.len(), secret_key.as_mut_ptr(), secret_key.len());
+        let gen_result = unsafe {
+            kaspa_mldsa_generate_keypair(2, public_key.as_mut_ptr(), public_key.len(), secret_key.as_mut_ptr(), secret_key.len())
+        };
 
         assert!(gen_result, "Keypair generation should succeed");
 
         let message = b"test message";
         let mut signature = vec![0u8; 2420];
 
-        let sign_result = kaspa_mldsa_sign(
-            message.as_ptr(),
-            message.len(),
-            secret_key.as_ptr(),
-            secret_key.len(),
-            signature.as_mut_ptr(),
-            signature.len(),
-        );
+        let sign_result = unsafe {
+            kaspa_mldsa_sign(
+                message.as_ptr(),
+                message.len(),
+                secret_key.as_ptr(),
+                secret_key.len(),
+                signature.as_mut_ptr(),
+                signature.len(),
+            )
+        };
 
         assert!(sign_result, "Signing should succeed");
 
-        let verify_result = kaspa_mldsa_verify(
-            message.as_ptr(),
-            message.len(),
-            signature.as_ptr(),
-            signature.len(),
-            public_key.as_ptr(),
-            public_key.len(),
-        );
+        let verify_result = unsafe {
+            kaspa_mldsa_verify(
+                message.as_ptr(),
+                message.len(),
+                signature.as_ptr(),
+                signature.len(),
+                public_key.as_ptr(),
+                public_key.len(),
+            )
+        };
 
         assert!(verify_result, "Signature should verify");
     }
