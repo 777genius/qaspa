@@ -421,7 +421,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
         abortable: &Abortable,
     ) -> Result<Bundle, Error> {
         commit_reveal_batch_bundle(
-            pskb::CommitRevealBatchKind::Parameterized { address, commit_amount_sompi },
+            pskb::CommitRevealBatchKind::Parameterized { address: Box::new(address), commit_amount_sompi },
             reveal_fee_sompi,
             script_sig,
             payload,

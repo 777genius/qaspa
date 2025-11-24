@@ -423,7 +423,7 @@ pub fn pskt_to_pending_transaction(
 // different parameters sets.
 pub enum CommitRevealBatchKind {
     Manual { hop_payment: PaymentDestination, destination_payment: PaymentDestination },
-    Parameterized { address: Address, commit_amount_sompi: u64 },
+    Parameterized { address: Box<Address>, commit_amount_sompi: u64 },
 }
 
 struct BundleCommitRevealConfig {
@@ -483,10 +483,10 @@ pub async fn commit_reveal_batch_bundle(
 
             BundleCommitRevealConfig {
                 address_commit: lock_address.clone(),
-                addresses_reveal: vec![address.clone()],
+                addresses_reveal: vec![(*address).clone()],
                 commit_destination: PaymentDestination::from(PaymentOutput::new(lock_address, commit_amount_sompi)),
                 redeem_script,
-                payment_outputs: PaymentOutputs { outputs: vec![PaymentOutput::new(address.clone(), amt_reveal)] },
+                payment_outputs: PaymentOutputs { outputs: vec![PaymentOutput::new((*address).clone(), amt_reveal)] },
             }
         }
     };

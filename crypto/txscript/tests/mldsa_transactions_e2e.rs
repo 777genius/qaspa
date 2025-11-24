@@ -37,6 +37,7 @@ struct TestNode {
     process: Child,
     rpc_port: u16,
     p2p_port: u16,
+    #[allow(dead_code)]
     id: usize,
 }
 
@@ -124,6 +125,7 @@ impl TestNode {
         }
     }
 
+    #[allow(dead_code)]
     fn get_block_count(&self) -> u64 {
         match self.rpc_call("getBlockCount", serde_json::json!({})) {
             Ok(result) => result["blockCount"].as_u64().unwrap_or(0),
@@ -224,6 +226,7 @@ struct UtxoInfo {
 struct MLDSAWallet {
     keypair: MlDsaKeypair,
     address: Address,
+    #[allow(dead_code)]
     level: MlDsaLevel,
 }
 
