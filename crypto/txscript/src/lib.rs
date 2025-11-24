@@ -23,7 +23,7 @@ use kaspa_consensus_core::hashing::sighash::{
 };
 use kaspa_consensus_core::hashing::sighash_type::SigHashType;
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionInput, UtxoEntry, VerifiableTransaction};
-use kaspa_mldsa::{MlDsaLevel, PublicKey as MlDsaPublicKey, Signature as MlDsaSignature, verify as mldsa_verify};
+use kaspa_mldsa::{verify as mldsa_verify, MlDsaLevel, PublicKey as MlDsaPublicKey, Signature as MlDsaSignature};
 use kaspa_txscript_errors::TxScriptError;
 use log::trace;
 use opcodes::codes::OpReturn;

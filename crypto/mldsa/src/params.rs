@@ -187,7 +187,7 @@ mod tests {
 #[cfg(test)]
 mod size_tests {
     use pqcrypto_dilithium::{dilithium2, dilithium3, dilithium5};
-    use pqcrypto_traits::sign::{PublicKey, SecretKey, DetachedSignature};
+    use pqcrypto_traits::sign::{DetachedSignature, PublicKey, SecretKey};
 
     #[test]
     fn print_actual_sizes() {

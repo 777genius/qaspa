@@ -18,8 +18,7 @@ use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::hashing::sighash::SigHashReusedValuesUnsync;
 use kaspa_consensus_core::hashing::sighash_type::SIG_HASH_ALL;
 use kaspa_consensus_core::tx::{
-    MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput,
-    UtxoEntry, VerifiableTransaction,
+    MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry, VerifiableTransaction,
 };
 use kaspa_hashes::Hash;
 use kaspa_mldsa::{generate_keypair, sign, MlDsaLevel};
@@ -39,15 +38,7 @@ fn create_and_verify_mldsa_tx(level: MlDsaLevel) -> (Transaction, usize) {
     // Create transaction
     let tx = Transaction::new(
         0,
-        vec![TransactionInput::new(
-            TransactionOutpoint {
-                transaction_id: Hash::from_bytes([0u8; 32]),
-                index: 0,
-            },
-            vec![],
-            0,
-            1,
-        )],
+        vec![TransactionInput::new(TransactionOutpoint { transaction_id: Hash::from_bytes([0u8; 32]), index: 0 }, vec![], 0, 1)],
         vec![TransactionOutput::new(1000, script_pubkey.clone())],
         0,
         Default::default(),
@@ -211,10 +202,7 @@ fn test_e2e_mass_optimization() {
 
     // Verify optimization goals
     // Target: ~272 tx/block, which means mass should be ~7,353 per tx
-    assert!(
-        estimated_mldsa_mass < 10_000,
-        "ML-DSA tx mass should be <10KB for good throughput"
-    );
+    assert!(estimated_mldsa_mass < 10_000, "ML-DSA tx mass should be <10KB for good throughput");
 
     println!("\n🎉 Mass optimization verified!");
     println!("   ✅ ML-DSA transactions have acceptable mass");
@@ -231,15 +219,7 @@ fn test_e2e_security_validation() {
 
     let tx = Transaction::new(
         0,
-        vec![TransactionInput::new(
-            TransactionOutpoint {
-                transaction_id: Hash::from_bytes([0u8; 32]),
-                index: 0,
-            },
-            vec![],
-            0,
-            1,
-        )],
+        vec![TransactionInput::new(TransactionOutpoint { transaction_id: Hash::from_bytes([0u8; 32]), index: 0 }, vec![], 0, 1)],
         vec![TransactionOutput::new(1000, script_pubkey.clone())],
         0,
         Default::default(),
@@ -419,15 +399,7 @@ fn test_e2e_production_readiness() {
 
     let tx = Transaction::new(
         0,
-        vec![TransactionInput::new(
-            TransactionOutpoint {
-                transaction_id: Hash::from_bytes([0u8; 32]),
-                index: 0,
-            },
-            vec![],
-            0,
-            1,
-        )],
+        vec![TransactionInput::new(TransactionOutpoint { transaction_id: Hash::from_bytes([0u8; 32]), index: 0 }, vec![], 0, 1)],
         vec![TransactionOutput::new(1000, script_pubkey.clone())],
         0,
         Default::default(),
@@ -504,10 +476,7 @@ fn test_e2e_production_readiness() {
     let (_, mass) = create_and_verify_mldsa_tx(MlDsaLevel::Level2);
     let max_block_mass = 2_000_000;
     let tx_per_block = max_block_mass / mass;
-    assert!(
-        tx_per_block >= 200,
-        "Should fit at least 200 ML-DSA tx/block"
-    );
+    assert!(tx_per_block >= 200, "Should fit at least 200 ML-DSA tx/block");
     println!("  ✅ Mass optimization effective (~{} tx/block)", tx_per_block);
     checks_passed += 1;
 

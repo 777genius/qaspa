@@ -21,9 +21,9 @@
 //! }
 //! ```
 
-use kaspa_mldsa::{verify, MlDsaPublicKey, MlDsaSignature, MlDsaLevel};
-use std::slice;
+use kaspa_mldsa::{verify, MlDsaLevel, MlDsaPublicKey, MlDsaSignature};
 use std::ptr;
+use std::slice;
 
 /// Verify ML-DSA signature
 ///
@@ -173,16 +173,8 @@ pub extern "C" fn kaspa_mldsa_generate_keypair(
 
     // Copy to output buffers
     unsafe {
-        ptr::copy_nonoverlapping(
-            keypair.public_key.as_bytes().as_ptr(),
-            public_key_out,
-            keypair.public_key.len(),
-        );
-        ptr::copy_nonoverlapping(
-            keypair.secret_key.as_bytes().as_ptr(),
-            secret_key_out,
-            keypair.secret_key.len(),
-        );
+        ptr::copy_nonoverlapping(keypair.public_key.as_bytes().as_ptr(), public_key_out, keypair.public_key.len());
+        ptr::copy_nonoverlapping(keypair.secret_key.as_bytes().as_ptr(), secret_key_out, keypair.secret_key.len());
     }
 
     true
@@ -317,13 +309,8 @@ mod tests {
         let mut public_key = vec![0u8; 1312];
         let mut secret_key = vec![0u8; 2560];
 
-        let gen_result = kaspa_mldsa_generate_keypair(
-            2,
-            public_key.as_mut_ptr(),
-            public_key.len(),
-            secret_key.as_mut_ptr(),
-            secret_key.len(),
-        );
+        let gen_result =
+            kaspa_mldsa_generate_keypair(2, public_key.as_mut_ptr(), public_key.len(), secret_key.as_mut_ptr(), secret_key.len());
 
         assert!(gen_result, "Keypair generation should succeed");
 

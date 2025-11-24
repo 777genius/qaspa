@@ -15,8 +15,7 @@ use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::hashing::sighash::SigHashReusedValuesUnsync;
 use kaspa_consensus_core::hashing::sighash_type::SIG_HASH_ALL;
 use kaspa_consensus_core::tx::{
-    MutableTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint,
-    TransactionOutput, UtxoEntry,
+    MutableTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry,
 };
 use kaspa_hashes::Hash;
 use kaspa_mldsa::{generate_keypair, sign, MlDsaKeypair, MlDsaLevel};
@@ -82,10 +81,7 @@ impl TestNode {
     }
 
     fn check_rpc(&self) -> bool {
-        let client = match reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(2))
-            .build()
-        {
+        let client = match reqwest::blocking::Client::builder().timeout(Duration::from_secs(2)).build() {
             Ok(c) => c,
             Err(_) => return false,
         };
@@ -167,9 +163,7 @@ impl TestNode {
             }),
         )?;
 
-        let entries = result["entries"]
-            .as_array()
-            .ok_or("No entries in response")?;
+        let entries = result["entries"].as_array().ok_or("No entries in response")?;
 
         let mut utxos = Vec::new();
         for entry in entries {
@@ -179,10 +173,7 @@ impl TestNode {
                 transaction_id: outpoint["transactionId"].as_str().unwrap_or("").to_string(),
                 index: outpoint["index"].as_u64().unwrap_or(0) as u32,
                 amount: utxo_entry["amount"].as_u64().unwrap_or(0),
-                script_public_key: utxo_entry["scriptPublicKey"]["scriptPublicKey"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                script_public_key: utxo_entry["scriptPublicKey"]["scriptPublicKey"].as_str().unwrap_or("").to_string(),
                 block_daa_score: utxo_entry["blockDaaScore"].as_u64().unwrap_or(0),
                 is_coinbase: utxo_entry["isCoinbase"].as_bool().unwrap_or(false),
             });
@@ -418,25 +409,19 @@ fn test_mldsa_transaction_creation_and_mining() {
     println!("\n📍 Phase 3: Funding ML-DSA address\n");
     println!("  Mining 10 blocks to ML-DSA address...");
 
-    let blocks = network.nodes[0]
-        .generate_blocks(&wallet.address_string(), 10)
-        .expect("Failed to generate blocks");
+    let blocks = network.nodes[0].generate_blocks(&wallet.address_string(), 10).expect("Failed to generate blocks");
 
     println!("  ✓ Mined {} blocks", blocks.len());
 
     // Wait for maturity (need 100 blocks for coinbase maturity in Kaspa)
     println!("\n  Mining additional 100 blocks for coinbase maturity...");
-    network.nodes[0]
-        .generate_blocks(&wallet.address_string(), 100)
-        .expect("Failed to generate maturity blocks");
+    network.nodes[0].generate_blocks(&wallet.address_string(), 100).expect("Failed to generate maturity blocks");
 
     thread::sleep(Duration::from_secs(2));
 
     // Check UTXOs
     println!("\n📍 Phase 4: Checking UTXOs\n");
-    let utxos = network.nodes[0]
-        .get_utxos_by_address(&wallet.address_string())
-        .expect("Failed to get UTXOs");
+    let utxos = network.nodes[0].get_utxos_by_address(&wallet.address_string()).expect("Failed to get UTXOs");
 
     println!("  ✓ Found {} UTXOs", utxos.len());
     let total_balance: u64 = utxos.iter().map(|u| u.amount).sum();
@@ -463,9 +448,8 @@ fn test_mldsa_transaction_creation_and_mining() {
     println!("    Amount: {} sompi", amount_to_send);
     println!("    Fee: {} sompi", fee);
 
-    let tx_hex = wallet
-        .create_transaction(utxos, &recipient_wallet.address, amount_to_send, fee)
-        .expect("Failed to create transaction");
+    let tx_hex =
+        wallet.create_transaction(utxos, &recipient_wallet.address, amount_to_send, fee).expect("Failed to create transaction");
 
     println!("  ✓ Transaction created");
     println!("    Size: {} bytes (hex: {} chars)", tx_hex.len() / 2, tx_hex.len());
@@ -495,8 +479,7 @@ fn test_mldsa_transaction_creation_and_mining() {
     println!("\n📍 Phase 8: Mining block with ML-DSA transaction\n");
 
     let mining_addr = wallet.address_string(); // Use same address for mining reward
-    let new_blocks =
-        network.nodes[0].generate_blocks(&mining_addr, 1).expect("Failed to mine block with transaction");
+    let new_blocks = network.nodes[0].generate_blocks(&mining_addr, 1).expect("Failed to mine block with transaction");
 
     println!("  ✓ Mined block: {}", new_blocks[0]);
 
@@ -506,9 +489,8 @@ fn test_mldsa_transaction_creation_and_mining() {
     // Verify recipient has received funds
     println!("\n📍 Phase 9: Verifying recipient balance\n");
 
-    let recipient_utxos = network.nodes[0]
-        .get_utxos_by_address(&recipient_wallet.address_string())
-        .expect("Failed to get recipient UTXOs");
+    let recipient_utxos =
+        network.nodes[0].get_utxos_by_address(&recipient_wallet.address_string()).expect("Failed to get recipient UTXOs");
 
     println!("  Recipient UTXOs: {}", recipient_utxos.len());
     let recipient_balance: u64 = recipient_utxos.iter().map(|u| u.amount).sum();
@@ -567,9 +549,7 @@ fn test_mldsa_transaction_propagation() {
     // Create and fund wallet
     let wallet = MLDSAWallet::new(MlDsaLevel::Level2, Prefix::Devnet);
     println!("\n  Funding wallet...");
-    network.nodes[0]
-        .generate_blocks(&wallet.address_string(), 110)
-        .expect("Failed to fund wallet");
+    network.nodes[0].generate_blocks(&wallet.address_string(), 110).expect("Failed to fund wallet");
 
     thread::sleep(Duration::from_secs(2));
 
@@ -583,9 +563,7 @@ fn test_mldsa_transaction_propagation() {
 
     // Create transaction
     println!("\n📍 Creating and submitting transaction to node 1\n");
-    let tx_hex = wallet
-        .create_transaction(utxos, &recipient.address, 1_000_000_000, 1_000)
-        .expect("Failed to create transaction");
+    let tx_hex = wallet.create_transaction(utxos, &recipient.address, 1_000_000_000, 1_000).expect("Failed to create transaction");
 
     let tx_id = network.nodes[0].submit_transaction(&tx_hex).expect("Failed to submit transaction");
     println!("  ✓ Transaction submitted: {}", tx_id);

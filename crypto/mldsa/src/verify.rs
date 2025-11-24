@@ -1,9 +1,6 @@
 //! ML-DSA signature verification
 
-use crate::{
-    keypair::PublicKey,
-    sign::Signature,
-};
+use crate::{keypair::PublicKey, sign::Signature};
 
 /// Verifies an ML-DSA signature
 ///

@@ -1,6 +1,6 @@
 //! Benchmarks for ML-DSA operations
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use kaspa_mldsa::{generate_keypair, sign, verify, MlDsaLevel};
 
 fn bench_keygen(c: &mut Criterion) {
@@ -8,9 +8,7 @@ fn bench_keygen(c: &mut Criterion) {
 
     for level in [MlDsaLevel::Level2, MlDsaLevel::Level3, MlDsaLevel::Level5] {
         group.bench_with_input(BenchmarkId::from_parameter(level), &level, |b, &level| {
-            b.iter(|| {
-                black_box(generate_keypair(level))
-            });
+            b.iter(|| black_box(generate_keypair(level)));
         });
     }
 
@@ -26,9 +24,7 @@ fn bench_sign(c: &mut Criterion) {
         let keypair = generate_keypair(level);
 
         group.bench_with_input(BenchmarkId::from_parameter(level), &level, |b, _level| {
-            b.iter(|| {
-                black_box(sign(black_box(message), black_box(&keypair.secret_key)))
-            });
+            b.iter(|| black_box(sign(black_box(message), black_box(&keypair.secret_key))));
         });
     }
 
@@ -45,13 +41,7 @@ fn bench_verify(c: &mut Criterion) {
         let signature = sign(message, &keypair.secret_key);
 
         group.bench_with_input(BenchmarkId::from_parameter(level), &level, |b, _level| {
-            b.iter(|| {
-                black_box(verify(
-                    black_box(message),
-                    black_box(&signature),
-                    black_box(&keypair.public_key)
-                ))
-            });
+            b.iter(|| black_box(verify(black_box(message), black_box(&signature), black_box(&keypair.public_key))));
         });
     }
 

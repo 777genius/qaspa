@@ -20,10 +20,7 @@ impl PublicKey {
     /// Creates a public key from bytes
     pub fn from_bytes(bytes: &[u8], level: MlDsaLevel) -> Result<Self> {
         if bytes.len() != level.public_key_len() {
-            return Err(MlDsaError::InvalidPublicKeyLength {
-                expected: level.public_key_len(),
-                actual: bytes.len(),
-            });
+            return Err(MlDsaError::InvalidPublicKeyLength { expected: level.public_key_len(), actual: bytes.len() });
         }
         Ok(Self { bytes: bytes.to_vec(), level })
     }
@@ -56,11 +53,7 @@ impl PublicKey {
 
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PublicKey({}..{} [{} bytes])",
-            &self.to_hex()[..8],
-            &self.to_hex()[self.to_hex().len()-8..],
-            self.len()
-        )
+        write!(f, "PublicKey({}..{} [{} bytes])", &self.to_hex()[..8], &self.to_hex()[self.to_hex().len() - 8..], self.len())
     }
 }
 
@@ -89,10 +82,7 @@ impl SecretKey {
     /// Creates a secret key from bytes
     pub fn from_bytes(bytes: &[u8], level: MlDsaLevel) -> Result<Self> {
         if bytes.len() != level.secret_key_len() {
-            return Err(MlDsaError::InvalidSecretKeyLength {
-                expected: level.secret_key_len(),
-                actual: bytes.len(),
-            });
+            return Err(MlDsaError::InvalidSecretKeyLength { expected: level.secret_key_len(), actual: bytes.len() });
         }
         Ok(Self { bytes: bytes.to_vec(), level })
     }
@@ -148,10 +138,7 @@ impl Clone for MlDsaKeypair {
         // Manual clone implementation to allow cloning even though SecretKey doesn't derive Clone
         Self {
             public_key: self.public_key.clone(),
-            secret_key: SecretKey {
-                bytes: self.secret_key.bytes.clone(),
-                level: self.secret_key.level,
-            },
+            secret_key: SecretKey { bytes: self.secret_key.bytes.clone(), level: self.secret_key.level },
         }
     }
 }
@@ -159,24 +146,14 @@ impl Clone for MlDsaKeypair {
 impl fmt::Debug for MlDsaKeypair {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Don't expose secret key material in debug output
-        f.debug_struct("MlDsaKeypair")
-            .field("public_key", &self.public_key)
-            .field("secret_key", &"<redacted>")
-            .finish()
+        f.debug_struct("MlDsaKeypair").field("public_key", &self.public_key).field("secret_key", &"<redacted>").finish()
     }
 }
 
 impl MlDsaKeypair {
     /// Creates a new keypair from public and secret key bytes
-    pub fn from_bytes(
-        public_bytes: &[u8],
-        secret_bytes: &[u8],
-        level: MlDsaLevel,
-    ) -> Result<Self> {
-        Ok(Self {
-            public_key: PublicKey::from_bytes(public_bytes, level)?,
-            secret_key: SecretKey::from_bytes(secret_bytes, level)?,
-        })
+    pub fn from_bytes(public_bytes: &[u8], secret_bytes: &[u8], level: MlDsaLevel) -> Result<Self> {
+        Ok(Self { public_key: PublicKey::from_bytes(public_bytes, level)?, secret_key: SecretKey::from_bytes(secret_bytes, level)? })
     }
 
     /// Returns the security level
@@ -215,10 +192,7 @@ pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
         }
     };
 
-    MlDsaKeypair {
-        public_key: PublicKey { bytes: pk, level },
-        secret_key: SecretKey { bytes: sk, level },
-    }
+    MlDsaKeypair { public_key: PublicKey { bytes: pk, level }, secret_key: SecretKey { bytes: sk, level } }
 }
 
 #[cfg(test)]

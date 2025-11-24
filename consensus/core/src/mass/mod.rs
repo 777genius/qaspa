@@ -711,17 +711,15 @@ mod tests {
             0,
             vec![TransactionInput {
                 previous_outpoint: TransactionOutpoint {
-                    transaction_id: TransactionId::from_str("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3").unwrap(),
+                    transaction_id: TransactionId::from_str("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3")
+                        .unwrap(),
                     index: 0,
                 },
                 signature_script: schnorr_sig_script,
                 sequence: 0,
                 sig_op_count: 1,
             }],
-            vec![TransactionOutput {
-                value: 1000,
-                script_public_key: schnorr_spk.clone(),
-            }],
+            vec![TransactionOutput { value: 1000, script_public_key: schnorr_spk.clone() }],
             0,
             SubnetworkId::from_bytes([0; 20]),
             0,
@@ -740,17 +738,15 @@ mod tests {
             0,
             vec![TransactionInput {
                 previous_outpoint: TransactionOutpoint {
-                    transaction_id: TransactionId::from_str("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3").unwrap(),
+                    transaction_id: TransactionId::from_str("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3")
+                        .unwrap(),
                     index: 0,
                 },
                 signature_script: mldsa_sig_script,
                 sequence: 0,
                 sig_op_count: 1,
             }],
-            vec![TransactionOutput {
-                value: 1000,
-                script_public_key: mldsa_spk.clone(),
-            }],
+            vec![TransactionOutput { value: 1000, script_public_key: mldsa_spk.clone() }],
             0,
             SubnetworkId::from_bytes([0; 20]),
             0,

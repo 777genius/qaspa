@@ -38,7 +38,7 @@ fn pay_to_pub_key_mldsa(address_payload: &[u8]) -> ScriptVec {
             .chain(once(0x20)) // Low byte of 1312
             .chain(once(0x05)) // High byte of 1312
             .chain(address_payload.iter().copied())
-            .chain(once(OpCheckSigMLDSA))
+            .chain(once(OpCheckSigMLDSA)),
     )
 }
 

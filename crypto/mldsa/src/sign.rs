@@ -20,10 +20,7 @@ impl Signature {
     /// Creates a signature from bytes
     pub fn from_bytes(bytes: &[u8], level: MlDsaLevel) -> Result<Self> {
         if bytes.len() != level.signature_len() {
-            return Err(MlDsaError::InvalidSignatureLength {
-                expected: level.signature_len(),
-                actual: bytes.len(),
-            });
+            return Err(MlDsaError::InvalidSignatureLength { expected: level.signature_len(), actual: bytes.len() });
         }
         Ok(Self { bytes: bytes.to_vec(), level })
     }
@@ -56,9 +53,11 @@ impl Signature {
 
 impl fmt::Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Signature({}..{} [{} bytes, {}])",
+        write!(
+            f,
+            "Signature({}..{} [{} bytes, {}])",
             &self.to_hex()[..8],
-            &self.to_hex()[self.to_hex().len()-8..],
+            &self.to_hex()[self.to_hex().len() - 8..],
             self.len(),
             self.level
         )
@@ -100,20 +99,17 @@ pub fn sign(message: &[u8], secret_key: &SecretKey) -> Signature {
 
     let sig_bytes = match level {
         MlDsaLevel::Level2 => {
-            let sk = pqcrypto_dilithium::dilithium2::SecretKey::from_bytes(secret_key.as_bytes())
-                .expect("valid secret key");
+            let sk = pqcrypto_dilithium::dilithium2::SecretKey::from_bytes(secret_key.as_bytes()).expect("valid secret key");
             let sig = pqcrypto_dilithium::dilithium2::detached_sign(message, &sk);
             sig.as_bytes().to_vec()
         }
         MlDsaLevel::Level3 => {
-            let sk = pqcrypto_dilithium::dilithium3::SecretKey::from_bytes(secret_key.as_bytes())
-                .expect("valid secret key");
+            let sk = pqcrypto_dilithium::dilithium3::SecretKey::from_bytes(secret_key.as_bytes()).expect("valid secret key");
             let sig = pqcrypto_dilithium::dilithium3::detached_sign(message, &sk);
             sig.as_bytes().to_vec()
         }
         MlDsaLevel::Level5 => {
-            let sk = pqcrypto_dilithium::dilithium5::SecretKey::from_bytes(secret_key.as_bytes())
-                .expect("valid secret key");
+            let sk = pqcrypto_dilithium::dilithium5::SecretKey::from_bytes(secret_key.as_bytes()).expect("valid secret key");
             let sig = pqcrypto_dilithium::dilithium5::detached_sign(message, &sk);
             sig.as_bytes().to_vec()
         }

@@ -41,10 +41,7 @@ fn test_mldsa_transaction_end_to_end() {
     assert_eq!(script_pubkey.script().len(), 1316); // OpPushData2 + 2 + 1312 + OpCheckSigMLDSA
 
     // Step 4: Create a transaction that spends from this script
-    let previous_outpoint = TransactionOutpoint {
-        transaction_id: Hash::from_bytes([1u8; 32]),
-        index: 0,
-    };
+    let previous_outpoint = TransactionOutpoint { transaction_id: Hash::from_bytes([1u8; 32]), index: 0 };
 
     let tx = Transaction::new(
         0,
@@ -84,10 +81,7 @@ fn test_mldsa_transaction_end_to_end() {
 
     // Signature script only pushes the signature (with hash type)
     // The public key is already in the script_pubkey
-    let signature_script = ScriptBuilder::new()
-        .add_data(&sig_with_hash_type)
-        .unwrap()
-        .drain();
+    let signature_script = ScriptBuilder::new().add_data(&sig_with_hash_type).unwrap().drain();
 
     mutable_tx.tx.inputs[0].signature_script = signature_script;
 
@@ -131,10 +125,7 @@ fn test_mldsa_signature_invalid() {
     let address = Address::new(Prefix::Mainnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
     let script_pubkey = pay_to_address_script(&address);
 
-    let previous_outpoint = TransactionOutpoint {
-        transaction_id: Hash::from_bytes([1u8; 32]),
-        index: 0,
-    };
+    let previous_outpoint = TransactionOutpoint { transaction_id: Hash::from_bytes([1u8; 32]), index: 0 };
 
     let tx = Transaction::new(
         0,
@@ -168,10 +159,7 @@ fn test_mldsa_signature_invalid() {
 
     // Signature script only pushes the signature (with hash type)
     // The public key is already in the script_pubkey
-    let signature_script = ScriptBuilder::new()
-        .add_data(&sig_with_hash_type)
-        .unwrap()
-        .drain();
+    let signature_script = ScriptBuilder::new().add_data(&sig_with_hash_type).unwrap().drain();
 
     mutable_tx.tx.inputs[0].signature_script = signature_script;
 
@@ -207,10 +195,7 @@ fn test_mldsa_wrong_public_key() {
     let address = Address::new(Prefix::Mainnet, Version::PubKeyMLDSA, keypair1.public_key.as_bytes());
     let script_pubkey = pay_to_address_script(&address);
 
-    let previous_outpoint = TransactionOutpoint {
-        transaction_id: Hash::from_bytes([1u8; 32]),
-        index: 0,
-    };
+    let previous_outpoint = TransactionOutpoint { transaction_id: Hash::from_bytes([1u8; 32]), index: 0 };
 
     let tx = Transaction::new(
         0,
@@ -242,10 +227,7 @@ fn test_mldsa_wrong_public_key() {
 
     // Signature script only pushes the signature
     // The public key comes from script_pubkey (keypair1's public key)
-    let signature_script = ScriptBuilder::new()
-        .add_data(&sig_with_hash_type)
-        .unwrap()
-        .drain();
+    let signature_script = ScriptBuilder::new().add_data(&sig_with_hash_type).unwrap().drain();
 
     mutable_tx.tx.inputs[0].signature_script = signature_script;
 
