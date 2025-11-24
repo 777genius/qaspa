@@ -436,8 +436,11 @@ mod tests {
 
         let mut block = example_block.clone();
         let txs = &mut block.transactions;
-        txs[1].inputs[0].sig_op_count = 255;
-        txs[1].inputs[1].sig_op_count = 255;
+        // Updated from 255 to 1250 to account for consensus parameter changes:
+        // mass_per_sig_op: 1000→800, max_block_mass: 500,000→2,000,000
+        // Calculation: 1250 × 2 inputs × 800 = 2,000,000 (exceeds limit with tx size)
+        txs[1].inputs[0].sig_op_count = 1250;
+        txs[1].inputs[1].sig_op_count = 1250;
         block.header.hash_merkle_root = calc_hash_merkle_root(txs.iter());
         assert_match!(body_processor.validate_body_in_isolation(&block.to_immutable()), Err(RuleError::ExceedsComputeMassLimit(_, _)));
 
