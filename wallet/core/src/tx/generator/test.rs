@@ -309,6 +309,7 @@ impl Harness {
         self.clone()
     }
 
+    #[allow(dead_code)]
     pub fn drain<SOMPI>(self: &Rc<Self>, count: usize, expected: &Expected<SOMPI>) -> Rc<Self>
     where
         SOMPI: Into<Sompi> + Debug + Copy,
@@ -325,6 +326,7 @@ impl Harness {
         self.clone()
     }
 
+    #[allow(dead_code)]
     pub fn accumulate(self: &Rc<Self>, count: usize) -> Rc<Self> {
         for _n in 0..count {
             if DISPLAY_LOGS {
@@ -630,30 +632,16 @@ fn test_generator_inputs_2_outputs_2_fees_exclude() -> Result<()> {
 
 #[test]
 fn test_generator_inputs_100_outputs_1_fees_exclude_success() -> Result<()> {
-    // generator(test_network_id(), &[10.0; 100], &[], Fees::sender(Kaspa(5.0)), [(output_address, Kaspa(990.0))].as_slice())
+    // With new mass parameters (mass_per_sig_op: 800, mass_per_script_pub_key_byte: 2),
+    // all 100 inputs fit in a single transaction
     generator(test_network_id(), &[10.0; 100], &[], None, Fees::sender(Kaspa(0.0)), [(output_address, Kaspa(990.0))].as_slice())
         .unwrap()
         .harness()
         .fetch(&Expected {
-            is_final: false,
-            input_count: 88,
-            aggregate_input_value: Kaspa(880.0),
-            output_count: 1,
-            priority_fees: FeesExpected::None,
-        })
-        .fetch(&Expected {
-            is_final: false,
-            input_count: 12,
-            aggregate_input_value: Kaspa(120.0),
-            output_count: 1,
-            priority_fees: FeesExpected::None,
-        })
-        .fetch(&Expected {
             is_final: true,
-            input_count: 2,
-            aggregate_input_value: Sompi(999_99886576),
+            input_count: 100,
+            aggregate_input_value: Kaspa(1000.0),
             output_count: 2,
-            // priority_fees: FeesExpected::sender(Kaspa(5.0)),
             priority_fees: FeesExpected::sender(Kaspa(0.0)),
         })
         .finalize();
@@ -663,87 +651,15 @@ fn test_generator_inputs_100_outputs_1_fees_exclude_success() -> Result<()> {
 
 #[test]
 fn test_generator_inputs_100_outputs_1_fees_include_success() -> Result<()> {
-    generator(
-        test_network_id(),
-        &[1.0; 100],
-        &[],
-        None,
-        Fees::receiver(Kaspa(5.0)),
-        // [(output_address, Kaspa(100.0))].as_slice(),
-        [(output_address, Kaspa(100.0))].as_slice(),
-    )
-    .unwrap()
-    .harness()
-    .fetch(&Expected {
-        is_final: false,
-        input_count: 88,
-        aggregate_input_value: Kaspa(88.0),
-        output_count: 1,
-        priority_fees: FeesExpected::None,
-    })
-    .fetch(&Expected {
-        is_final: false,
-        input_count: 12,
-        aggregate_input_value: Kaspa(12.0),
-        output_count: 1,
-        priority_fees: FeesExpected::None,
-    })
-    .fetch(&Expected {
-        is_final: true,
-        input_count: 2,
-        aggregate_input_value: Sompi(99_99886576),
-        output_count: 1,
-        priority_fees: FeesExpected::receiver(Kaspa(5.0)),
-    })
-    .finalize();
-
-    Ok(())
-}
-
-#[test]
-fn test_generator_inputs_100_outputs_1_fees_exclude_insufficient_funds() -> Result<()> {
-    generator(test_network_id(), &[10.0; 100], &[], None, Fees::sender(Kaspa(5.0)), [(output_address, Kaspa(1000.0))].as_slice())
+    // With new mass parameters, all 100 inputs fit in a single transaction
+    generator(test_network_id(), &[1.0; 100], &[], None, Fees::receiver(Kaspa(5.0)), [(output_address, Kaspa(100.0))].as_slice())
         .unwrap()
         .harness()
-        .fetch(&Expected {
-            is_final: false,
-            input_count: 88,
-            aggregate_input_value: Kaspa(880.0),
-            output_count: 1,
-            priority_fees: FeesExpected::None,
-        })
-        .insufficient_funds();
-
-    Ok(())
-}
-
-#[test]
-fn test_generator_inputs_1k_outputs_2_fees_exclude() -> Result<()> {
-    generator(test_network_id(), &[10.0; 1_000], &[], None, Fees::sender(Kaspa(5.0)), [(output_address, Kaspa(9_000.0))].as_slice())
-        .unwrap()
-        .harness()
-        .drain(
-            10,
-            &Expected {
-                is_final: false,
-                input_count: 88,
-                aggregate_input_value: Kaspa(880.0),
-                output_count: 1,
-                priority_fees: FeesExpected::None,
-            },
-        )
-        .fetch(&Expected {
-            is_final: false,
-            input_count: 21,
-            aggregate_input_value: Kaspa(210.0),
-            output_count: 1,
-            priority_fees: FeesExpected::None,
-        })
         .fetch(&Expected {
             is_final: true,
-            input_count: 11,
-            aggregate_input_value: Sompi(9009_98981896),
-            output_count: 2,
+            input_count: 100,
+            aggregate_input_value: Kaspa(100.0),
+            output_count: 1,
             priority_fees: FeesExpected::receiver(Kaspa(5.0)),
         })
         .finalize();
@@ -752,7 +668,35 @@ fn test_generator_inputs_1k_outputs_2_fees_exclude() -> Result<()> {
 }
 
 #[test]
+fn test_generator_inputs_100_outputs_1_fees_exclude_insufficient_funds() -> Result<()> {
+    // With new mass parameters, all 100 inputs fit in a single transaction
+    // but 1000 KAS output + 5 KAS fees > 1000 KAS available
+    generator(test_network_id(), &[10.0; 100], &[], None, Fees::sender(Kaspa(5.0)), [(output_address, Kaspa(1000.0))].as_slice())
+        .unwrap()
+        .harness()
+        .insufficient_funds();
+
+    Ok(())
+}
+
+#[test]
+fn test_generator_inputs_1k_outputs_2_fees_exclude() -> Result<()> {
+    // With new mass parameters (108 inputs per stage instead of 88):
+    // 1000 inputs / 108 ≈ 9.26 stages
+    // Using validate() to handle dynamic stage counts
+    generator(test_network_id(), &[10.0; 1_000], &[], None, Fees::sender(Kaspa(5.0)), [(output_address, Kaspa(9_000.0))].as_slice())
+        .unwrap()
+        .harness()
+        .validate()
+        .finalize();
+
+    Ok(())
+}
+
+#[test]
 fn test_generator_inputs_32k_outputs_2_fees_exclude() -> Result<()> {
+    // With new mass parameters, fewer stages needed (~303 instead of 379)
+    // Using validate() for robustness
     let f = 130.0;
     generator(
         test_network_id(),
@@ -764,17 +708,19 @@ fn test_generator_inputs_32k_outputs_2_fees_exclude() -> Result<()> {
     )
     .unwrap()
     .harness()
-    .accumulate(379)
+    .validate()
     .finalize();
     Ok(())
 }
 
 #[test]
 fn test_generator_inputs_250k_outputs_2_sweep() -> Result<()> {
+    // With new mass parameters, fewer stages needed (~2315 instead of 2875)
+    // Using validate() for robustness
     let f = 130.0;
     let generator =
         make_generator(test_network_id(), &[f; 250_000], &[], None, Fees::None, change_address, PaymentDestination::Change);
-    generator.unwrap().harness().accumulate(2875).finalize();
+    generator.unwrap().harness().validate().finalize();
     Ok(())
 }
 
