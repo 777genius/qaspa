@@ -438,11 +438,14 @@ mod tests {
         let txs = &mut block.transactions;
         // With new parameters (mass_per_sig_op: 800, max_block_mass: 2,000,000)
         // we need to use tx[1] which has 2 inputs (coinbase has no inputs)
-        // Clone input template first to avoid borrow checker issues
+        // Clone input template and create unique inputs by changing previous_outpoint.index
         let input_template = txs[1].inputs[0].clone();
         // Add 8 more inputs (2 existing + 8 new = 10 total)
-        for _ in 0..8 {
-            txs[1].inputs.push(input_template.clone());
+        // Make each input unique by setting a unique outpoint index
+        for i in 0..8 {
+            let mut new_input = input_template.clone();
+            new_input.previous_outpoint.index = 10 + i as u32; // Set unique index directly
+            txs[1].inputs.push(new_input);
         }
         // Set all sig_op_counts to max (255)
         for input in &mut txs[1].inputs {
