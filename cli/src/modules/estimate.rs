@@ -26,7 +26,7 @@ impl Estimate {
         let change_address = account.change_address()?;
         let destination = PaymentDestination::PaymentOutputs(PaymentOutputs::from((change_address.clone(), amount_sompi)));
         // TODO fee_rate
-        let estimate = account.estimate(destination, fee_rate, priority_fee_sompi.into(), None, &abortable).await?;
+        let estimate = account.estimate(destination, fee_rate, priority_fee_sompi.into(), None, None, &abortable).await?;
 
         tprintln!(ctx, "Estimate - {estimate}");
 
