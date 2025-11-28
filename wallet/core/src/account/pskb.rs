@@ -501,6 +501,8 @@ pub async fn commit_reveal_batch_bundle(
         payload,
     )
     .map_err(|e| Error::PSKTGenerationError(e.to_string()))?;
+    let settings =
+        account.clone().ensure_stealth_change_support(settings).await.map_err(|e| Error::PSKTGenerationError(e.to_string()))?;
 
     let signer = Arc::new(PSKBSigner::new(
         account.clone().as_dyn_arc(),

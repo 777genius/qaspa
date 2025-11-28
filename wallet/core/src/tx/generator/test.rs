@@ -5,15 +5,17 @@ use crate::result::Result;
 use crate::tx::{Fees, MassCalculator, PaymentDestination};
 use crate::utxo::UtxoEntryReference;
 use crate::{tx::PaymentOutputs, utils::kaspa_to_sompi};
-use kaspa_addresses::Address;
+use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::config::params::Params;
 use kaspa_consensus_core::mass::UtxoCell;
 use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use kaspa_consensus_core::tx::Transaction;
+use kaspa_stealth::StealthSecretKey;
 use rand::prelude::*;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
+use std::sync::Arc;
 use workflow_log::style;
 
 use super::*;
@@ -763,4 +765,92 @@ fn test_generator_fan_out_1() -> Result<()> {
     //     .finalize();
 
     Ok(())
+}
+
+#[test]
+fn test_generator_requires_stealth_change_creator() {
+    let network_id = test_network_id();
+    let network_type = NetworkType::from(network_id);
+    let (change_address, _, _) = new_stealth_change_address(network_type);
+    let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(5.0))];
+    let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
+    let payment_address = output_address(network_type);
+    let outputs = PaymentOutputs::from(&[(payment_address, kaspa_to_sompi(1.0))]);
+
+    let settings = GeneratorSettings {
+        network_id,
+        multiplexer: None,
+        sig_op_count: 1,
+        minimum_signatures: 1,
+        change_address,
+        utxo_iterator,
+        source_utxo_context: None,
+        priority_utxo_entries: None,
+        destination_utxo_context: None,
+        fee_rate: None,
+        final_transaction_priority_fee: Fees::None,
+        final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+        final_transaction_payload: None,
+        stealth_change_creator: None,
+    };
+
+    match Generator::try_new(settings, None, None) {
+        Err(Error::StealthChangeCreatorRequired) => {}
+        other => panic!("expected stealth change creator error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_generator_produces_stealth_change_metadata() -> Result<()> {
+    let network_id = test_network_id();
+    let network_type = NetworkType::from(network_id);
+    let (change_address, keys, stealth_address) = new_stealth_change_address(network_type);
+    let creator: DynStealthChangeCreator = Arc::new(StealthChangeCreatorImpl::new(stealth_address, keys.spend_secret()));
+
+    let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(3.0)), UtxoEntryReference::simulated(kaspa_to_sompi(2.0))];
+    let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
+    let payment_address = output_address(network_type);
+    let outputs = PaymentOutputs::from(&[(payment_address, kaspa_to_sompi(2.0))]);
+
+    let settings = GeneratorSettings {
+        network_id,
+        multiplexer: None,
+        sig_op_count: 1,
+        minimum_signatures: 1,
+        change_address,
+        utxo_iterator,
+        source_utxo_context: None,
+        priority_utxo_entries: None,
+        destination_utxo_context: None,
+        fee_rate: None,
+        final_transaction_priority_fee: Fees::None,
+        final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+        final_transaction_payload: None,
+        stealth_change_creator: Some(creator),
+    };
+
+    let generator = Generator::try_new(settings, None, None)?;
+    let pending_tx = generator.generate_transaction()?.expect("transaction expected");
+    assert!(pending_tx.is_final());
+
+    let change_index = pending_tx.change_output_index().expect("change index");
+    let pending_change = pending_tx.stealth_change().expect("stealth metadata missing");
+    assert_eq!(pending_change.output_index, change_index);
+
+    let mut cloned = pending_tx.clone();
+    assert!(cloned.take_stealth_change().is_some());
+    assert!(cloned.take_stealth_change().is_none());
+
+    Ok(())
+}
+
+fn new_stealth_change_address(network_type: NetworkType) -> (Address, StealthSecretKey, kaspa_stealth::StealthAddress) {
+    let keys = StealthSecretKey::generate();
+    let stealth_address = keys.to_address();
+    let prefix = match network_type {
+        NetworkType::Mainnet => Prefix::StealthMainnet,
+        _ => Prefix::StealthTestnet,
+    };
+    let address = Address::new(prefix, Version::Stealth, &stealth_address.to_bytes());
+    (address, keys, stealth_address)
 }

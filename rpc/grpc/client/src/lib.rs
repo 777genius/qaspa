@@ -28,7 +28,7 @@ use kaspa_notify::{
     },
 };
 use kaspa_rpc_core::{
-    api::{connection::DynRpcConnection, rpc::RpcApi},
+    api::rpc::RpcApi,
     error::RpcError,
     error::RpcResult,
     model::message::*,

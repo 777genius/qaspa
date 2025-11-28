@@ -310,6 +310,15 @@ pub trait Account: AnySync + Send + Sync + 'static {
 
     fn as_dyn_arc(self: Arc<Self>) -> Arc<dyn Account>;
 
+    async fn ensure_stealth_change_support(self: Arc<Self>, mut settings: GeneratorSettings) -> Result<GeneratorSettings> {
+        if settings.change_address.version == kaspa_addresses::Version::Stealth && settings.stealth_change_creator.is_none() {
+            let account = self.clone().as_stealth_account().map_err(|_| Error::StealthChangeCreatorRequired)?;
+            let creator = account.create_change_creator().await?;
+            settings = settings.with_stealth_change_creator(creator);
+        }
+        Ok(settings)
+    }
+
     /// Aggregate all account UTXOs into the change address.
     /// Also known as "compounding".
     async fn sweep(
@@ -329,6 +338,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
             Fees::None,
             None,
         )?;
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
 
         let mut stream = generator.stream();
@@ -364,6 +374,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
 
         let settings =
             GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
 
@@ -446,6 +457,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
     ) -> Result<Bundle, Error> {
         let settings =
             GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
         let keydata = self.prv_key_data(wallet_secret).await?;
         let signer = Arc::new(PSKBSigner::new(self.clone().as_dyn_arc(), keydata, payment_secret));
         let generator = Generator::try_new(settings, None, Some(abortable))?;
@@ -545,6 +557,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
             final_transaction_payload,
         )?
         .utxo_context_transfer(destination_account.utxo_context());
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
 
@@ -571,7 +584,9 @@ pub trait Account: AnySync + Send + Sync + 'static {
         payload: Option<Vec<u8>>,
         abortable: &Abortable,
     ) -> Result<GeneratorSummary> {
-        let settings = GeneratorSettings::try_new_with_account(self.as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings =
+            GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings = self.ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, None, Some(abortable))?;
 

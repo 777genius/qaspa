@@ -440,6 +440,10 @@ impl Generator {
             return Err(Error::GeneratorChangeAddressNetworkTypeMismatch);
         }
 
+        if change_address.version == Version::Stealth && stealth_change_creator.is_none() {
+            return Err(Error::StealthChangeCreatorRequired);
+        }
+
         // Calculate change output mass - special handling for Stealth addresses
         // which have a 66-byte script (not compatible with pay_to_address_script)
         let standard_change_output_mass = if change_address.version == kaspa_addresses::Version::Stealth {

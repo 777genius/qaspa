@@ -632,16 +632,13 @@ impl Account for StealthAccount {
         let keydata = self.prv_key_data(wallet_secret.clone()).await?;
         let signer = Arc::new(Signer::new(self.clone().as_dyn_arc(), keydata, payment_secret));
 
-        // Create stealth change creator for stealth change outputs
-        let stealth_change_creator = self.create_change_creator().await?;
-
         // Create stealth signer for stealth inputs
         let stealth_signer = StealthSigner::new(self.ephemeral_keys.clone());
 
         // Configure generator with stealth change creator
-        let mut settings =
+        let settings =
             GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
-        settings.stealth_change_creator = Some(stealth_change_creator);
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
 
@@ -702,7 +699,7 @@ impl Account for StealthAccount {
         let mut cursor = None;
         let limit = Some(1000u32);
         let mut total_claimed = 0usize;
-        let mut updated_contexts = std::collections::HashSet::new();
+        let mut updated_contexts: Vec<UtxoContext> = Vec::new();
 
         loop {
             let response = match rpc.get_utxos_by_script_version(STEALTH_SCRIPT_VERSION, cursor, limit).await {
@@ -736,7 +733,9 @@ impl Account for StealthAccount {
                     let utxo_ref: crate::utxo::UtxoEntryReference = (&utxo_entry).into();
                     // Use current DAA score for maturity calculation (not block_daa_score!)
                     context.handle_utxo_added(vec![utxo_ref], current_daa_score).await?;
-                    updated_contexts.insert(context);
+                    if !updated_contexts.iter().any(|c| c.id() == context.id()) {
+                        updated_contexts.push(context);
+                    }
                     total_claimed += 1;
                 }
             }
