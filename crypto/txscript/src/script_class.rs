@@ -249,12 +249,12 @@ mod tests {
                 name: "valid stealth script (66 bytes with version 16)",
                 // Format: [33B R compressed][1B view_tag][32B P_dest x-only]
                 // Using valid compressed pubkey (02 prefix) and x-only pubkey
-                script: hex::decode(
-                    "02" // compressed pubkey prefix
-                    .to_owned() + &"4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151" // 32 bytes
-                    + "ab" // view_tag (1 byte)
-                    + "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151", // P_dest (32 bytes)
-                )
+                script: hex::decode(concat!(
+                    "02",                                                               // compressed pubkey prefix
+                    "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151", // 32 bytes
+                    "ab",                                                               // view_tag (1 byte)
+                    "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151", // P_dest (32 bytes)
+                ))
                 .unwrap(),
                 version: STEALTH_SCRIPT_VERSION,
                 class: ScriptClass::Stealth,
@@ -267,12 +267,12 @@ mod tests {
             },
             Test {
                 name: "non standard stealth script (correct length but wrong version)",
-                script: hex::decode(
-                    "02".to_owned()
-                        + &"4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151"
-                        + "ab"
-                        + "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151",
-                )
+                script: hex::decode(concat!(
+                    "02",
+                    "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151",
+                    "ab",
+                    "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151",
+                ))
                 .unwrap(),
                 version: 0, // wrong version
                 class: ScriptClass::NonStandard,
