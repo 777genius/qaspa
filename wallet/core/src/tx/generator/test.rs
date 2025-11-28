@@ -775,7 +775,7 @@ fn test_generator_requires_stealth_change_creator() {
     let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(5.0))];
     let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
     let payment_address = output_address(network_type);
-    let outputs = PaymentOutputs::from(&[(payment_address, kaspa_to_sompi(1.0))]);
+    let outputs = PaymentOutputs::from([(payment_address, kaspa_to_sompi(1.0))].as_slice());
 
     let settings = GeneratorSettings {
         network_id,
@@ -788,7 +788,7 @@ fn test_generator_requires_stealth_change_creator() {
         priority_utxo_entries: None,
         destination_utxo_context: None,
         fee_rate: None,
-        final_transaction_priority_fee: Fees::None,
+        final_transaction_priority_fee: Fees::SenderPays(0),
         final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
         final_transaction_payload: None,
         stealth_change_creator: None,
@@ -796,7 +796,8 @@ fn test_generator_requires_stealth_change_creator() {
 
     match Generator::try_new(settings, None, None) {
         Err(Error::StealthChangeCreatorRequired) => {}
-        other => panic!("expected stealth change creator error, got {:?}", other),
+        Ok(_) => panic!("expected stealth change creator error, got Ok"),
+        Err(e) => panic!("expected stealth change creator error, got {:?}", e),
     }
 }
 
@@ -810,7 +811,7 @@ fn test_generator_produces_stealth_change_metadata() -> Result<()> {
     let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(3.0)), UtxoEntryReference::simulated(kaspa_to_sompi(2.0))];
     let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
     let payment_address = output_address(network_type);
-    let outputs = PaymentOutputs::from(&[(payment_address, kaspa_to_sompi(2.0))]);
+    let outputs = PaymentOutputs::from([(payment_address, kaspa_to_sompi(2.0))].as_slice());
 
     let settings = GeneratorSettings {
         network_id,
@@ -823,7 +824,7 @@ fn test_generator_produces_stealth_change_metadata() -> Result<()> {
         priority_utxo_entries: None,
         destination_utxo_context: None,
         fee_rate: None,
-        final_transaction_priority_fee: Fees::None,
+        final_transaction_priority_fee: Fees::SenderPays(0),
         final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
         final_transaction_payload: None,
         stealth_change_creator: Some(creator),
@@ -837,7 +838,7 @@ fn test_generator_produces_stealth_change_metadata() -> Result<()> {
     let pending_change = pending_tx.stealth_change().expect("stealth metadata missing");
     assert_eq!(pending_change.output_index, change_index);
 
-    let mut cloned = pending_tx.clone();
+    let cloned = pending_tx.clone();
     assert!(cloned.take_stealth_change().is_some());
     assert!(cloned.take_stealth_change().is_none());
 
