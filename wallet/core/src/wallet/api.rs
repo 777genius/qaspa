@@ -392,16 +392,35 @@ impl WalletApi for super::Wallet {
     }
 
     async fn accounts_send_call(self: Arc<Self>, request: AccountsSendRequest) -> Result<AccountsSendResponse> {
-        let AccountsSendRequest { account_id, wallet_secret, payment_secret, destination, fee_rate, priority_fee_sompi, payload } =
-            request;
+        let AccountsSendRequest {
+            account_id,
+            wallet_secret,
+            payment_secret,
+            destination,
+            fee_rate,
+            priority_fee_sompi,
+            fee_randomization,
+            payload,
+        } = request;
 
         let guard = self.guard();
         let guard = guard.lock().await;
         let account = self.get_account_by_id(&account_id, &guard).await?.ok_or(Error::AccountNotFound(account_id))?;
 
         let abortable = Abortable::new();
-        let (generator_summary, transaction_ids) =
-            account.send(destination, fee_rate, priority_fee_sompi, payload, wallet_secret, payment_secret, &abortable, None).await?;
+        let (generator_summary, transaction_ids) = account
+            .send(
+                destination,
+                fee_rate,
+                priority_fee_sompi,
+                fee_randomization,
+                payload,
+                wallet_secret,
+                payment_secret,
+                &abortable,
+                None,
+            )
+            .await?;
 
         Ok(AccountsSendResponse { generator_summary, transaction_ids })
     }
@@ -462,6 +481,7 @@ impl WalletApi for super::Wallet {
             fee_rate,
             priority_fee_sompi,
             transfer_amount_sompi,
+            fee_randomization,
         } = request;
 
         let guard = self.guard();
@@ -477,6 +497,7 @@ impl WalletApi for super::Wallet {
                 transfer_amount_sompi,
                 fee_rate,
                 priority_fee_sompi.unwrap_or(Fees::SenderPays(0)),
+                fee_randomization,
                 wallet_secret,
                 payment_secret,
                 &abortable,
@@ -591,7 +612,7 @@ impl WalletApi for super::Wallet {
     }
 
     async fn accounts_estimate_call(self: Arc<Self>, request: AccountsEstimateRequest) -> Result<AccountsEstimateResponse> {
-        let AccountsEstimateRequest { account_id, destination, fee_rate, priority_fee_sompi, payload } = request;
+        let AccountsEstimateRequest { account_id, destination, fee_rate, priority_fee_sompi, fee_randomization, payload } = request;
 
         let guard = self.guard();
         let guard = guard.lock().await;
@@ -610,7 +631,7 @@ impl WalletApi for super::Wallet {
 
         let abortable = Abortable::new();
         self.inner.estimation_abortables.lock().unwrap().insert(account_id, abortable.clone());
-        let result = account.estimate(destination, fee_rate, priority_fee_sompi, payload, &abortable).await;
+        let result = account.estimate(destination, fee_rate, priority_fee_sompi, fee_randomization, payload, &abortable).await;
         self.inner.estimation_abortables.lock().unwrap().remove(&account_id);
 
         Ok(AccountsEstimateResponse { generator_summary: result? })

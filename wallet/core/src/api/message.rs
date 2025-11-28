@@ -6,7 +6,7 @@
 //!
 
 use crate::imports::*;
-use crate::tx::{Fees, GeneratorSummary, PaymentDestination};
+use crate::tx::{Fees, GeneratorSummary, PaymentDestination, RandomFeeSettings};
 use kaspa_addresses::Address;
 use kaspa_consensus_client::{TransactionOutpoint, UtxoEntry};
 use kaspa_rpc_core::RpcFeerateBucket;
@@ -502,6 +502,8 @@ pub struct AccountsSendRequest {
     pub destination: PaymentDestination,
     pub fee_rate: Option<f64>,
     pub priority_fee_sompi: Fees,
+    #[serde(default)]
+    pub fee_randomization: Option<RandomFeeSettings>,
     pub payload: Option<Vec<u8>>,
 }
 
@@ -657,6 +659,8 @@ pub struct AccountsTransferRequest {
     pub transfer_amount_sompi: u64,
     pub fee_rate: Option<f64>,
     pub priority_fee_sompi: Option<Fees>,
+    #[serde(default)]
+    pub fee_randomization: Option<RandomFeeSettings>,
     // pub priority_fee_sompi: Fees,
 }
 
@@ -676,6 +680,8 @@ pub struct AccountsEstimateRequest {
     pub destination: PaymentDestination,
     pub fee_rate: Option<f64>,
     pub priority_fee_sompi: Fees,
+    #[serde(default)]
+    pub fee_randomization: Option<RandomFeeSettings>,
     pub payload: Option<Vec<u8>>,
 }
 

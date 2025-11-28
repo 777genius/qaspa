@@ -1,6 +1,6 @@
 use crate::imports::*;
 use crate::result::Result;
-use crate::tx::{generator as native, Fees, PaymentDestination, PaymentOutputs};
+use crate::tx::{generator as native, Fees, PaymentDestination, PaymentOutputs, RandomFeeSettings};
 use crate::utxo::{TryIntoUtxoEntryReferences, UtxoEntryReference};
 use crate::wasm::tx::generator::*;
 use crate::wasm::tx::IFees;
@@ -66,6 +66,14 @@ interface IGeneratorSettingsObject {
      * @see {@link IFees}, {@link FeeSource}
      */
     priorityFee?: IFees | bigint;
+    /**
+     * Optional minimum randomization offset (sompi) added to the priority fee.
+     */
+    feeRandomizationMinSompi?: bigint;
+    /**
+     * Optional maximum randomization offset (sompi) added to the priority fee.
+     */
+    feeRandomizationMaxSompi?: bigint;
     /**
      * UTXO entries to be used for the transaction. This can be an
      * array of UtxoEntry instances, objects matching {@link IUtxoEntry}
@@ -170,6 +178,7 @@ impl Generator {
             change_address,
             fee_rate,
             final_priority_fee,
+            fee_randomization,
             sig_op_count,
             minimum_signatures,
             payload,
@@ -195,6 +204,7 @@ impl Generator {
                     final_priority_fee,
                     payload,
                     multiplexer,
+                    fee_randomization,
                 )?
             }
             GeneratorSource::UtxoContext(utxo_context) => {
@@ -212,6 +222,7 @@ impl Generator {
                     final_priority_fee,
                     payload,
                     multiplexer,
+                    fee_randomization,
                 )?
             } // GeneratorSource::Account(account) => {
               //     let account: Arc<dyn crate::account::Account> = account.into();
@@ -273,6 +284,7 @@ struct GeneratorSettings {
     pub change_address: Option<Address>,
     pub fee_rate: Option<f64>,
     pub final_priority_fee: Fees,
+    pub fee_randomization: Option<RandomFeeSettings>,
     pub sig_op_count: u8,
     pub minimum_signatures: u16,
     pub payload: Option<Vec<u8>>,
@@ -293,6 +305,9 @@ impl TryFrom<IGeneratorSettingsObject> for GeneratorSettings {
         let fee_rate = args.get_f64("feeRate").ok().and_then(|v| (v.is_finite() && !v.is_nan() && v >= 1e-8).then_some(v));
 
         let final_priority_fee = args.get::<IFees>("priorityFee")?.try_into()?;
+        let fee_randomization_min = js_value_to_optional_u64(args.get_value("feeRandomizationMinSompi")?, "feeRandomizationMinSompi")?;
+        let fee_randomization_max = js_value_to_optional_u64(args.get_value("feeRandomizationMaxSompi")?, "feeRandomizationMaxSompi")?;
+        let fee_randomization = build_fee_randomization(fee_randomization_min, fee_randomization_max)?;
 
         let generator_source = if let Ok(Some(context)) = args.try_cast_into::<UtxoContext>("entries") {
             GeneratorSource::UtxoContext(context)
@@ -326,11 +341,42 @@ impl TryFrom<IGeneratorSettingsObject> for GeneratorSettings {
             change_address,
             fee_rate,
             final_priority_fee,
+            fee_randomization,
             sig_op_count,
             minimum_signatures,
             payload,
         };
 
         Ok(settings)
+    }
+}
+
+fn js_value_to_optional_u64(value: JsValue, field: &str) -> Result<Option<u64>> {
+    if value.is_null() || value.is_undefined() {
+        return Ok(None);
+    }
+
+    if let Some(num) = value.as_f64() {
+        if !num.is_finite() {
+            return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
+        }
+        if num < 0.0 {
+            return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
+        }
+        return Ok(Some(num as u64));
+    }
+
+    Err(Error::InvalidArgument(format!("{field} must be a number")))
+}
+
+fn build_fee_randomization(min: Option<u64>, max: Option<u64>) -> Result<Option<RandomFeeSettings>> {
+    match (min, max) {
+        (None, None) => Ok(None),
+        (Some(min), Some(max)) => {
+            let settings = RandomFeeSettings { enabled: true, min_sompi: min, max_sompi: max };
+            settings.validate()?;
+            Ok(Some(settings))
+        }
+        _ => Err(Error::InvalidArgument("feeRandomizationMinSompi and feeRandomizationMaxSompi must both be provided".to_string())),
     }
 }

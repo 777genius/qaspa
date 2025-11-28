@@ -23,7 +23,9 @@ use crate::storage::account::AccountSettings;
 use crate::storage::AccountMetadata;
 use crate::storage::{PrvKeyData, PrvKeyDataId};
 use crate::tx::PaymentOutput;
-use crate::tx::{Fees, Generator, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, Signer};
+use crate::tx::{
+    Fees, Generator, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, RandomFeeSettings, Signer,
+};
 use crate::utxo::balance::{AtomicBalance, BalanceStrings};
 use crate::utxo::UtxoContextBinding;
 use kaspa_bip32::{ChildNumber, ExtendedPrivateKey, PrivateKey};
@@ -337,6 +339,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
             fee_rate,
             Fees::None,
             None,
+            None,
         )?;
         let settings = self.clone().ensure_stealth_change_support(settings).await?;
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
@@ -363,6 +366,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
         destination: PaymentDestination,
         fee_rate: Option<f64>,
         priority_fee_sompi: Fees,
+        random_fee_settings: Option<RandomFeeSettings>,
         payload: Option<Vec<u8>>,
         wallet_secret: Secret,
         payment_secret: Option<Secret>,
@@ -372,8 +376,14 @@ pub trait Account: AnySync + Send + Sync + 'static {
         let keydata = self.prv_key_data(wallet_secret).await?;
         let signer = Arc::new(Signer::new(self.clone().as_dyn_arc(), keydata, payment_secret));
 
-        let settings =
-            GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings = GeneratorSettings::try_new_with_account(
+            self.clone().as_dyn_arc(),
+            destination,
+            fee_rate,
+            priority_fee_sompi,
+            payload,
+            random_fee_settings,
+        )?;
         let settings = self.clone().ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
@@ -455,8 +465,14 @@ pub trait Account: AnySync + Send + Sync + 'static {
         payment_secret: Option<Secret>,
         abortable: &Abortable,
     ) -> Result<Bundle, Error> {
-        let settings =
-            GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings = GeneratorSettings::try_new_with_account(
+            self.clone().as_dyn_arc(),
+            destination,
+            fee_rate,
+            priority_fee_sompi,
+            payload,
+            None,
+        )?;
         let settings = self.clone().ensure_stealth_change_support(settings).await?;
         let keydata = self.prv_key_data(wallet_secret).await?;
         let signer = Arc::new(PSKBSigner::new(self.clone().as_dyn_arc(), keydata, payment_secret));
@@ -530,6 +546,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
         transfer_amount_sompi: u64,
         fee_rate: Option<f64>,
         priority_fee_sompi: Fees,
+        random_fee_settings: Option<RandomFeeSettings>,
         wallet_secret: Secret,
         payment_secret: Option<Secret>,
         abortable: &Abortable,
@@ -555,6 +572,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
             fee_rate,
             priority_fee_sompi,
             final_transaction_payload,
+            random_fee_settings,
         )?
         .utxo_context_transfer(destination_account.utxo_context());
         let settings = self.clone().ensure_stealth_change_support(settings).await?;
@@ -581,11 +599,18 @@ pub trait Account: AnySync + Send + Sync + 'static {
         destination: PaymentDestination,
         fee_rate: Option<f64>,
         priority_fee_sompi: Fees,
+        random_fee_settings: Option<RandomFeeSettings>,
         payload: Option<Vec<u8>>,
         abortable: &Abortable,
     ) -> Result<GeneratorSummary> {
-        let settings =
-            GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings = GeneratorSettings::try_new_with_account(
+            self.clone().as_dyn_arc(),
+            destination,
+            fee_rate,
+            priority_fee_sompi,
+            payload,
+            random_fee_settings,
+        )?;
         let settings = self.ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, None, Some(abortable))?;
@@ -752,6 +777,7 @@ pub trait DerivationCapableAccount: Account {
                         PaymentDestination::Change,
                         fee_rate,
                         Fees::None,
+                        None,
                         None,
                         None,
                     )?;

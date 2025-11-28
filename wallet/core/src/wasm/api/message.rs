@@ -4,7 +4,7 @@ use super::extensions::*;
 use crate::account::descriptor::IAccountDescriptor;
 use crate::api::message::*;
 use crate::imports::*;
-use crate::tx::{Fees, PaymentDestination, PaymentOutputs};
+use crate::tx::{Fees, PaymentDestination, PaymentOutputs, RandomFeeSettings};
 use crate::wasm::api::keydata::PrvKeyDataVariantKind;
 use crate::wasm::tx::fees::IFees;
 use crate::wasm::tx::GeneratorSummary;
@@ -33,6 +33,36 @@ const TS_CATEGORY_WALLET: &'static str = r#"
 "#;
 
 // ---
+
+fn js_value_to_optional_u64(value: JsValue, field: &str) -> Result<Option<u64>> {
+    if value.is_undefined() || value.is_null() {
+        return Ok(None);
+    }
+
+    if let Some(num) = value.as_f64() {
+        if !num.is_finite() {
+            return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
+        }
+        if num < 0.0 {
+            return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
+        }
+        return Ok(Some(num as u64));
+    }
+
+    Err(Error::InvalidArgument(format!("{field} must be a number")))
+}
+
+fn build_fee_randomization_from_js(min: Option<u64>, max: Option<u64>) -> Result<Option<RandomFeeSettings>> {
+    match (min, max) {
+        (None, None) => Ok(None),
+        (Some(min), Some(max)) => {
+            let settings = RandomFeeSettings { enabled: true, min_sompi: min, max_sompi: max };
+            settings.validate()?;
+            Ok(Some(settings))
+        }
+        _ => Err(Error::InvalidArgument("feeRandomizationMinSompi and feeRandomizationMaxSompi must both be provided".to_string())),
+    }
+}
 
 // declare! {
 //     IPingRequest,
@@ -1517,6 +1547,14 @@ declare! {
          */
         priorityFeeSompi? : IFees | bigint;
         /**
+         * Optional minimum randomization offset (sompi) applied to the final priority fee.
+         */
+        feeRandomizationMinSompi?: bigint;
+        /**
+         * Optional maximum randomization offset (sompi) applied to the final priority fee.
+         */
+        feeRandomizationMaxSompi?: bigint;
+        /**
          * 
          */
         payload? : Uint8Array | HexString;
@@ -1534,13 +1572,25 @@ try_from! ( args: IAccountsSendRequest, AccountsSendRequest, {
     let payment_secret = args.try_get_secret("paymentSecret")?;
     let fee_rate = args.get_f64("feeRate").ok();
     let priority_fee_sompi = args.get::<IFees>("priorityFeeSompi")?.try_into()?;
+    let fee_randomization_min = js_value_to_optional_u64(args.get_value("feeRandomizationMinSompi")?, "feeRandomizationMinSompi")?;
+    let fee_randomization_max = js_value_to_optional_u64(args.get_value("feeRandomizationMaxSompi")?, "feeRandomizationMaxSompi")?;
+    let fee_randomization = build_fee_randomization_from_js(fee_randomization_min, fee_randomization_max)?;
     let payload = args.try_get_value("payload")?.map(|v| v.try_as_vec_u8()).transpose()?;
 
     let outputs = args.get_value("destination")?;
     let destination: PaymentDestination =
         if outputs.is_undefined() { PaymentDestination::Change } else { PaymentOutputs::try_owned_from(outputs)?.into() };
 
-    Ok(AccountsSendRequest { account_id, wallet_secret, payment_secret, fee_rate, priority_fee_sompi, destination, payload })
+    Ok(AccountsSendRequest {
+        account_id,
+        wallet_secret,
+        payment_secret,
+        fee_rate,
+        priority_fee_sompi,
+        fee_randomization,
+        destination,
+        payload,
+    })
 });
 
 declare! {
@@ -1819,6 +1869,8 @@ declare! {
         paymentSecret? : string;
         feeRate? : number;
         priorityFeeSompi? : IFees | bigint;
+        feeRandomizationMinSompi?: bigint;
+        feeRandomizationMaxSompi?: bigint;
         transferAmountSompi : bigint;
     }
     "#,
@@ -1832,6 +1884,11 @@ try_from! ( args: IAccountsTransferRequest, AccountsTransferRequest, {
     let fee_rate = args.get_f64("feeRate").ok();
     let priority_fee_sompi = args.try_get::<IFees>("priorityFeeSompi")?.map(Fees::try_from).transpose()?;
     let transfer_amount_sompi = args.get_u64("transferAmountSompi")?;
+    let fee_randomization_min =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMinSompi")?, "feeRandomizationMinSompi")?;
+    let fee_randomization_max =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMaxSompi")?, "feeRandomizationMaxSompi")?;
+    let fee_randomization = build_fee_randomization_from_js(fee_randomization_min, fee_randomization_max)?;
 
     Ok(AccountsTransferRequest {
         source_account_id,
@@ -1841,6 +1898,7 @@ try_from! ( args: IAccountsTransferRequest, AccountsTransferRequest, {
         fee_rate,
         priority_fee_sompi,
         transfer_amount_sompi,
+        fee_randomization,
     })
 });
 
@@ -1881,6 +1939,8 @@ declare! {
         destination : IPaymentOutput[];
         feeRate? : number;
         priorityFeeSompi : IFees | bigint;
+        feeRandomizationMinSompi?: bigint;
+        feeRandomizationMaxSompi?: bigint;
         payload? : Uint8Array | string;
     }
     "#,
@@ -1890,13 +1950,18 @@ try_from! ( args: IAccountsEstimateRequest, AccountsEstimateRequest, {
     let account_id = args.get_account_id("accountId")?;
     let fee_rate = args.get_f64("feeRate").ok();
     let priority_fee_sompi = args.get::<IFees>("priorityFeeSompi")?.try_into()?;
+    let fee_randomization_min =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMinSompi")?, "feeRandomizationMinSompi")?;
+    let fee_randomization_max =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMaxSompi")?, "feeRandomizationMaxSompi")?;
+    let fee_randomization = build_fee_randomization_from_js(fee_randomization_min, fee_randomization_max)?;
     let payload = args.try_get_value("payload")?.map(|v| v.try_as_vec_u8()).transpose()?;
 
     let outputs = args.get_value("destination")?;
     let destination: PaymentDestination =
         if outputs.is_undefined() { PaymentDestination::Change } else { PaymentOutputs::try_owned_from(outputs)?.into() };
 
-    Ok(AccountsEstimateRequest { account_id, fee_rate, priority_fee_sompi, destination, payload })
+    Ok(AccountsEstimateRequest { account_id, fee_rate, priority_fee_sompi, fee_randomization, destination, payload })
 });
 
 declare! {

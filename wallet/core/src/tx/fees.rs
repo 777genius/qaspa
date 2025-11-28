@@ -2,6 +2,7 @@
 //! Primitives for declaring transaction fees.
 //!
 
+use crate::error::Error;
 use crate::result::Result;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -92,5 +93,39 @@ impl TryFrom<String> for Fees {
     type Error = crate::error::Error;
     fn try_from(fee: String) -> Result<Self> {
         Self::try_from(fee.as_str())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
+pub struct RandomFeeSettings {
+    pub enabled: bool,
+    pub min_sompi: u64,
+    pub max_sompi: u64,
+}
+
+impl RandomFeeSettings {
+    pub const fn disabled() -> Self {
+        Self { enabled: false, min_sompi: 0, max_sompi: 0 }
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.enabled && self.max_sompi > 0 && self.min_sompi <= self.max_sompi
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled && self.min_sompi > self.max_sompi {
+            return Err(Error::InvalidRange(self.min_sompi, self.max_sompi));
+        }
+        Ok(())
+    }
+
+    pub fn range(&self) -> Option<(u64, u64)> {
+        self.is_active().then_some((self.min_sompi, self.max_sompi))
+    }
+}
+
+impl Default for RandomFeeSettings {
+    fn default() -> Self {
+        Self::disabled()
     }
 }

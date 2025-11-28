@@ -204,10 +204,10 @@ proptest! {
         let address = keys.to_address();
 
         // Check the parity of the original scan pubkey
-        let scan_full = keys.scan_secret().public_key(&secp256k1::SECP256K1);
+        let scan_full = keys.scan_secret().public_key(secp256k1::SECP256K1);
         let (_, scan_parity) = scan_full.x_only_public_key();
 
-        let spend_full = keys.spend_secret().public_key(&secp256k1::SECP256K1);
+        let spend_full = keys.spend_secret().public_key(secp256k1::SECP256K1);
         let (_, spend_parity) = spend_full.x_only_public_key();
 
         // Create output (sender uses x-only with even parity)

@@ -5,8 +5,7 @@
 
 pub use crate::error::Error;
 use crate::imports::*;
-use crate::tx::PaymentOutput;
-use crate::tx::PaymentOutputs;
+use crate::tx::{PaymentOutput, PaymentOutputs, RandomFeeSettings};
 use futures::stream;
 use kaspa_bip32::{DerivationPath, KeyFingerprint, PrivateKey};
 use kaspa_consensus_client::UtxoEntry as ClientUTXO;
@@ -375,6 +374,7 @@ pub fn pskt_to_pending_transaction(
         final_transaction_destination,
         final_transaction_payload: None,
         stealth_change_creator: None,
+        random_fee_settings: RandomFeeSettings::default(),
     };
 
     // Create the Generator
@@ -499,6 +499,7 @@ pub async fn commit_reveal_batch_bundle(
         fee_rate.or(Some(1.0)),
         0u64.into(),
         payload,
+        None,
     )
     .map_err(|e| Error::PSKTGenerationError(e.to_string()))?;
     let settings =

@@ -402,7 +402,7 @@ mod tests {
         let key_data = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
 
         // Test store
-        store.store(outpoint.clone(), key_data.clone(), 100).await.unwrap();
+        store.store(outpoint, key_data.clone(), 100).await.unwrap();
         assert!(store.contains(&outpoint));
         assert_eq!(store.len(), 1);
         assert!(store.is_modified());

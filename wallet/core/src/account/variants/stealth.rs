@@ -16,7 +16,7 @@ use crate::storage::interface::StorageDescriptor;
 use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use crate::tx::generator::stealth_change::{DynStealthChangeCreator, PendingStealthChange, StealthChangeCreator};
 use crate::tx::generator::stealth_signer::StealthSigner;
-use crate::tx::{Fees, GeneratorSummary, PaymentDestination};
+use crate::tx::{Fees, GeneratorSummary, PaymentDestination, RandomFeeSettings};
 use crate::utxo::stealth_handler::StealthUtxoHandler;
 use crate::utxo::UtxoContext;
 use kaspa_addresses::{Address, Version};
@@ -613,6 +613,7 @@ impl Account for StealthAccount {
         destination: PaymentDestination,
         fee_rate: Option<f64>,
         priority_fee_sompi: Fees,
+        random_fee_settings: Option<RandomFeeSettings>,
         payload: Option<Vec<u8>>,
         wallet_secret: Secret,
         payment_secret: Option<Secret>,
@@ -636,8 +637,14 @@ impl Account for StealthAccount {
         let stealth_signer = StealthSigner::new(self.ephemeral_keys.clone());
 
         // Configure generator with stealth change creator
-        let settings =
-            GeneratorSettings::try_new_with_account(self.clone().as_dyn_arc(), destination, fee_rate, priority_fee_sompi, payload)?;
+        let settings = GeneratorSettings::try_new_with_account(
+            self.clone().as_dyn_arc(),
+            destination,
+            fee_rate,
+            priority_fee_sompi,
+            payload,
+            random_fee_settings,
+        )?;
         let settings = self.clone().ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;

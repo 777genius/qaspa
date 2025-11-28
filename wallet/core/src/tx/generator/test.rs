@@ -2,7 +2,7 @@
 
 use crate::error::Error;
 use crate::result::Result;
-use crate::tx::{Fees, MassCalculator, PaymentDestination};
+use crate::tx::{Fees, MassCalculator, PaymentDestination, RandomFeeSettings};
 use crate::utxo::UtxoEntryReference;
 use crate::{tx::PaymentOutputs, utils::kaspa_to_sompi};
 use kaspa_addresses::{Address, Prefix, Version};
@@ -446,6 +446,37 @@ where
         final_transaction_destination,
         final_transaction_payload,
         stealth_change_creator: None,
+        random_fee_settings: RandomFeeSettings::default(),
+    };
+
+    Generator::try_new(settings, None, None)
+}
+
+fn make_generator_with_randomization(random_fee_settings: RandomFeeSettings, priority_fee: Fees) -> Result<Generator> {
+    let network_id = test_network_id();
+    let network_type = NetworkType::from(network_id);
+    let change_address = change_address(network_type);
+    let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(5.0))];
+    let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
+    let payment_address = output_address(network_type);
+    let outputs = PaymentOutputs::from([(payment_address, kaspa_to_sompi(2.0))].as_slice());
+
+    let settings = GeneratorSettings {
+        network_id,
+        multiplexer: None,
+        sig_op_count: 1,
+        minimum_signatures: 1,
+        change_address,
+        utxo_iterator,
+        source_utxo_context: None,
+        priority_utxo_entries: None,
+        destination_utxo_context: None,
+        fee_rate: None,
+        final_transaction_priority_fee: priority_fee,
+        final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+        final_transaction_payload: None,
+        stealth_change_creator: None,
+        random_fee_settings,
     };
 
     Generator::try_new(settings, None, None)
@@ -768,6 +799,47 @@ fn test_generator_fan_out_1() -> Result<()> {
 }
 
 #[test]
+fn test_fee_randomization_disabled() -> Result<()> {
+    let generator = make_generator_with_randomization(RandomFeeSettings::default(), Fees::SenderPays(1_000))?;
+    for transaction in generator.iter() {
+        transaction?;
+    }
+    let summary = generator.summary();
+    assert_eq!(summary.random_fee_offset, 0);
+    Ok(())
+}
+
+#[test]
+fn test_fee_randomization_fixed_offset() -> Result<()> {
+    let settings = RandomFeeSettings { enabled: true, min_sompi: 777, max_sompi: 777 };
+    let generator = make_generator_with_randomization(settings, Fees::SenderPays(1_000))?;
+    for transaction in generator.iter() {
+        transaction?;
+    }
+    let summary = generator.summary();
+    assert_eq!(summary.random_fee_offset, 777);
+    Ok(())
+}
+
+#[test]
+fn test_fee_randomization_within_range() -> Result<()> {
+    let settings = RandomFeeSettings { enabled: true, min_sompi: 100, max_sompi: 300 };
+    for _ in 0..5 {
+        let generator = make_generator_with_randomization(settings, Fees::SenderPays(1_000))?;
+        for transaction in generator.iter() {
+            transaction?;
+        }
+        let summary = generator.summary();
+        assert!(
+            summary.random_fee_offset >= 100 && summary.random_fee_offset <= 300,
+            "offset {} outside of range",
+            summary.random_fee_offset
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn test_generator_requires_stealth_change_creator() {
     let network_id = test_network_id();
     let network_type = NetworkType::from(network_id);
@@ -792,6 +864,7 @@ fn test_generator_requires_stealth_change_creator() {
         final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
         final_transaction_payload: None,
         stealth_change_creator: None,
+        random_fee_settings: RandomFeeSettings::default(),
     };
 
     match Generator::try_new(settings, None, None) {
@@ -828,6 +901,7 @@ fn test_generator_produces_stealth_change_metadata() -> Result<()> {
         final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
         final_transaction_payload: None,
         stealth_change_creator: Some(creator),
+        random_fee_settings: RandomFeeSettings::default(),
     };
 
     let generator = Generator::try_new(settings, None, None)?;

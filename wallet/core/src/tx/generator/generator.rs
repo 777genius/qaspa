@@ -62,7 +62,7 @@ use crate::result::Result;
 use crate::tx::generator::stealth_change::DynStealthChangeCreator;
 use crate::tx::{
     mass::*, Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, PendingTransactionIterator,
-    PendingTransactionStream,
+    PendingTransactionStream, RandomFeeSettings,
 };
 use crate::utxo::{NetworkParams, UtxoContext, UtxoEntryReference};
 use kaspa_addresses::Version;
@@ -72,6 +72,7 @@ use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspa_consensus_core::tx::{Transaction, TransactionInput, TransactionOutpoint, TransactionOutput};
 use kaspa_stealth::{create_stealth_output, StealthAddress};
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
+use rand::{rngs::OsRng, Rng};
 use std::collections::VecDeque;
 
 use super::SignerT;
@@ -317,6 +318,9 @@ struct Inner {
     stealth_change_creator: Option<DynStealthChangeCreator>,
     // execution context
     context: Mutex<Context>,
+    // random fee configuration
+    random_fee_settings: RandomFeeSettings,
+    random_fee_offset: u64,
 }
 
 impl std::fmt::Debug for Inner {
@@ -340,6 +344,8 @@ impl std::fmt::Debug for Inner {
             .field("final_transaction_outputs_compute_mass", &self.final_transaction_outputs_compute_mass)
             .field("final_transaction_payload", &self.final_transaction_payload)
             .field("final_transaction_payload_mass", &self.final_transaction_payload_mass)
+            .field("random_fee_settings", &self.random_fee_settings)
+            .field("random_fee_offset", &self.random_fee_offset)
             // .field("context", &self.context)
             .finish()
     }
@@ -371,6 +377,7 @@ impl Generator {
             final_transaction_payload,
             destination_utxo_context,
             stealth_change_creator,
+            random_fee_settings,
         } = settings;
 
         let network_type = NetworkType::from(network_id);
@@ -426,6 +433,9 @@ impl Generator {
                 (tx_outputs, Some(outputs.outputs.iter().map(|output| output.amount).sum()))
             }
         };
+
+        let (final_transaction_priority_fee, random_fee_offset) =
+            Self::randomize_priority_fee(&random_fee_settings, final_transaction_priority_fee)?;
 
         if final_transaction_outputs.is_empty() && matches!(final_transaction_priority_fee, Fees::ReceiverPays(_)) {
             return Err(Error::GeneratorIncludeFeesRequiresOneOutput);
@@ -518,6 +528,8 @@ impl Generator {
             final_transaction_payload_mass,
             stealth_change_creator,
             destination_utxo_context,
+            random_fee_settings,
+            random_fee_offset,
         };
 
         Ok(Self { inner: Arc::new(inner) })
@@ -669,6 +681,28 @@ impl Generator {
 
     fn calc_fees_from_mass(&self, mass: u64) -> u64 {
         self.inner.mass_calculator.calc_minimum_transaction_fee_from_mass(mass).max(self.calc_fee_rate(mass))
+    }
+
+    fn randomize_priority_fee(random_fee_settings: &RandomFeeSettings, priority_fee: Fees) -> Result<(Fees, u64)> {
+        if !random_fee_settings.is_active() {
+            return Ok((priority_fee, 0));
+        }
+
+        if priority_fee.is_none() {
+            return Err(Error::InvalidArgument("Fee randomization requires a priority fee".to_string()));
+        }
+
+        let (min, max) = random_fee_settings.range().expect("active random fee settings must provide a range");
+
+        let offset = if min == max { min } else { OsRng.gen_range(min..=max) };
+
+        let randomized_fee = match priority_fee {
+            Fees::SenderPays(value) => Fees::SenderPays(value.saturating_add(offset)),
+            Fees::ReceiverPays(value) => Fees::ReceiverPays(value.saturating_add(offset)),
+            Fees::None => Fees::None,
+        };
+
+        Ok((randomized_fee, offset))
     }
 
     /// Main UTXO entry processing loop. This function sources UTXOs from [`Generator::get_utxo_entry()`] and
@@ -1300,6 +1334,7 @@ impl Generator {
             final_transaction_id: context.final_transaction_id,
             number_of_generated_transactions: context.number_of_transactions,
             number_of_generated_stages: context.number_of_stages,
+            random_fee_offset: self.inner.random_fee_offset,
         }
     }
 }

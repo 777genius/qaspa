@@ -295,7 +295,7 @@ mod tests {
         let keys = StealthSecretKey::generate();
         let address = keys.to_address();
 
-        let creator = StealthChangeCreatorImpl::new(address.clone(), keys.spend_secret());
+        let creator = StealthChangeCreatorImpl::new(address, keys.spend_secret());
 
         // Create a change output
         let amount = 100_000_000; // 1 KAS
@@ -327,7 +327,7 @@ mod tests {
         let keys = StealthSecretKey::generate();
         let address = keys.to_address();
 
-        let creator = StealthChangeCreatorImpl::new(address.clone(), keys.spend_secret());
+        let creator = StealthChangeCreatorImpl::new(address, keys.spend_secret());
 
         // Create multiple change outputs
         let (output1, pending1) = creator.create_change_output(100).unwrap();
@@ -359,7 +359,7 @@ mod tests {
         let keys = StealthSecretKey::generate();
         let address = keys.to_address();
 
-        let creator = StealthChangeCreatorImpl::new(address.clone(), keys.spend_secret());
+        let creator = StealthChangeCreatorImpl::new(address, keys.spend_secret());
 
         // Create multiple change outputs
         let (_, pending1) = creator.create_change_output(100).unwrap();
