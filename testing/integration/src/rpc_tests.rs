@@ -689,11 +689,36 @@ async fn sanity_test() {
                 })
             }
 
+            KaspadPayloadOps::GetUtxosByScriptVersion => {
+                let rpc_client = client.clone();
+                tst!(op, {
+                    // Query for stealth UTXOs (script version 16)
+                    // Should return empty since no stealth UTXOs exist yet
+                    let response = rpc_client.get_utxos_by_script_version(16, None, None).await.unwrap();
+                    assert!(response.entries.is_empty());
+                    assert!(response.next_cursor.is_none());
+                })
+            }
+
+            KaspadPayloadOps::GetBlockViewTags => {
+                let rpc_client = client.clone();
+                tst!(op, {
+                    // Query for view tags in genesis block
+                    // Should return empty stealth outputs since genesis has no stealth transactions
+                    let response = rpc_client
+                        .get_block_view_tags_call(None, kaspa_rpc_core::GetBlockViewTagsRequest { hash: SIMNET_GENESIS.hash })
+                        .await
+                        .unwrap();
+                    assert_eq!(response.block_hash, SIMNET_GENESIS.hash);
+                    assert!(response.stealth_outputs.is_empty());
+                })
+            }
+
             KaspadPayloadOps::NotifyBlockAdded => {
                 let rpc_client = client.clone();
                 let id = listener_id;
                 tst!(op, {
-                    rpc_client.start_notify(id, BlockAddedScope {}.into()).await.unwrap();
+                    rpc_client.start_notify(id, BlockAddedScope::default().into()).await.unwrap();
                 })
             }
 

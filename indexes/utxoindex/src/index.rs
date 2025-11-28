@@ -6,12 +6,16 @@ use crate::{
     update_container::UtxoIndexChanges,
     IDENT,
 };
-use kaspa_consensus_core::{tx::ScriptPublicKeys, utxo::utxo_diff::UtxoDiff, BlockHashSet};
+use kaspa_consensus_core::{
+    tx::{ScriptPublicKey, ScriptPublicKeyVersion, ScriptPublicKeys, TransactionOutpoint},
+    utxo::utxo_diff::UtxoDiff,
+    BlockHashSet,
+};
 use kaspa_consensusmanager::{ConsensusManager, ConsensusResetHandler};
 use kaspa_core::{info, trace};
 use kaspa_database::prelude::{StoreError, StoreResult, DB};
 use kaspa_hashes::Hash;
-use kaspa_index_core::indexed_utxos::BalanceByScriptPublicKey;
+use kaspa_index_core::indexed_utxos::{BalanceByScriptPublicKey, CompactUtxoEntry};
 use kaspa_utils::arc::ArcExtensions;
 use parking_lot::RwLock;
 use std::{
@@ -76,6 +80,15 @@ impl UtxoIndexApi for UtxoIndex {
         trace!("[{0}] retrieving tips", IDENT);
 
         self.store.get_tips()
+    }
+
+    fn get_utxos_by_script_version(
+        &self,
+        version: ScriptPublicKeyVersion,
+        cursor_key: Option<Vec<u8>>,
+        limit: usize,
+    ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>> {
+        self.store.get_utxos_by_script_version(version, cursor_key, limit)
     }
 
     /// Updates the [UtxoIndex] via the virtual state supplied:

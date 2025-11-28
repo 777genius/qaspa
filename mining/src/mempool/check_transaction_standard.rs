@@ -114,8 +114,14 @@ impl Mempool {
     ///
     /// It is exposed by [MiningManager] for use by transaction generators and wallets.
     pub(crate) fn is_transaction_output_dust(&self, transaction_output: &TransactionOutput) -> bool {
-        // Unspendable outputs are considered dust.
-        if is_unspendable::<PopulatedTransaction, SigHashReusedValuesUnsync>(transaction_output.script_public_key.script()) {
+        // Stealth outputs (version 16) have raw data instead of opcodes,
+        // so they would incorrectly fail is_unspendable check. Skip that check for stealth.
+        let is_stealth = transaction_output.script_public_key.version() == MAX_SCRIPT_PUBLIC_KEY_VERSION;
+
+        // Unspendable outputs are considered dust (but skip for stealth scripts).
+        if !is_stealth
+            && is_unspendable::<PopulatedTransaction, SigHashReusedValuesUnsync>(transaction_output.script_public_key.script())
+        {
             return true;
         }
 
@@ -187,6 +193,7 @@ impl Mempool {
                 ScriptClass::PubKey => {}
                 ScriptClass::PubKeyECDSA => {}
                 ScriptClass::PubKeyMLDSA => {}
+                ScriptClass::Stealth => {} // Native SegWit: 1 Schnorr signature, same as PubKey
                 ScriptClass::ScriptHash => {
                     // todo relax due to on fly calculation
                     let num_sig_ops = get_sig_op_count_upper_bound::<PopulatedTransaction, SigHashReusedValuesUnsync>(

@@ -2,10 +2,12 @@ use crate::{
     opcodes::codes::{OpBlake2b, OpCheckSig, OpCheckSigECDSA, OpCheckSigMLDSA, OpData32, OpData33, OpEqual, OpPushData2},
     script_builder::{ScriptBuilder, ScriptBuilderResult},
     script_class::ScriptClass,
+    STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION,
 };
 use blake2b_simd::Params;
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::tx::{ScriptPublicKey, ScriptVec};
+use kaspa_stealth::EphemeralOutput;
 use kaspa_txscript_errors::TxScriptError;
 use smallvec::SmallVec;
 use std::iter::once;
@@ -50,15 +52,64 @@ fn pay_to_script_hash(script_hash: &[u8]) -> ScriptVec {
     SmallVec::from_iter([OpBlake2b, OpData32].iter().copied().chain(script_hash.iter().copied()).chain(once(OpEqual)))
 }
 
+/// Creates a new script to pay a transaction output to a stealth address.
+/// Format: [33 bytes R (ephemeral pubkey)][1 byte view_tag][32 bytes P_dest (x-only)]
+///
+/// This is a Native SegWit style script - no opcodes, direct Schnorr verification.
+fn pay_to_stealth_output(output: &EphemeralOutput) -> ScriptVec {
+    SmallVec::from_slice(&output.to_bytes())
+}
+
 /// Creates a new script to pay a transaction output to the specified address.
+///
+/// Note: For stealth addresses (Version::Stealth), use `pay_to_stealth` instead,
+/// as stealth outputs require the ephemeral key data, not just the address payload.
 pub fn pay_to_address_script(address: &Address) -> ScriptPublicKey {
     let script = match address.version {
         Version::PubKey => pay_to_pub_key(address.payload.as_slice()),
         Version::PubKeyECDSA => pay_to_pub_key_ecdsa(address.payload.as_slice()),
         Version::PubKeyMLDSA => pay_to_pub_key_mldsa(address.payload.as_slice()),
         Version::ScriptHash => pay_to_script_hash(address.payload.as_slice()),
+        Version::Stealth => {
+            panic!("Use pay_to_stealth() for stealth addresses - they require ephemeral key data")
+        }
     };
     ScriptPublicKey::new(ScriptClass::from(address.version).version(), script)
+}
+
+/// Creates a ScriptPublicKey for a stealth output.
+///
+/// This creates the Native SegWit style script used for stealth transactions.
+/// The script contains the ephemeral public key R, view tag, and destination pubkey P_dest.
+///
+/// # Arguments
+///
+/// * `output` - The ephemeral output data from `kaspa_stealth::create_stealth_output`
+///
+/// # Returns
+///
+/// A ScriptPublicKey with version STEALTH_SCRIPT_VERSION (16) containing the stealth output data.
+pub fn pay_to_stealth(output: &EphemeralOutput) -> ScriptPublicKey {
+    ScriptPublicKey::new(STEALTH_SCRIPT_VERSION, pay_to_stealth_output(output))
+}
+
+/// Extracts the EphemeralOutput from a stealth ScriptPublicKey.
+///
+/// # Arguments
+///
+/// * `spk` - A ScriptPublicKey that should be a stealth output
+///
+/// # Returns
+///
+/// The EphemeralOutput containing R, view_tag, and P_dest, or an error if invalid.
+pub fn extract_stealth_output(spk: &ScriptPublicKey) -> Result<EphemeralOutput, TxScriptError> {
+    if spk.version() != STEALTH_SCRIPT_VERSION {
+        return Err(TxScriptError::PubKeyFormat);
+    }
+    if spk.script().len() != STEALTH_OUTPUT_SIZE {
+        return Err(TxScriptError::PubKeyFormat);
+    }
+    EphemeralOutput::from_slice(spk.script()).map_err(|_| TxScriptError::PubKeyFormat)
 }
 
 /// Takes a script and returns an equivalent pay-to-script-hash script
@@ -96,6 +147,12 @@ pub fn extract_script_pub_key_address(script_public_key: &ScriptPublicKey, prefi
         ScriptClass::PubKeyECDSA => Ok(Address::new(prefix, Version::PubKeyECDSA, &script[1..34])),
         ScriptClass::PubKeyMLDSA => Ok(Address::new(prefix, Version::PubKeyMLDSA, &script[3..1315])), // Skip OpPushData2 + 2 length bytes
         ScriptClass::ScriptHash => Ok(Address::new(prefix, Version::ScriptHash, &script[2..34])),
+        ScriptClass::Stealth => {
+            // Stealth ScriptPublicKeys don't directly map to an address - they contain
+            // ephemeral data (R, view_tag, P_dest) specific to a single output.
+            // Use extract_stealth_output() to get the ephemeral data instead.
+            Err(TxScriptError::PubKeyFormat)
+        }
     }
 }
 

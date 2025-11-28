@@ -1,4 +1,4 @@
-use crate::{opcodes, MAX_SCRIPT_PUBLIC_KEY_VERSION};
+use crate::{opcodes, STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION};
 use borsh::{BorshDeserialize, BorshSerialize};
 use kaspa_addresses::Version;
 use kaspa_consensus_core::tx::{ScriptPublicKey, ScriptPublicKeyVersion};
@@ -30,6 +30,8 @@ pub enum ScriptClass {
     PubKeyMLDSA,
     /// Pay to script hash
     ScriptHash,
+    /// Pay to stealth address (Native SegWit style)
+    Stealth,
 }
 
 const NON_STANDARD: &str = "nonstandard";
@@ -37,24 +39,38 @@ const PUB_KEY: &str = "pubkey";
 const PUB_KEY_ECDSA: &str = "pubkeyecdsa";
 const PUB_KEY_MLDSA: &str = "pubkeymldsa";
 const SCRIPT_HASH: &str = "scripthash";
+const STEALTH: &str = "stealth";
 
 impl ScriptClass {
     pub fn from_script(script_public_key: &ScriptPublicKey) -> Self {
-        let script_public_key_ = script_public_key.script();
-        if script_public_key.version() == MAX_SCRIPT_PUBLIC_KEY_VERSION {
-            if Self::is_pay_to_pubkey(script_public_key_) {
-                ScriptClass::PubKey
-            } else if Self::is_pay_to_pubkey_ecdsa(script_public_key_) {
-                Self::PubKeyECDSA
-            } else if Self::is_pay_to_pubkey_mldsa(script_public_key_) {
-                Self::PubKeyMLDSA
-            } else if Self::is_pay_to_script_hash(script_public_key_) {
-                Self::ScriptHash
-            } else {
-                ScriptClass::NonStandard
+        let script = script_public_key.script();
+        let version = script_public_key.version();
+
+        match version {
+            // Standard script types (version 0)
+            0 => {
+                if Self::is_pay_to_pubkey(script) {
+                    ScriptClass::PubKey
+                } else if Self::is_pay_to_pubkey_ecdsa(script) {
+                    Self::PubKeyECDSA
+                } else if Self::is_pay_to_pubkey_mldsa(script) {
+                    Self::PubKeyMLDSA
+                } else if Self::is_pay_to_script_hash(script) {
+                    Self::ScriptHash
+                } else {
+                    ScriptClass::NonStandard
+                }
             }
-        } else {
-            ScriptClass::NonStandard
+            // Stealth address scripts (Native SegWit style)
+            STEALTH_SCRIPT_VERSION => {
+                if Self::is_pay_to_stealth(script) {
+                    ScriptClass::Stealth
+                } else {
+                    ScriptClass::NonStandard
+                }
+            }
+            // Unknown version
+            _ => ScriptClass::NonStandard,
         }
     }
 
@@ -99,6 +115,16 @@ impl ScriptClass {
         (script_public_key[34] == opcodes::codes::OpEqual)
     }
 
+    /// Returns true if the script is a pay-to-stealth format.
+    /// Format: [33 bytes R][1 byte view_tag][32 bytes P_dest] = 66 bytes
+    ///
+    /// Note: This only checks the length. Full validation of the public keys
+    /// is done during script execution in the VM.
+    #[inline(always)]
+    pub fn is_pay_to_stealth(script: &[u8]) -> bool {
+        script.len() == STEALTH_OUTPUT_SIZE
+    }
+
     fn as_str(&self) -> &'static str {
         match self {
             ScriptClass::NonStandard => NON_STANDARD,
@@ -106,16 +132,18 @@ impl ScriptClass {
             ScriptClass::PubKeyECDSA => PUB_KEY_ECDSA,
             ScriptClass::PubKeyMLDSA => PUB_KEY_MLDSA,
             ScriptClass::ScriptHash => SCRIPT_HASH,
+            ScriptClass::Stealth => STEALTH,
         }
     }
 
     pub fn version(&self) -> ScriptPublicKeyVersion {
         match self {
             ScriptClass::NonStandard => 0,
-            ScriptClass::PubKey => MAX_SCRIPT_PUBLIC_KEY_VERSION,
-            ScriptClass::PubKeyECDSA => MAX_SCRIPT_PUBLIC_KEY_VERSION,
-            ScriptClass::PubKeyMLDSA => MAX_SCRIPT_PUBLIC_KEY_VERSION,
-            ScriptClass::ScriptHash => MAX_SCRIPT_PUBLIC_KEY_VERSION,
+            ScriptClass::PubKey => 0,
+            ScriptClass::PubKeyECDSA => 0,
+            ScriptClass::PubKeyMLDSA => 0,
+            ScriptClass::ScriptHash => 0,
+            ScriptClass::Stealth => STEALTH_SCRIPT_VERSION,
         }
     }
 }
@@ -136,6 +164,7 @@ impl FromStr for ScriptClass {
             PUB_KEY_ECDSA => Ok(ScriptClass::PubKeyECDSA),
             PUB_KEY_MLDSA => Ok(ScriptClass::PubKeyMLDSA),
             SCRIPT_HASH => Ok(ScriptClass::ScriptHash),
+            STEALTH => Ok(ScriptClass::Stealth),
             _ => Err(Error::InvalidScriptClass(script_class.to_string())),
         }
     }
@@ -156,12 +185,14 @@ impl From<Version> for ScriptClass {
             Version::PubKeyECDSA => ScriptClass::PubKeyECDSA,
             Version::PubKeyMLDSA => ScriptClass::PubKeyMLDSA,
             Version::ScriptHash => ScriptClass::ScriptHash,
+            Version::Stealth => ScriptClass::Stealth,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::MAX_SCRIPT_PUBLIC_KEY_VERSION;
     use kaspa_consensus_core::tx::ScriptVec;
 
     use super::*;
@@ -211,6 +242,39 @@ mod tests {
                 name: "non standard script (unexpected final check sig op)",
                 script: hex::decode("204a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151ad").unwrap(),
                 version: 0,
+                class: ScriptClass::NonStandard,
+            },
+            // Stealth script tests
+            Test {
+                name: "valid stealth script (66 bytes with version 16)",
+                // Format: [33B R compressed][1B view_tag][32B P_dest x-only]
+                // Using valid compressed pubkey (02 prefix) and x-only pubkey
+                script: hex::decode(
+                    "02" // compressed pubkey prefix
+                    .to_owned() + &"4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151" // 32 bytes
+                    + "ab" // view_tag (1 byte)
+                    + "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151", // P_dest (32 bytes)
+                )
+                .unwrap(),
+                version: STEALTH_SCRIPT_VERSION,
+                class: ScriptClass::Stealth,
+            },
+            Test {
+                name: "non standard stealth script (wrong length)",
+                script: hex::decode("4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151").unwrap(),
+                version: STEALTH_SCRIPT_VERSION,
+                class: ScriptClass::NonStandard,
+            },
+            Test {
+                name: "non standard stealth script (correct length but wrong version)",
+                script: hex::decode(
+                    "02".to_owned()
+                        + &"4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151"
+                        + "ab"
+                        + "4a23f5eef4b2dead811c7efb4f1afbd8df845e804b6c36a4001fc096e13f8151",
+                )
+                .unwrap(),
+                version: 0, // wrong version
                 class: ScriptClass::NonStandard,
             },
         ];

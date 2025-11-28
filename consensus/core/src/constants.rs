@@ -7,7 +7,8 @@ pub const TX_VERSION: u16 = 0;
 pub const LOCK_TIME_THRESHOLD: u64 = 500_000_000_000;
 
 /// MAX_SCRIPT_PUBLIC_KEY_VERSION is the current latest supported public key script version.
-pub const MAX_SCRIPT_PUBLIC_KEY_VERSION: u16 = 0;
+/// Updated to 16 to support stealth addresses (STEALTH_SCRIPT_VERSION = 16).
+pub const MAX_SCRIPT_PUBLIC_KEY_VERSION: u16 = 16;
 
 /// SompiPerKaspa is the number of sompi in one kaspa (1 KAS).
 pub const SOMPI_PER_KASPA: u64 = 100_000_000;

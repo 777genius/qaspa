@@ -307,6 +307,14 @@ impl RpcApi for RpcCoreMock {
         Err(RpcError::NotImplemented)
     }
 
+    async fn get_utxos_by_script_version_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: GetUtxosByScriptVersionRequest,
+    ) -> RpcResult<GetUtxosByScriptVersionResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
     async fn get_sink_blue_score_call(
         &self,
         _connection: Option<&DynRpcConnection>,
@@ -384,6 +392,14 @@ impl RpcApi for RpcCoreMock {
         _connection: Option<&DynRpcConnection>,
         _request: GetUtxoReturnAddressRequest,
     ) -> RpcResult<GetUtxoReturnAddressResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
+    async fn get_block_view_tags_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: GetBlockViewTagsRequest,
+    ) -> RpcResult<GetBlockViewTagsResponse> {
         Err(RpcError::NotImplemented)
     }
 

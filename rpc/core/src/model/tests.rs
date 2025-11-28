@@ -1030,6 +1030,7 @@ mod mockery {
                 has_utxo_index: true,
                 is_synced: false,
                 virtual_daa_score: mock(),
+                has_stealth_support: true,
             }
         }
     }
@@ -1068,9 +1069,41 @@ mod mockery {
 
     test!(GetDaaScoreTimestampEstimateResponse);
 
+    // GetBlockViewTags
+    impl Mock for RpcStealthOutputInfo {
+        fn mock() -> Self {
+            RpcStealthOutputInfo {
+                transaction_id: mock(),
+                output_index: mock(),
+                view_tag: 42,
+                ephemeral_pubkey: "02".to_string() + &"0".repeat(64),
+                destination_pubkey: "0".repeat(64),
+                amount: mock(),
+            }
+        }
+    }
+
+    test!(RpcStealthOutputInfo);
+
+    impl Mock for GetBlockViewTagsRequest {
+        fn mock() -> Self {
+            GetBlockViewTagsRequest { hash: mock() }
+        }
+    }
+
+    test!(GetBlockViewTagsRequest);
+
+    impl Mock for GetBlockViewTagsResponse {
+        fn mock() -> Self {
+            GetBlockViewTagsResponse { block_hash: mock(), daa_score: mock(), stealth_outputs: vec![mock()] }
+        }
+    }
+
+    test!(GetBlockViewTagsResponse);
+
     impl Mock for NotifyBlockAddedRequest {
         fn mock() -> Self {
-            NotifyBlockAddedRequest { command: Command::Start }
+            NotifyBlockAddedRequest { command: Command::Start, include_stealth_outputs: true }
         }
     }
 
@@ -1086,7 +1119,7 @@ mod mockery {
 
     impl Mock for BlockAddedNotification {
         fn mock() -> Self {
-            BlockAddedNotification { block: mock() }
+            BlockAddedNotification { block: mock(), stealth_outputs: Some(vec![RpcStealthOutputInfo::mock()]) }
         }
     }
 

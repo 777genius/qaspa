@@ -2,7 +2,7 @@
 //! Deterministic byte sequence generation (used by Account ids).
 //!
 
-pub use crate::account::{bip32, bip32watch, keypair, legacy, multisig};
+pub use crate::account::{bip32, bip32watch, keypair, legacy, multisig, stealth};
 use crate::encryption::sha256_hash;
 use crate::imports::*;
 use crate::storage::PrvKeyDataId;
@@ -118,6 +118,19 @@ pub fn from_bip32<const N: usize>(prv_key_data_id: &PrvKeyDataId, data: &bip32::
         account_index: Some(data.account_index),
         secp256k1_public_key: None,
         data: None,
+    };
+    make_hashes(hashable)
+}
+
+/// Create deterministic hashes from stealth account data.
+pub fn from_stealth<const N: usize>(prv_key_data_id: &PrvKeyDataId, data: &stealth::Payload) -> [Hash; N] {
+    let hashable = DeterministicHashData {
+        account_kind: &stealth::STEALTH_ACCOUNT_KIND.into(),
+        prv_key_data_ids: &Some([*prv_key_data_id]),
+        ecdsa: Some(false), // Stealth uses Schnorr, not ECDSA
+        account_index: Some(data.account_index),
+        secp256k1_public_key: None,
+        data: Some(data.scan_pubkey.clone()), // Unique identifier
     };
     make_hashes(hashable)
 }

@@ -3,7 +3,7 @@ use crate::subscription::context::SubscriptionContext;
 use super::{
     events::EventType,
     subscription::{
-        single::{OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
+        single::{BlockAddedSubscription, OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
         Single,
     },
 };
@@ -12,6 +12,8 @@ use std::fmt::{Debug, Display};
 /// A notification, usable throughout the full notification system via types implementing this trait
 pub trait Notification: Clone + Debug + Display + Send + Sync + 'static {
     fn apply_overall_subscription(&self, subscription: &OverallSubscription, context: &SubscriptionContext) -> Option<Self>;
+
+    fn apply_block_added_subscription(&self, subscription: &BlockAddedSubscription, context: &SubscriptionContext) -> Option<Self>;
 
     fn apply_virtual_chain_changed_subscription(
         &self,
@@ -24,6 +26,9 @@ pub trait Notification: Clone + Debug + Display + Send + Sync + 'static {
 
     fn apply_subscription(&self, subscription: &dyn Single, context: &SubscriptionContext) -> Option<Self> {
         match subscription.event_type() {
+            EventType::BlockAdded => {
+                self.apply_block_added_subscription(subscription.as_any().downcast_ref::<BlockAddedSubscription>().unwrap(), context)
+            }
             EventType::VirtualChainChanged => self.apply_virtual_chain_changed_subscription(
                 subscription.as_any().downcast_ref::<VirtualChainChangedSubscription>().unwrap(),
                 context,
@@ -101,6 +106,12 @@ pub mod test_helpers {
         pub addresses: Arc<Vec<Address>>,
     }
 
+    #[derive(Clone, Debug, Default, PartialEq, Eq)]
+    pub struct StealthUtxosChangedNotification {
+        pub data: u64,
+        pub script_versions: Vec<u16>,
+    }
+
     full_featured! {
     #[derive(Clone, Debug, Display, PartialEq, Eq)]
     pub enum TestNotification {
@@ -110,12 +121,21 @@ pub mod test_helpers {
         VirtualChainChanged(VirtualChainChangedNotification),
         #[display(fmt = "UtxosChanged #{}", "_0.data")]
         UtxosChanged(UtxosChangedNotification),
+        #[display(fmt = "StealthUtxosChanged #{}", "_0.data")]
+        StealthUtxosChanged(StealthUtxosChangedNotification),
     }
     }
 
     impl Notification for TestNotification {
         fn apply_overall_subscription(&self, subscription: &OverallSubscription, _: &SubscriptionContext) -> Option<Self> {
             trace!("apply_overall_subscription: {self:?}, {subscription:?}");
+            match subscription.active() {
+                true => Some(self.clone()),
+                false => None,
+            }
+        }
+
+        fn apply_block_added_subscription(&self, subscription: &BlockAddedSubscription, _: &SubscriptionContext) -> Option<Self> {
             match subscription.active() {
                 true => Some(self.clone()),
                 false => None,
@@ -215,12 +235,22 @@ pub mod test_helpers {
             &mut self.data
         }
     }
+    impl Data for StealthUtxosChangedNotification {
+        fn data(&self) -> u64 {
+            self.data
+        }
+
+        fn data_mut(&mut self) -> &mut u64 {
+            &mut self.data
+        }
+    }
     impl Data for TestNotification {
         fn data(&self) -> u64 {
             match self {
                 TestNotification::BlockAdded(n) => n.data(),
                 TestNotification::VirtualChainChanged(n) => n.data(),
                 TestNotification::UtxosChanged(n) => n.data(),
+                TestNotification::StealthUtxosChanged(n) => n.data(),
             }
         }
 
@@ -229,6 +259,7 @@ pub mod test_helpers {
                 TestNotification::BlockAdded(n) => n.data_mut(),
                 TestNotification::VirtualChainChanged(n) => n.data_mut(),
                 TestNotification::UtxosChanged(n) => n.data_mut(),
+                TestNotification::StealthUtxosChanged(n) => n.data_mut(),
             }
         }
     }

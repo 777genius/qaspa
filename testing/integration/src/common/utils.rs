@@ -199,7 +199,7 @@ pub async fn mine_block(pay_address: Address, submitting_client: &GrpcClient, li
             .unwrap()
             .unwrap()
         {
-            Notification::BlockAdded(BlockAddedNotification { block }) => {
+            Notification::BlockAdded(BlockAddedNotification { block, .. }) => {
                 assert_eq!(block.header.hash, block_hash);
                 block.header.daa_score
             }

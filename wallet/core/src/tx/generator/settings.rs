@@ -6,6 +6,7 @@
 use crate::events::Events;
 use crate::imports::*;
 use crate::result::Result;
+use crate::tx::generator::stealth_change::DynStealthChangeCreator;
 use crate::tx::{Fees, PaymentDestination};
 use crate::utxo::{UtxoContext, UtxoEntryReference, UtxoIterator};
 use kaspa_addresses::Address;
@@ -38,6 +39,11 @@ pub struct GeneratorSettings {
     pub final_transaction_payload: Option<Vec<u8>>,
     // transaction is a transfer between accounts
     pub destination_utxo_context: Option<UtxoContext>,
+    /// Optional creator for stealth change outputs.
+    /// Required when `change_address.version == Version::Stealth`.
+    /// This allows pre-calculation of spending keys for change outputs,
+    /// avoiding the need to re-scan the blockchain.
+    pub stealth_change_creator: Option<DynStealthChangeCreator>,
 }
 
 // impl std::fmt::Debug for GeneratorSettings {
@@ -89,6 +95,7 @@ impl GeneratorSettings {
             final_transaction_destination,
             final_transaction_payload,
             destination_utxo_context: None,
+            stealth_change_creator: None,
         };
 
         Ok(settings)
@@ -124,6 +131,7 @@ impl GeneratorSettings {
             final_transaction_destination,
             final_transaction_payload,
             destination_utxo_context: None,
+            stealth_change_creator: None,
         };
 
         Ok(settings)
@@ -158,9 +166,20 @@ impl GeneratorSettings {
             final_transaction_destination,
             final_transaction_payload,
             destination_utxo_context: None,
+            stealth_change_creator: None,
         };
 
         Ok(settings)
+    }
+
+    /// Sets the stealth change creator for creating change outputs to stealth addresses.
+    ///
+    /// This is required when `change_address` is a stealth address (Version::Stealth).
+    /// The creator pre-calculates the spending key so we don't need to re-scan
+    /// the blockchain to find our own change output.
+    pub fn with_stealth_change_creator(mut self, creator: DynStealthChangeCreator) -> Self {
+        self.stealth_change_creator = Some(creator);
+        self
     }
 
     pub fn utxo_context_transfer(mut self, destination_utxo_context: &UtxoContext) -> Self {

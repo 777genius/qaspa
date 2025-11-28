@@ -36,7 +36,11 @@ pub mod prelude {
 use crate::runtime_sig_op_counter::{RuntimeSigOpCounter, SigOpConsumer};
 pub use standard::*;
 
-pub const MAX_SCRIPT_PUBLIC_KEY_VERSION: u16 = 0;
+pub const MAX_SCRIPT_PUBLIC_KEY_VERSION: u16 = 16;
+/// Stealth address script version (Native SegWit style - no opcodes)
+pub const STEALTH_SCRIPT_VERSION: u16 = 16;
+/// Size of stealth output in ScriptPublicKey: [33B R][1B tag][32B P_dest]
+pub const STEALTH_OUTPUT_SIZE: usize = 66;
 pub const MAX_STACK_SIZE: usize = 244;
 pub const MAX_SCRIPTS_SIZE: usize = 10_000;
 // Increased from 520 to support ML-DSA (post-quantum) signatures
@@ -135,13 +139,20 @@ fn parse_script<T: VerifiableTransaction, Reused: SigHashReusedValues>(
 /// * `Ok(u8)` - The exact number of signature operations executed
 /// * `Err(TxScriptError)` - If script execution fails or input index is invalid
 pub fn get_sig_op_count<T: VerifiableTransaction>(tx: &T, input_idx: usize, kip10_enabled: bool) -> Result<u8, TxScriptError> {
+    let utxo = tx.utxo(input_idx).ok_or_else(|| TxScriptError::InvalidInputIndex(input_idx as i32, tx.inputs().len()))?;
+
+    // Stealth outputs always have exactly 1 signature operation
+    if utxo.script_public_key.version() == STEALTH_SCRIPT_VERSION {
+        return Ok(1);
+    }
+
     let sig_cache = Cache::new(0);
     let reused_values = SigHashReusedValuesUnsync::new();
     let mut vm = TxScriptEngine::from_transaction_input(
         tx,
         &tx.inputs()[input_idx],
         input_idx,
-        tx.utxo(input_idx).ok_or_else(|| TxScriptError::InvalidInputIndex(input_idx as i32, tx.inputs().len()))?,
+        utxo,
         &reused_values,
         &sig_cache,
         kip10_enabled,
@@ -172,6 +183,11 @@ pub fn get_sig_op_count_upper_bound<T: VerifiableTransaction, Reused: SigHashReu
     signature_script: &[u8],
     prev_script_public_key: &ScriptPublicKey,
 ) -> u64 {
+    // Stealth outputs always have exactly 1 signature operation
+    if prev_script_public_key.version() == STEALTH_SCRIPT_VERSION {
+        return 1;
+    }
+
     let is_p2sh = ScriptClass::is_pay_to_script_hash(prev_script_public_key.script());
     let script_pub_key_ops = parse_script::<T, Reused>(prev_script_public_key.script()).collect_vec();
     if !is_p2sh {
@@ -378,8 +394,15 @@ impl<'a, T: VerifiableTransaction, Reused: SigHashReusedValues> TxScriptEngine<'
 
     pub fn execute(&mut self) -> Result<(), TxScriptError> {
         let (scripts, is_p2sh) = match &self.script_source {
-            ScriptSource::TxInput { input, utxo_entry, is_p2sh, .. } => {
-                if utxo_entry.script_public_key.version() > MAX_SCRIPT_PUBLIC_KEY_VERSION {
+            ScriptSource::TxInput { tx, input, utxo_entry, is_p2sh, idx } => {
+                let version = utxo_entry.script_public_key.version();
+
+                // Native SegWit style Stealth validation - no opcodes, direct Schnorr verify
+                if version == STEALTH_SCRIPT_VERSION {
+                    return self.execute_stealth_spend(*tx, *idx, input, utxo_entry);
+                }
+
+                if version > MAX_SCRIPT_PUBLIC_KEY_VERSION {
                     trace!("The version of the scriptPublicKey is higher than the known version - the Execute function returns true.");
                     return Ok(());
                 }
@@ -446,6 +469,73 @@ impl<'a, T: VerifiableTransaction, Reused: SigHashReusedValues> TxScriptEngine<'
         match v {
             true => Ok(()),
             false => Err(TxScriptError::EvalFalse),
+        }
+    }
+
+    /// Native SegWit style validation for Stealth outputs.
+    ///
+    /// This bypasses the opcode execution entirely and performs direct Schnorr
+    /// signature verification against the destination pubkey P_dest.
+    ///
+    /// Script format: [33B R][1B view_tag][32B P_dest]
+    /// Signature format: [64B sig][1B sighash_type]
+    fn execute_stealth_spend(
+        &mut self,
+        tx: &T,
+        input_idx: usize,
+        input: &TransactionInput,
+        utxo_entry: &UtxoEntry,
+    ) -> Result<(), TxScriptError> {
+        let script = utxo_entry.script_public_key.script();
+
+        // Step 1: Validate script format
+        if script.len() != STEALTH_OUTPUT_SIZE {
+            return Err(TxScriptError::PubKeyFormat);
+        }
+
+        // Step 2: Validate ephemeral pubkey R (first 33 bytes, compressed)
+        // This provides early detection of malformed stealth outputs
+        let r_bytes = &script[0..33];
+        let _ephemeral_pubkey = secp256k1::PublicKey::from_slice(r_bytes).map_err(|_| TxScriptError::PubKeyFormat)?;
+
+        // Step 3: Extract destination pubkey P_dest (last 32 bytes, x-only)
+        let p_dest_bytes = &script[34..66];
+        let pubkey = secp256k1::XOnlyPublicKey::from_slice(p_dest_bytes).map_err(|_| TxScriptError::PubKeyFormat)?;
+
+        // Step 3: Parse signature from signature_script
+        // Format: [64 bytes Schnorr sig][1 byte sighash_type]
+        let sig_script = &input.signature_script;
+        if sig_script.len() != 65 {
+            return Err(TxScriptError::SigLength(sig_script.len()));
+        }
+
+        let sig_bytes = &sig_script[..64];
+        let hash_type_byte = sig_script[64];
+        let hash_type = SigHashType::from_u8(hash_type_byte).map_err(|_| TxScriptError::InvalidSigHashType(hash_type_byte))?;
+
+        // Step 4: Parse signature
+        let sig = secp256k1::schnorr::Signature::from_slice(sig_bytes).map_err(TxScriptError::InvalidSignature)?;
+
+        // Step 5: Compute signature hash
+        let sig_hash = calc_schnorr_signature_hash(tx, input_idx, hash_type, self.reused_values);
+        let msg = secp256k1::Message::from_digest_slice(sig_hash.as_bytes().as_slice()).unwrap();
+
+        // Step 6: Check cache and verify signature
+        let sig_cache_key = SigCacheKey { signature: Signature::Secp256k1(sig), pub_key: PublicKey::Schnorr(pubkey), message: msg };
+
+        match self.sig_cache.get(&sig_cache_key) {
+            Some(true) => Ok(()),
+            Some(false) => Err(TxScriptError::EvalFalse),
+            None => match sig.verify(&msg, &pubkey) {
+                Ok(()) => {
+                    self.sig_cache.insert(sig_cache_key, true);
+                    Ok(())
+                }
+                Err(_) => {
+                    self.sig_cache.insert(sig_cache_key, false);
+                    Err(TxScriptError::EvalFalse)
+                }
+            },
         }
     }
 

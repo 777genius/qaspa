@@ -474,6 +474,7 @@ declare! {
         hasUtxoIndex : boolean;
         isSynced : boolean;
         virtualDaaScore : bigint;
+        hasStealthSupport : boolean;
     }
     "#,
 }
@@ -1766,6 +1767,65 @@ declare! {
 }
 
 try_from!(args: GetUtxoReturnAddressResponse, IGetUtxoReturnAddressResponse, {
+    Ok(to_value(&args)?.into())
+});
+
+// --- GetBlockViewTags ---
+
+declare! {
+    IStealthOutputInfo,
+    r#"
+    /**
+     * Information about a stealth output in a block.
+     *
+     * @category Node RPC
+     */
+    export interface IStealthOutputInfo {
+        transactionId: HexString;
+        outputIndex: number;
+        viewTag: number;
+        ephemeralPubkey: HexString;
+        destinationPubkey: HexString;
+        amount: bigint;
+    }
+    "#,
+}
+
+declare! {
+    IGetBlockViewTagsRequest,
+    r#"
+    /**
+     * Request to get stealth outputs (view tags) from a specific block.
+     *
+     * @category Node RPC
+     */
+    export interface IGetBlockViewTagsRequest {
+        hash: HexString;
+    }
+    "#,
+}
+
+try_from!(args: IGetBlockViewTagsRequest, GetBlockViewTagsRequest, {
+    Ok(from_value(args.into())?)
+});
+
+declare! {
+    IGetBlockViewTagsResponse,
+    r#"
+    /**
+     * Response with stealth outputs from a block.
+     *
+     * @category Node RPC
+     */
+    export interface IGetBlockViewTagsResponse {
+        blockHash: HexString;
+        daaScore: bigint;
+        stealthOutputs: IStealthOutputInfo[];
+    }
+    "#,
+}
+
+try_from!(args: GetBlockViewTagsResponse, IGetBlockViewTagsResponse, {
     Ok(to_value(&args)?.into())
 });
 

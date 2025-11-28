@@ -374,6 +374,7 @@ pub fn pskt_to_pending_transaction(
         final_transaction_priority_fee: fee_u.into(),
         final_transaction_destination,
         final_transaction_payload: None,
+        stealth_change_creator: None,
     };
 
     // Create the Generator

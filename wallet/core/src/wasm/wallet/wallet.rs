@@ -2,6 +2,7 @@ use crate::imports::*;
 use crate::storage::local::interface::LocalStore;
 use crate::storage::WalletDescriptor;
 use crate::wallet as native;
+use crate::wasm::api::extensions::WalletApiObjectExtension;
 use crate::wasm::notify::{WalletEventTarget, WalletNotificationCallback, WalletNotificationTypeOrCallback};
 use kaspa_consensus_core::network::NetworkIdT;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
@@ -27,6 +28,43 @@ declare! {
         resolver?: Resolver;
     }
     "#,
+}
+
+// Stealth account operation types
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountUnlockRequest")]
+    pub type IStealthAccountUnlockRequest;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountUnlockResponse")]
+    pub type IStealthAccountUnlockResponse;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountLockRequest")]
+    pub type IStealthAccountLockRequest;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountLockResponse")]
+    pub type IStealthAccountLockResponse;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountScanRequest")]
+    pub type IStealthAccountScanRequest;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountScanResponse")]
+    pub type IStealthAccountScanResponse;
 }
 
 #[derive(Default)]
@@ -270,6 +308,50 @@ impl Wallet {
     pub fn set_network_id(&self, network_id: NetworkIdT) -> Result<()> {
         self.inner.wallet.set_network_id(&network_id.try_into_owned()?)?;
         Ok(())
+    }
+
+    /// Unlock a stealth account for scanning and spending.
+    /// Must be called before scanning for stealth UTXOs or sending from stealth account.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "stealthAccountUnlock")]
+    pub async fn stealth_account_unlock(&self, request: IStealthAccountUnlockRequest) -> Result<IStealthAccountUnlockResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let account_id = request.get_account_id("accountId")?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let payment_secret = request.try_get_secret("paymentSecret")?;
+
+        let stealth_address = self.wallet().stealth_account_unlock(&account_id, &wallet_secret, payment_secret.as_ref()).await?;
+
+        let response = Object::new();
+        response.set("stealthAddress", &JsValue::from_str(&stealth_address))?;
+        Ok(response.unchecked_into())
+    }
+
+    /// Lock a stealth account (clear keys from memory).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "stealthAccountLock")]
+    pub async fn stealth_account_lock(&self, request: IStealthAccountLockRequest) -> Result<IStealthAccountLockResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let account_id = request.get_account_id("accountId")?;
+
+        self.wallet().stealth_account_lock(&account_id).await?;
+
+        Ok(Object::new().unchecked_into())
+    }
+
+    /// Scan blockchain for stealth UTXOs belonging to this account.
+    /// Account must be unlocked first.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "stealthAccountScan")]
+    pub async fn stealth_account_scan(&self, request: IStealthAccountScanRequest) -> Result<IStealthAccountScanResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let account_id = request.get_account_id("accountId")?;
+
+        let utxos_found = self.wallet().stealth_account_scan(&account_id).await?;
+
+        let response = Object::new();
+        response.set("utxosFound", &JsValue::from_f64(utxos_found as f64))?;
+        Ok(response.unchecked_into())
     }
 }
 

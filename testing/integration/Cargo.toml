@@ -36,6 +36,9 @@ kaspa-txscript.workspace = true
 kaspa-utils.workspace = true
 kaspa-utxoindex.workspace = true
 kaspa-wrpc-server.workspace = true
+kaspa-wallet-core.workspace = true
+kaspa-wallet-keys.workspace = true
+kaspa-stealth.workspace = true
 kaspad.workspace = true
 
 async-channel.workspace = true
@@ -47,6 +50,7 @@ crossbeam-channel.workspace = true
 dhat = { workspace = true, optional = true }
 faster-hex.workspace = true
 flate2.workspace = true
+futures.workspace = true
 futures-util.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
@@ -64,6 +68,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 workflow-perf-monitor.workspace = true
+workflow-core.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

@@ -164,6 +164,11 @@ pub enum AccountCreateArgs {
         account_name: Option<String>,
         ecdsa: bool,
     },
+    Stealth {
+        prv_key_data_args: PrvKeyDataArgs,
+        account_name: Option<String>,
+        account_index: Option<u64>,
+    },
 }
 
 impl AccountCreateArgs {
@@ -193,5 +198,15 @@ impl AccountCreateArgs {
         minimum_signatures: u16,
     ) -> Self {
         AccountCreateArgs::Multisig { prv_key_data_args, additional_xpub_keys, name, minimum_signatures }
+    }
+
+    pub fn new_stealth(
+        prv_key_data_id: PrvKeyDataId,
+        payment_secret: Option<Secret>,
+        account_name: Option<String>,
+        account_index: Option<u64>,
+    ) -> Self {
+        let prv_key_data_args = PrvKeyDataArgs { prv_key_data_id, payment_secret };
+        AccountCreateArgs::Stealth { prv_key_data_args, account_name, account_index }
     }
 }

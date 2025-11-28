@@ -1,12 +1,12 @@
 use kaspa_consensus_core::{
-    tx::{ScriptPublicKeys, TransactionOutpoint},
+    tx::{ScriptPublicKey, ScriptPublicKeyVersion, ScriptPublicKeys, TransactionOutpoint},
     utxo::utxo_diff::UtxoDiff,
     BlockHashSet,
 };
 use kaspa_consensusmanager::spawn_blocking;
 use kaspa_database::prelude::StoreResult;
 use kaspa_hashes::Hash;
-use kaspa_index_core::indexed_utxos::BalanceByScriptPublicKey;
+use kaspa_index_core::indexed_utxos::{BalanceByScriptPublicKey, CompactUtxoEntry};
 use parking_lot::RwLock;
 use std::{collections::HashSet, fmt::Debug, sync::Arc};
 
@@ -31,6 +31,13 @@ pub trait UtxoIndexApi: Send + Sync + Debug {
 
     // This can have a big memory footprint, so it should be used only for tests.
     fn get_all_outpoints(&self) -> StoreResult<HashSet<TransactionOutpoint>>;
+
+    fn get_utxos_by_script_version(
+        &self,
+        version: ScriptPublicKeyVersion,
+        cursor_key: Option<Vec<u8>>,
+        limit: usize,
+    ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>>;
 
     /// Retrieve the stored tips of the utxoindex (used for testing purposes).
     ///
@@ -83,5 +90,20 @@ impl UtxoIndexProxy {
 
     pub async fn update(self, utxo_diff: Arc<UtxoDiff>, tips: Arc<Vec<Hash>>) -> UtxoIndexResult<UtxoChanges> {
         spawn_blocking(move || self.inner.write().update(utxo_diff, tips)).await.unwrap()
+    }
+
+    /// Get all outpoints (for iteration/filtering purposes)
+    /// Warning: This can have a big memory footprint on large UTXO sets
+    pub async fn get_all_outpoints(self) -> StoreResult<HashSet<TransactionOutpoint>> {
+        spawn_blocking(move || self.inner.read().get_all_outpoints()).await.unwrap()
+    }
+
+    pub async fn get_utxos_by_script_version(
+        self,
+        version: ScriptPublicKeyVersion,
+        cursor_key: Option<Vec<u8>>,
+        limit: usize,
+    ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>> {
+        spawn_blocking(move || self.inner.read().get_utxos_by_script_version(version, cursor_key, limit)).await.unwrap()
     }
 }

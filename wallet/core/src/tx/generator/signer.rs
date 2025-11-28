@@ -8,6 +8,15 @@ use kaspa_consensus_core::{sign::sign_with_multiple_v2, tx::SignableTransaction}
 
 pub trait SignerT: Send + Sync + 'static {
     fn try_sign(&self, transaction: SignableTransaction, addresses: &[Address]) -> Result<SignableTransaction>;
+
+    /// Signs the transaction with optional full signing requirement.
+    /// If `require_fully_signed` is false, allows partial signing (useful for stealth inputs).
+    fn try_sign_partial(
+        &self,
+        transaction: SignableTransaction,
+        addresses: &[Address],
+        require_fully_signed: bool,
+    ) -> Result<SignableTransaction>;
 }
 
 struct Inner {
@@ -50,12 +59,22 @@ impl Signer {
 
 impl SignerT for Signer {
     fn try_sign(&self, mutable_tx: SignableTransaction, addresses: &[Address]) -> Result<SignableTransaction> {
+        self.try_sign_partial(mutable_tx, addresses, true)
+    }
+
+    fn try_sign_partial(
+        &self,
+        mutable_tx: SignableTransaction,
+        addresses: &[Address],
+        require_fully_signed: bool,
+    ) -> Result<SignableTransaction> {
         self.ingest(addresses)?;
 
         let keys = self.inner.keys.lock().unwrap();
-        let mut keys_for_signing = addresses.iter().map(|address| *keys.get(address).unwrap()).collect::<Vec<_>>();
+        let mut keys_for_signing = addresses.iter().filter_map(|address| keys.get(address).copied()).collect::<Vec<_>>();
         // TODO - refactor for multisig
-        let signable_tx = sign_with_multiple_v2(mutable_tx, &keys_for_signing).fully_signed()?;
+        let signed = sign_with_multiple_v2(mutable_tx, &keys_for_signing);
+        let signable_tx = if require_fully_signed { signed.fully_signed()? } else { signed.unwrap() };
         keys_for_signing.zeroize();
         Ok(signable_tx)
     }
@@ -80,9 +99,19 @@ impl KeydataSigner {
 
 impl SignerT for KeydataSigner {
     fn try_sign(&self, mutable_tx: SignableTransaction, addresses: &[Address]) -> Result<SignableTransaction> {
-        let mut keys_for_signing = addresses.iter().map(|address| *self.inner.keys.get(address).unwrap()).collect::<Vec<_>>();
+        self.try_sign_partial(mutable_tx, addresses, true)
+    }
+
+    fn try_sign_partial(
+        &self,
+        mutable_tx: SignableTransaction,
+        addresses: &[Address],
+        require_fully_signed: bool,
+    ) -> Result<SignableTransaction> {
+        let mut keys_for_signing = addresses.iter().filter_map(|address| self.inner.keys.get(address).copied()).collect::<Vec<_>>();
         // TODO - refactor for multisig
-        let signable_tx = sign_with_multiple_v2(mutable_tx, &keys_for_signing).fully_signed()?;
+        let signed = sign_with_multiple_v2(mutable_tx, &keys_for_signing);
+        let signable_tx = if require_fully_signed { signed.fully_signed()? } else { signed.unwrap() };
         keys_for_signing.zeroize();
         Ok(signable_tx)
     }

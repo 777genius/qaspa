@@ -7,7 +7,7 @@ use kaspa_notify::{
     notification::Notification as NotificationTrait,
     subscription::{
         context::SubscriptionContext,
-        single::{OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
+        single::{BlockAddedSubscription, OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
         Subscription,
     },
 };
@@ -47,6 +47,14 @@ pub enum Notification {
 
 impl NotificationTrait for Notification {
     fn apply_overall_subscription(&self, subscription: &OverallSubscription, _context: &SubscriptionContext) -> Option<Self> {
+        match subscription.active() {
+            true => Some(self.clone()),
+            false => None,
+        }
+    }
+
+    fn apply_block_added_subscription(&self, subscription: &BlockAddedSubscription, _context: &SubscriptionContext) -> Option<Self> {
+        // Consensus layer does not filter stealth outputs - this is done at RPC layer
         match subscription.active() {
             true => Some(self.clone()),
             false => None,

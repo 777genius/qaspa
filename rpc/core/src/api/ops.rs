@@ -40,6 +40,7 @@ pub enum RpcApiOps {
     NotifyVirtualDaaScoreChanged = 16,
     NotifyVirtualChainChanged = 17,
     NotifySinkBlueScoreChanged = 18,
+    NotifyStealthUtxosChanged = 19,
 
     // Notification ops required by wRPC
 
@@ -54,6 +55,7 @@ pub enum RpcApiOps {
     VirtualDaaScoreChangedNotification = 66,
     PruningPointUtxoSetOverrideNotification = 67,
     NewBlockTemplateNotification = 68,
+    StealthUtxosChangedNotification = 69,
 
     // RPC methods
     /// Ping the node to check if connection is alive
@@ -138,6 +140,10 @@ pub enum RpcApiOps {
     GetCurrentBlockColor = 149,
     /// Get UTXO Return Addresses
     GetUtxoReturnAddress = 150,
+    /// Get UTXOs by script version (for stealth address scanning)
+    GetUtxosByScriptVersion = 151,
+    /// Get stealth outputs (view tags) from a specific block
+    GetBlockViewTags = 152,
 }
 
 impl RpcApiOps {
@@ -179,6 +185,7 @@ impl From<EventType> for RpcApiOps {
             EventType::VirtualDaaScoreChanged => RpcApiOps::VirtualDaaScoreChangedNotification,
             EventType::PruningPointUtxoSetOverride => RpcApiOps::PruningPointUtxoSetOverrideNotification,
             EventType::NewBlockTemplate => RpcApiOps::NewBlockTemplateNotification,
+            EventType::StealthUtxosChanged => RpcApiOps::StealthUtxosChangedNotification,
         }
     }
 }

@@ -591,6 +591,10 @@ pub trait Account: AnySync + Send + Sync + 'static {
         Err(Error::InvalidAccountKind)
     }
 
+    fn as_stealth_account(self: Arc<Self>) -> Result<Arc<stealth::StealthAccount>> {
+        Err(Error::InvalidAccountKind)
+    }
+
     fn create_address_private_keys<'l>(
         self: Arc<Self>,
         key_data: &PrvKeyData,

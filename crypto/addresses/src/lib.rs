@@ -74,6 +74,12 @@ pub enum Prefix {
     Simnet,
     #[serde(rename = "kaspadev")]
     Devnet,
+    /// Stealth address mainnet prefix
+    #[serde(rename = "qs")]
+    StealthMainnet,
+    /// Stealth address testnet prefix
+    #[serde(rename = "qstest")]
+    StealthTestnet,
     #[cfg(test)]
     A,
     #[cfg(test)]
@@ -87,10 +93,36 @@ impl Prefix {
             Prefix::Testnet => "kaspatest",
             Prefix::Simnet => "kaspasim",
             Prefix::Devnet => "kaspadev",
+            Prefix::StealthMainnet => "qs",
+            Prefix::StealthTestnet => "qstest",
             #[cfg(test)]
             Prefix::A => "a",
             #[cfg(test)]
             Prefix::B => "b",
+        }
+    }
+
+    /// Returns true if this prefix is for stealth addresses
+    #[inline(always)]
+    pub fn is_stealth(&self) -> bool {
+        matches!(self, Prefix::StealthMainnet | Prefix::StealthTestnet)
+    }
+
+    /// Returns the corresponding stealth prefix for a regular prefix
+    pub fn to_stealth(&self) -> Option<Prefix> {
+        match self {
+            Prefix::Mainnet => Some(Prefix::StealthMainnet),
+            Prefix::Testnet | Prefix::Simnet | Prefix::Devnet => Some(Prefix::StealthTestnet),
+            _ => None,
+        }
+    }
+
+    /// Returns the corresponding regular prefix for a stealth prefix
+    pub fn to_regular(&self) -> Option<Prefix> {
+        match self {
+            Prefix::StealthMainnet => Some(Prefix::Mainnet),
+            Prefix::StealthTestnet => Some(Prefix::Testnet),
+            _ => None,
         }
     }
 
@@ -118,6 +150,8 @@ impl TryFrom<&str> for Prefix {
             "kaspatest" => Ok(Prefix::Testnet),
             "kaspasim" => Ok(Prefix::Simnet),
             "kaspadev" => Ok(Prefix::Devnet),
+            "qs" => Ok(Prefix::StealthMainnet),
+            "qstest" => Ok(Prefix::StealthTestnet),
             #[cfg(test)]
             "a" => Ok(Prefix::A),
             #[cfg(test)]
@@ -128,7 +162,7 @@ impl TryFrom<&str> for Prefix {
 }
 
 ///
-///  Kaspa `Address` version (`PubKey`, `PubKey ECDSA`, `PubKey ML-DSA`, `ScriptHash`)
+///  Kaspa `Address` version (`PubKey`, `PubKey ECDSA`, `PubKey ML-DSA`, `ScriptHash`, `Stealth`)
 ///
 /// @category Address
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -145,6 +179,9 @@ pub enum Version {
     PubKeyMLDSA = 2,
     /// ScriptHash addresses always have the version byte set to 8
     ScriptHash = 8,
+    /// Stealth addresses always have the version byte set to 16
+    /// Payload: [32 scan_pubkey][32 spend_pubkey] = 64 bytes
+    Stealth = 16,
 }
 
 impl TryFrom<&str> for Version {
@@ -156,6 +193,7 @@ impl TryFrom<&str> for Version {
             "PubKeyECDSA" => Ok(Version::PubKeyECDSA),
             "PubKeyMLDSA" => Ok(Version::PubKeyMLDSA),
             "ScriptHash" => Ok(Version::ScriptHash),
+            "Stealth" => Ok(Version::Stealth),
             _ => Err(AddressError::InvalidVersionString(value.to_owned())),
         }
     }
@@ -168,6 +206,7 @@ impl Version {
             Version::PubKeyECDSA => 33,
             Version::PubKeyMLDSA => 1312, // ML-DSA Level 2 public key size
             Version::ScriptHash => 32,
+            Version::Stealth => 64, // [32 scan][32 spend]
         }
     }
 }
@@ -181,6 +220,7 @@ impl TryFrom<u8> for Version {
             1 => Ok(Version::PubKeyECDSA),
             2 => Ok(Version::PubKeyMLDSA),
             8 => Ok(Version::ScriptHash),
+            16 => Ok(Version::Stealth),
             _ => Err(AddressError::InvalidVersion(value)),
         }
     }
@@ -193,6 +233,7 @@ impl Display for Version {
             Version::PubKeyECDSA => write!(f, "PubKeyECDSA"),
             Version::PubKeyMLDSA => write!(f, "PubKeyMLDSA"),
             Version::ScriptHash => write!(f, "ScriptHash"),
+            Version::Stealth => write!(f, "Stealth"),
         }
     }
 }

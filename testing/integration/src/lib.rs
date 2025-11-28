@@ -25,3 +25,6 @@ pub mod subscribe_benchmarks;
 
 #[cfg(test)]
 pub mod rpc_tests;
+
+#[cfg(test)]
+pub mod stealth_flow;

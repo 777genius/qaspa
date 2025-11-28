@@ -300,7 +300,8 @@ impl UtxoContext {
                 context.mature.sorted_insert_binary_asc_by_key(utxo_entry.clone(), |entry| entry.amount_as_ref());
             } else {
                 let params = NetworkParams::from(self.processor().network_id()?);
-                match utxo_entry.maturity(params, current_daa_score) {
+                let maturity = utxo_entry.maturity(params, current_daa_score);
+                match maturity {
                     Maturity::Stasis => {
                         context.stasis.insert(utxo_entry.id().clone(), utxo_entry.clone());
                         self.processor()

@@ -388,6 +388,12 @@ impl Wallet {
                     log_info!("create_private_context, open_impl: receive_address: {:?}", account.receive_address());
                     self.legacy_accounts().insert(account.clone());
                 }
+                // Auto-unlock stealth accounts on wallet open
+                if account.account_kind().as_ref() == stealth::STEALTH_ACCOUNT_KIND {
+                    if let Ok(stealth_account) = account.clone().as_stealth_account() {
+                        stealth_account.unlock(wallet_secret, None).await?;
+                    }
+                }
             }
         }
 
@@ -693,6 +699,11 @@ impl Wallet {
             AccountCreateArgs::Keypair { prv_key_data_id, account_name, ecdsa } => {
                 self.create_account_keypair(wallet_secret, None, prv_key_data_id, account_name, ecdsa).await?
             }
+            AccountCreateArgs::Stealth { prv_key_data_args, account_name, account_index } => {
+                let PrvKeyDataArgs { prv_key_data_id, payment_secret } = prv_key_data_args;
+                self.create_account_stealth(wallet_secret, prv_key_data_id, payment_secret.as_ref(), account_name, account_index)
+                    .await?
+            }
         };
 
         if notify {
@@ -826,6 +837,76 @@ impl Wallet {
         Ok(account)
     }
 
+    /// Creates a new stealth account for privacy-preserving transactions.
+    ///
+    /// Stealth accounts use ECDH to generate one-time destination addresses,
+    /// providing unlinkable payments.
+    pub async fn create_account_stealth(
+        self: &Arc<Wallet>,
+        wallet_secret: &Secret,
+        prv_key_data_id: PrvKeyDataId,
+        payment_secret: Option<&Secret>,
+        account_name: Option<String>,
+        account_index: Option<u64>,
+    ) -> Result<Arc<dyn Account>> {
+        let account_store = self.inner.store.clone().as_account_store()?;
+
+        let prv_key_data = self
+            .inner
+            .store
+            .as_prv_key_data_store()?
+            .load_key_data(wallet_secret, &prv_key_data_id)
+            .await?
+            .ok_or_else(|| Error::PrivateKeyNotFound(prv_key_data_id))?;
+
+        // Determine account index
+        let account_index = if let Some(index) = account_index {
+            index
+        } else {
+            // Count existing stealth accounts for this prv_key_data_id
+            let accounts = account_store.clone().iter(Some(prv_key_data_id)).await?.collect::<Vec<_>>().await;
+            accounts
+                .into_iter()
+                .filter(|a| {
+                    a.as_ref().ok().and_then(|(a, _)| (a.kind == stealth::STEALTH_ACCOUNT_KIND).then_some(true)).unwrap_or(false)
+                })
+                .count() as u64
+        };
+
+        // Derive stealth keys
+        let payload = prv_key_data.payload.decrypt(payment_secret)?;
+        let xprv = payload.get_xprv(payment_secret)?;
+        let derivation = stealth::StealthKeyDerivation::from_xprv(&xprv, account_index)?;
+
+        // Get current DAA score for account creation timestamp
+        let creation_daa_score = self.utxo_processor().current_daa_score();
+
+        // Create account
+        let account: Arc<dyn Account> = Arc::new(
+            stealth::StealthAccount::try_new(
+                self,
+                account_name,
+                prv_key_data.id,
+                account_index,
+                derivation.scan_pubkey,
+                derivation.spend_pubkey,
+                creation_daa_score,
+            )
+            .await?,
+        );
+
+        // Check for duplicates
+        if account_store.load_single(account.id()).await?.is_some() {
+            return Err(Error::AccountAlreadyExists(*account.id()));
+        }
+
+        // Store account
+        self.inner.store.clone().as_account_store()?.store_single(&account.to_storage()?, None).await?;
+        self.inner.store.commit(wallet_secret).await?;
+
+        Ok(account)
+    }
+
     pub async fn create_account_bip32_watch(
         self: &Arc<Wallet>,
         wallet_secret: &Secret,
@@ -927,6 +1008,47 @@ impl Wallet {
         self.inner.store.commit(wallet_secret).await?;
 
         Ok(account)
+    }
+
+    // ========================================================================
+    // STEALTH ACCOUNT OPERATIONS
+    // ========================================================================
+
+    /// Unlocks a stealth account by decrypting and caching the stealth keys.
+    /// Returns the stealth address on success.
+    pub async fn stealth_account_unlock(
+        self: &Arc<Self>,
+        account_id: &AccountId,
+        wallet_secret: &Secret,
+        payment_secret: Option<&Secret>,
+    ) -> Result<String> {
+        let guard = self.guard();
+        let guard = guard.lock().await;
+        let account = self.get_account_by_id(account_id, &guard).await?.ok_or(Error::AccountNotFound(*account_id))?;
+        let stealth = account.as_stealth_account()?;
+        stealth.unlock(wallet_secret, payment_secret).await?;
+        Ok(stealth.stealth_address().to_string())
+    }
+
+    /// Locks a stealth account by clearing cached keys from memory.
+    pub async fn stealth_account_lock(self: &Arc<Self>, account_id: &AccountId) -> Result<()> {
+        let guard = self.guard();
+        let guard = guard.lock().await;
+        let account = self.get_account_by_id(account_id, &guard).await?.ok_or(Error::AccountNotFound(*account_id))?;
+        let stealth = account.as_stealth_account()?;
+        stealth.lock().await;
+        Ok(())
+    }
+
+    /// Scans the blockchain for stealth UTXOs belonging to this account.
+    /// Returns the number of mature UTXOs found.
+    pub async fn stealth_account_scan(self: &Arc<Self>, account_id: &AccountId) -> Result<usize> {
+        let guard = self.guard();
+        let guard = guard.lock().await;
+        let account = self.get_account_by_id(account_id, &guard).await?.ok_or(Error::AccountNotFound(*account_id))?;
+        let stealth = account.clone().as_stealth_account()?;
+        stealth.clone().scan(None, None).await?;
+        Ok(stealth.utxo_context().mature_utxo_size())
     }
 
     pub async fn create_wallet(

@@ -1,12 +1,12 @@
 use std::{collections::HashSet, sync::Arc};
 
 use kaspa_consensus_core::{
-    tx::{ScriptPublicKeys, TransactionOutpoint},
+    tx::{ScriptPublicKey, ScriptPublicKeyVersion, ScriptPublicKeys, TransactionOutpoint},
     BlockHashSet,
 };
 use kaspa_core::trace;
 use kaspa_database::prelude::{CachePolicy, StoreResult, DB};
-use kaspa_index_core::indexed_utxos::BalanceByScriptPublicKey;
+use kaspa_index_core::indexed_utxos::{BalanceByScriptPublicKey, CompactUtxoEntry};
 
 use crate::{
     model::UtxoSetByScriptPublicKey,
@@ -40,6 +40,15 @@ impl Store {
 
     pub fn get_balance_by_script_public_key(&self, script_public_keys: ScriptPublicKeys) -> StoreResult<BalanceByScriptPublicKey> {
         self.utxos_by_script_public_key_store.get_balance_from_script_public_keys(script_public_keys)
+    }
+
+    pub fn get_utxos_by_script_version(
+        &self,
+        version: ScriptPublicKeyVersion,
+        cursor_key: Option<Vec<u8>>,
+        limit: usize,
+    ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>> {
+        self.utxos_by_script_public_key_store.get_utxos_by_script_version(version, cursor_key, limit)
     }
 
     // This can have a big memory footprint, so it should be used only for tests.

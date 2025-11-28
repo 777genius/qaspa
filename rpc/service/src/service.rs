@@ -1,6 +1,6 @@
 //! Core server implementation for ClientAPI
 
-use super::collector::{CollectorFromConsensus, CollectorFromIndex};
+use super::collector::{CollectorFromConsensus, StealthAwareIndexCollector};
 use crate::converter::feerate_estimate::{FeeEstimateConverter, FeeEstimateVerboseConverter};
 use crate::converter::{consensus::ConsensusConverter, index::IndexConverter, protocol::ProtocolConverter};
 use async_trait::async_trait;
@@ -65,7 +65,7 @@ use kaspa_rpc_core::{
     notify::connection::ChannelConnection,
     Notification, RpcError, RpcResult,
 };
-use kaspa_txscript::{extract_script_pub_key_address, pay_to_address_script};
+use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, pay_to_address_script, STEALTH_SCRIPT_VERSION};
 use kaspa_utils::expiring_cache::ExpiringCache;
 use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
@@ -187,8 +187,11 @@ impl RpcCoreService {
             );
 
             let index_events: EventSwitches = [EventType::UtxosChanged, EventType::PruningPointUtxoSetOverride].as_ref().into();
-            let index_collector =
-                Arc::new(CollectorFromIndex::new("rpc-core <= index", index_notify_channel.receiver(), index_converter.clone()));
+            let index_collector = Arc::new(StealthAwareIndexCollector::new(
+                "rpc-core <= index",
+                index_notify_channel.receiver(),
+                index_converter.clone(),
+            ));
             let index_subscriber =
                 Arc::new(Subscriber::new("rpc-core => index", index_events, index_notifier.clone(), index_notify_listener_id));
 
@@ -283,6 +286,31 @@ impl RpcCoreService {
             (false, true) => Ok(TransactionQuery::All),
             (false, false) => Ok(TransactionQuery::TransactionsOnly),
         }
+    }
+
+    /// Extracts stealth outputs from a block for view tag scanning
+    fn extract_stealth_outputs_from_block(block: &Block) -> Vec<RpcStealthOutputInfo> {
+        block
+            .transactions
+            .iter()
+            .flat_map(|tx| {
+                let tx_id = tx.id();
+                tx.outputs.iter().enumerate().filter_map(move |(idx, out)| {
+                    if out.script_public_key.version() != STEALTH_SCRIPT_VERSION {
+                        return None;
+                    }
+                    let eph = extract_stealth_output(&out.script_public_key).ok()?;
+                    Some(RpcStealthOutputInfo::new(
+                        tx_id,
+                        idx as u32,
+                        eph.view_tag,
+                        faster_hex::hex_string(&eph.ephemeral_pubkey.serialize()),
+                        faster_hex::hex_string(&eph.destination_pubkey.serialize()),
+                        out.value,
+                    ))
+                })
+            })
+            .collect()
     }
 }
 
@@ -694,6 +722,64 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         //       (the current impl does not retain an entry order matching the request addresses order)
         let entry_map = self.get_utxo_set_by_script_public_key(request.addresses.iter()).await;
         Ok(GetUtxosByAddressesResponse::new(self.index_converter.get_utxos_by_addresses_entries(&entry_map)))
+    }
+
+    async fn get_utxos_by_script_version_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: GetUtxosByScriptVersionRequest,
+    ) -> RpcResult<GetUtxosByScriptVersionResponse> {
+        if !self.config.utxoindex {
+            return Err(RpcError::NoUtxoIndex);
+        }
+        let session = self.consensus_manager.consensus().unguarded_session();
+        if session.async_is_consensus_in_transitional_ibd_state().await {
+            return Err(RpcError::ConsensusInTransitionalIbdState);
+        }
+
+        let limit = request.limit.unwrap_or(1000).min(10000) as usize;
+        let fetch_limit = limit.saturating_add(1);
+        let target_version = request.script_version;
+        let cursor_key = request.cursor.as_ref().and_then(|c| if c.cursor_key.is_empty() { None } else { Some(c.cursor_key.clone()) });
+
+        let utxoindex = self.utxoindex.clone().unwrap();
+        let mut raw_entries = utxoindex
+            .get_utxos_by_script_version(target_version, cursor_key, fetch_limit)
+            .await
+            .map_err(|e| RpcError::General(format!("Database error: {}", e)))?;
+
+        let mut next_cursor_raw: Option<(RpcTransactionOutpoint, Vec<u8>)> = None;
+        if raw_entries.len() == fetch_limit {
+            if let Some((_, outpoint, _, raw_key)) = raw_entries.pop() {
+                next_cursor_raw = Some((RpcTransactionOutpoint::from(outpoint), raw_key));
+            }
+        }
+
+        let mut entries = Vec::with_capacity(raw_entries.len());
+        for (script_public_key, outpoint, compact_entry, _) in raw_entries.into_iter() {
+            let rpc_entry =
+                RpcUtxoEntry::new(compact_entry.amount, script_public_key, compact_entry.block_daa_score, compact_entry.is_coinbase);
+            entries.push(RpcUtxosByScriptVersionEntry::new(outpoint.into(), rpc_entry));
+        }
+
+        let next_cursor =
+            next_cursor_raw.map(|(outpoint, raw_key)| RpcScriptVersionCursor::new(outpoint.transaction_id, outpoint.index, raw_key));
+
+        Ok(GetUtxosByScriptVersionResponse::new(entries, next_cursor))
+    }
+
+    async fn get_block_view_tags_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: GetBlockViewTagsRequest,
+    ) -> RpcResult<GetBlockViewTagsResponse> {
+        let session = self.consensus_manager.consensus().session().await;
+        let block = session.async_get_block_even_if_header_only(request.hash).await?;
+        let ghostdag = session.async_get_ghostdag_data(request.hash).await?;
+
+        let stealth_outputs = Self::extract_stealth_outputs_from_block(&block);
+
+        Ok(GetBlockViewTagsResponse::new(request.hash, ghostdag.blue_score, stealth_outputs))
     }
 
     async fn get_balance_by_address_call(
@@ -1206,6 +1292,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
             has_utxo_index: self.config.utxoindex,
             is_synced,
             virtual_daa_score,
+            has_stealth_support: true,
         })
     }
 
@@ -1249,6 +1336,14 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
                 // the whole subscription no matter if blanket or targeting specified addresses.
 
                 warn!("RPC subscription to blanket UtxosChanged called while node in safe RPC mode -- ignoring.");
+                Err(RpcError::UnavailableInSafeMode)
+            }
+            Scope::StealthUtxosChanged(ref stealth_scope) if !self.config.unsafe_rpc && stealth_scope.script_versions.is_empty() => {
+                // The subscription to blanket StealthUtxosChanged (all script versions)
+                // is restricted to unsafe mode only since it could be resource intensive.
+                //
+                // Specific script versions (e.g., [16] for stealth) are always allowed.
+                warn!("RPC subscription to blanket StealthUtxosChanged called while node in safe RPC mode -- ignoring.");
                 Err(RpcError::UnavailableInSafeMode)
             }
             _ => {

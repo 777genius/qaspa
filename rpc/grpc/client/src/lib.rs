@@ -28,7 +28,7 @@ use kaspa_notify::{
     },
 };
 use kaspa_rpc_core::{
-    api::rpc::RpcApi,
+    api::{connection::DynRpcConnection, rpc::RpcApi},
     error::RpcError,
     error::RpcResult,
     model::message::*,
@@ -265,6 +265,8 @@ impl RpcApi for GrpcClient {
     route!(get_headers_call, GetHeaders);
     route!(get_utxos_by_addresses_call, GetUtxosByAddresses);
     route!(get_balance_by_address_call, GetBalanceByAddress);
+    route!(get_utxos_by_script_version_call, GetUtxosByScriptVersion);
+    route!(get_block_view_tags_call, GetBlockViewTags);
     route!(get_balances_by_addresses_call, GetBalancesByAddresses);
     route!(get_sink_blue_score_call, GetSinkBlueScore);
     route!(ban_call, Ban);

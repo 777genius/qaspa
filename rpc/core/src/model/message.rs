@@ -1506,6 +1506,275 @@ impl Deserializer for GetUtxosByAddressesResponse {
     }
 }
 
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// GetUtxosByScriptVersion
+
+/// Request to get UTXOs filtered by script version.
+/// Used for stealth address scanning where UTXOs don't have associated addresses.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetUtxosByScriptVersionRequest {
+    pub script_version: u16,
+    pub cursor: Option<RpcScriptVersionCursor>,
+    pub limit: Option<u32>,
+}
+
+impl GetUtxosByScriptVersionRequest {
+    pub fn new(script_version: u16, cursor: Option<RpcScriptVersionCursor>, limit: Option<u32>) -> Self {
+        Self { script_version, cursor, limit }
+    }
+}
+
+impl Serializer for GetUtxosByScriptVersionRequest {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(u16, &self.script_version, writer)?;
+        store!(bool, &self.cursor.is_some(), writer)?;
+        if let Some(ref cursor) = self.cursor {
+            Serializer::serialize(cursor, writer)?;
+        }
+        store!(Option<u32>, &self.limit, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for GetUtxosByScriptVersionRequest {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let script_version = load!(u16, reader)?;
+        let has_cursor = load!(bool, reader)?;
+        let cursor = if has_cursor { Some(<RpcScriptVersionCursor as Deserializer>::deserialize(reader)?) } else { None };
+        let limit = load!(Option<u32>, reader)?;
+        Ok(Self { script_version, cursor, limit })
+    }
+}
+
+/// Cursor for paginating UTXOs by script version
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcScriptVersionCursor {
+    pub transaction_id: RpcTransactionId,
+    pub index: u32,
+    pub cursor_key: Vec<u8>,
+}
+
+impl RpcScriptVersionCursor {
+    pub fn new(transaction_id: RpcTransactionId, index: u32, cursor_key: Vec<u8>) -> Self {
+        Self { transaction_id, index, cursor_key }
+    }
+}
+
+impl Serializer for RpcScriptVersionCursor {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(RpcTransactionId, &self.transaction_id, writer)?;
+        store!(u32, &self.index, writer)?;
+        let key_len = self.cursor_key.len() as u32;
+        store!(u32, &key_len, writer)?;
+        std::io::Write::write_all(writer, &self.cursor_key)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for RpcScriptVersionCursor {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let transaction_id = load!(RpcTransactionId, reader)?;
+        let index = load!(u32, reader)?;
+        let key_len = load!(u32, reader)? as usize;
+        let mut cursor_key = vec![0u8; key_len];
+        std::io::Read::read_exact(reader, &mut cursor_key)?;
+        Ok(Self { transaction_id, index, cursor_key })
+    }
+}
+
+/// Response with UTXOs filtered by script version
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetUtxosByScriptVersionResponse {
+    pub entries: Vec<RpcUtxosByScriptVersionEntry>,
+    pub next_cursor: Option<RpcScriptVersionCursor>,
+}
+
+impl GetUtxosByScriptVersionResponse {
+    pub fn new(entries: Vec<RpcUtxosByScriptVersionEntry>, next_cursor: Option<RpcScriptVersionCursor>) -> Self {
+        Self { entries, next_cursor }
+    }
+}
+
+impl Serializer for GetUtxosByScriptVersionResponse {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        serialize!(Vec<RpcUtxosByScriptVersionEntry>, &self.entries, writer)?;
+        store!(bool, &self.next_cursor.is_some(), writer)?;
+        if let Some(ref cursor) = self.next_cursor {
+            Serializer::serialize(cursor, writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl Deserializer for GetUtxosByScriptVersionResponse {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let entries = deserialize!(Vec<RpcUtxosByScriptVersionEntry>, reader)?;
+        let has_cursor = load!(bool, reader)?;
+        let next_cursor = if has_cursor { Some(<RpcScriptVersionCursor as Deserializer>::deserialize(reader)?) } else { None };
+        Ok(Self { entries, next_cursor })
+    }
+}
+
+/// Entry for UTXOs by script version (without address, since stealth UTXOs don't have one)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcUtxosByScriptVersionEntry {
+    pub outpoint: RpcTransactionOutpoint,
+    pub utxo_entry: RpcUtxoEntry,
+}
+
+impl RpcUtxosByScriptVersionEntry {
+    pub fn new(outpoint: RpcTransactionOutpoint, utxo_entry: RpcUtxoEntry) -> Self {
+        Self { outpoint, utxo_entry }
+    }
+}
+
+impl Serializer for RpcUtxosByScriptVersionEntry {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        serialize!(RpcTransactionOutpoint, &self.outpoint, writer)?;
+        serialize!(RpcUtxoEntry, &self.utxo_entry, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for RpcUtxosByScriptVersionEntry {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let outpoint = deserialize!(RpcTransactionOutpoint, reader)?;
+        let utxo_entry = deserialize!(RpcUtxoEntry, reader)?;
+        Ok(Self { outpoint, utxo_entry })
+    }
+}
+
+// -----------------------------------
+// GetBlockViewTags
+// -----------------------------------
+
+/// Information about a stealth output in a block for view tag scanning
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcStealthOutputInfo {
+    pub transaction_id: RpcTransactionId,
+    pub output_index: u32,
+    pub view_tag: u8,
+    pub ephemeral_pubkey: String,
+    pub destination_pubkey: String,
+    pub amount: u64,
+}
+
+impl RpcStealthOutputInfo {
+    pub fn new(
+        transaction_id: RpcTransactionId,
+        output_index: u32,
+        view_tag: u8,
+        ephemeral_pubkey: String,
+        destination_pubkey: String,
+        amount: u64,
+    ) -> Self {
+        Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount }
+    }
+}
+
+impl Serializer for RpcStealthOutputInfo {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(RpcTransactionId, &self.transaction_id, writer)?;
+        store!(u32, &self.output_index, writer)?;
+        store!(u8, &self.view_tag, writer)?;
+        store!(String, &self.ephemeral_pubkey, writer)?;
+        store!(String, &self.destination_pubkey, writer)?;
+        store!(u64, &self.amount, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for RpcStealthOutputInfo {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let transaction_id = load!(RpcTransactionId, reader)?;
+        let output_index = load!(u32, reader)?;
+        let view_tag = load!(u8, reader)?;
+        let ephemeral_pubkey = load!(String, reader)?;
+        let destination_pubkey = load!(String, reader)?;
+        let amount = load!(u64, reader)?;
+        Ok(Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount })
+    }
+}
+
+/// Request to get stealth outputs (view tags) from a specific block
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetBlockViewTagsRequest {
+    pub hash: RpcHash,
+}
+
+impl GetBlockViewTagsRequest {
+    pub fn new(hash: RpcHash) -> Self {
+        Self { hash }
+    }
+}
+
+impl Serializer for GetBlockViewTagsRequest {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(RpcHash, &self.hash, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for GetBlockViewTagsRequest {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let hash = load!(RpcHash, reader)?;
+        Ok(Self { hash })
+    }
+}
+
+/// Response with stealth outputs from a block
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetBlockViewTagsResponse {
+    pub block_hash: RpcHash,
+    pub daa_score: u64,
+    pub stealth_outputs: Vec<RpcStealthOutputInfo>,
+}
+
+impl GetBlockViewTagsResponse {
+    pub fn new(block_hash: RpcHash, daa_score: u64, stealth_outputs: Vec<RpcStealthOutputInfo>) -> Self {
+        Self { block_hash, daa_score, stealth_outputs }
+    }
+}
+
+impl Serializer for GetBlockViewTagsResponse {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(RpcHash, &self.block_hash, writer)?;
+        store!(u64, &self.daa_score, writer)?;
+        serialize!(Vec<RpcStealthOutputInfo>, &self.stealth_outputs, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for GetBlockViewTagsResponse {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let block_hash = load!(RpcHash, reader)?;
+        let daa_score = load!(u64, reader)?;
+        let stealth_outputs = deserialize!(Vec<RpcStealthOutputInfo>, reader)?;
+        Ok(Self { block_hash, daa_score, stealth_outputs })
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BanRequest {
@@ -2397,11 +2666,14 @@ pub struct GetServerInfoResponse {
     pub has_utxo_index: bool,
     pub is_synced: bool,
     pub virtual_daa_score: u64,
+    /// Whether the server supports stealth transactions (script version 16)
+    #[serde(default)]
+    pub has_stealth_support: bool,
 }
 
 impl Serializer for GetServerInfoResponse {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &1, writer)?;
+        store!(u16, &2, writer)?; // Version 2: added has_stealth_support
 
         store!(u16, &self.rpc_api_version, writer)?;
         store!(u16, &self.rpc_api_revision, writer)?;
@@ -2411,6 +2683,7 @@ impl Serializer for GetServerInfoResponse {
         store!(bool, &self.has_utxo_index, writer)?;
         store!(bool, &self.is_synced, writer)?;
         store!(u64, &self.virtual_daa_score, writer)?;
+        store!(bool, &self.has_stealth_support, writer)?; // v2
 
         Ok(())
     }
@@ -2418,7 +2691,7 @@ impl Serializer for GetServerInfoResponse {
 
 impl Deserializer for GetServerInfoResponse {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let _version = load!(u16, reader)?;
+        let version = load!(u16, reader)?;
 
         let rpc_api_version = load!(u16, reader)?;
         let rpc_api_revision = load!(u16, reader)?;
@@ -2429,7 +2702,19 @@ impl Deserializer for GetServerInfoResponse {
         let is_synced = load!(bool, reader)?;
         let virtual_daa_score = load!(u64, reader)?;
 
-        Ok(Self { rpc_api_version, rpc_api_revision, server_version, network_id, has_utxo_index, is_synced, virtual_daa_score })
+        // Backward compatible: default to false for old versions
+        let has_stealth_support = if version >= 2 { load!(bool, reader)? } else { false };
+
+        Ok(Self {
+            rpc_api_version,
+            rpc_api_revision,
+            server_version,
+            network_id,
+            has_utxo_index,
+            is_synced,
+            virtual_daa_score,
+            has_stealth_support,
+        })
     }
 }
 
@@ -2747,26 +3032,35 @@ impl Deserializer for GetUtxoReturnAddressResponse {
 #[serde(rename_all = "camelCase")]
 pub struct NotifyBlockAddedRequest {
     pub command: Command,
+    /// When true, include stealth output info (view tags) in notifications
+    #[serde(default)]
+    pub include_stealth_outputs: bool,
 }
 impl NotifyBlockAddedRequest {
     pub fn new(command: Command) -> Self {
-        Self { command }
+        Self { command, include_stealth_outputs: false }
+    }
+
+    pub fn with_stealth_outputs(command: Command, include_stealth_outputs: bool) -> Self {
+        Self { command, include_stealth_outputs }
     }
 }
 
 impl Serializer for NotifyBlockAddedRequest {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &1, writer)?;
+        store!(u16, &2, writer)?;
         store!(Command, &self.command, writer)?;
+        store!(bool, &self.include_stealth_outputs, writer)?;
         Ok(())
     }
 }
 
 impl Deserializer for NotifyBlockAddedRequest {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let _version = load!(u16, reader)?;
+        let version = load!(u16, reader)?;
         let command = load!(Command, reader)?;
-        Ok(Self { command })
+        let include_stealth_outputs = if version >= 2 { load!(bool, reader)? } else { false };
+        Ok(Self { command, include_stealth_outputs })
     }
 }
 
@@ -2796,21 +3090,48 @@ impl Deserializer for NotifyBlockAddedResponse {
 #[serde(rename_all = "camelCase")]
 pub struct BlockAddedNotification {
     pub block: Arc<RpcBlock>,
+    /// Stealth outputs found in this block (only present if requested via include_stealth_outputs)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stealth_outputs: Option<Vec<RpcStealthOutputInfo>>,
+}
+
+impl BlockAddedNotification {
+    pub fn new(block: Arc<RpcBlock>) -> Self {
+        Self { block, stealth_outputs: None }
+    }
+
+    pub fn with_stealth_outputs(block: Arc<RpcBlock>, stealth_outputs: Vec<RpcStealthOutputInfo>) -> Self {
+        Self { block, stealth_outputs: Some(stealth_outputs) }
+    }
 }
 
 impl Serializer for BlockAddedNotification {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &1, writer)?;
+        store!(u16, &2, writer)?;
         serialize!(RpcBlock, &self.block, writer)?;
+        store!(bool, &self.stealth_outputs.is_some(), writer)?;
+        if let Some(ref outputs) = self.stealth_outputs {
+            store!(Vec<RpcStealthOutputInfo>, outputs, writer)?;
+        }
         Ok(())
     }
 }
 
 impl Deserializer for BlockAddedNotification {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let _version = load!(u16, reader)?;
+        let version = load!(u16, reader)?;
         let block = deserialize!(RpcBlock, reader)?;
-        Ok(Self { block: block.into() })
+        let stealth_outputs = if version >= 2 {
+            let has_stealth = load!(bool, reader)?;
+            if has_stealth {
+                Some(load!(Vec<RpcStealthOutputInfo>, reader)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        Ok(Self { block: block.into(), stealth_outputs })
     }
 }
 
@@ -3159,6 +3480,100 @@ impl Serializer for UtxosChangedNotification {
 }
 
 impl Deserializer for UtxosChangedNotification {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let added = deserialize!(Vec<RpcUtxosByAddressesEntry>, reader)?;
+        let removed = deserialize!(Vec<RpcUtxosByAddressesEntry>, reader)?;
+        Ok(Self { added: added.into(), removed: removed.into() })
+    }
+}
+
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// StealthUtxosChangedNotification
+
+// NotifyStealthUtxosChangedRequest registers this connection for stealth UTXO
+// notifications filtered by script version (e.g., version 16 for stealth outputs).
+//
+// This is similar to UtxosChangedNotification but filters by script version
+// instead of addresses, since stealth outputs don't have associated addresses.
+//
+// See: StealthUtxosChangedNotification
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyStealthUtxosChangedRequest {
+    pub script_versions: Vec<u16>,
+    pub command: Command,
+}
+
+impl NotifyStealthUtxosChangedRequest {
+    pub fn new(script_versions: Vec<u16>, command: Command) -> Self {
+        Self { script_versions, command }
+    }
+}
+
+impl Serializer for NotifyStealthUtxosChangedRequest {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(Vec<u16>, &self.script_versions, writer)?;
+        store!(Command, &self.command, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for NotifyStealthUtxosChangedRequest {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let script_versions = load!(Vec<u16>, reader)?;
+        let command = load!(Command, reader)?;
+        Ok(Self { script_versions, command })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyStealthUtxosChangedResponse {}
+
+impl Serializer for NotifyStealthUtxosChangedResponse {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for NotifyStealthUtxosChangedResponse {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        Ok(Self {})
+    }
+}
+
+// StealthUtxosChangedNotification is sent whenever stealth UTXOs matching
+// the subscribed script versions are added or removed.
+//
+// See: NotifyStealthUtxosChangedRequest
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StealthUtxosChangedNotification {
+    pub added: Arc<Vec<RpcUtxosByAddressesEntry>>,
+    pub removed: Arc<Vec<RpcUtxosByAddressesEntry>>,
+}
+
+impl StealthUtxosChangedNotification {
+    pub fn new(added: Vec<RpcUtxosByAddressesEntry>, removed: Vec<RpcUtxosByAddressesEntry>) -> Self {
+        Self { added: Arc::new(added), removed: Arc::new(removed) }
+    }
+}
+
+impl Serializer for StealthUtxosChangedNotification {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        serialize!(Vec<RpcUtxosByAddressesEntry>, &self.added, writer)?;
+        serialize!(Vec<RpcUtxosByAddressesEntry>, &self.removed, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for StealthUtxosChangedNotification {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let _version = load!(u16, reader)?;
         let added = deserialize!(Vec<RpcUtxosByAddressesEntry>, reader)?;

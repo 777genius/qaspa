@@ -1,6 +1,7 @@
 use kaspa_wallet_core::account::BIP32_ACCOUNT_KIND;
 use kaspa_wallet_core::account::LEGACY_ACCOUNT_KIND;
 use kaspa_wallet_core::account::MULTISIG_ACCOUNT_KIND;
+use kaspa_wallet_core::account::STEALTH_ACCOUNT_KIND;
 
 use crate::imports::*;
 use crate::wizards;
@@ -61,7 +62,11 @@ impl Account {
                 let prv_key_data_info = ctx.select_private_key().await?;
 
                 let account_name = account_name.as_deref();
-                wizards::account::create(&ctx, prv_key_data_info, account_kind, account_name).await?;
+                if account_kind == STEALTH_ACCOUNT_KIND {
+                    wizards::account::create_stealth(&ctx, prv_key_data_info, account_name).await?;
+                } else {
+                    wizards::account::create(&ctx, prv_key_data_info, account_kind, account_name).await?;
+                }
             }
             "import" => {
                 if argv.is_empty() {
@@ -238,6 +243,26 @@ impl Account {
                 let fee_rate = None;
                 self.derivation_scan(&ctx, start, count, window, sweep, fee_rate).await?;
             }
+            "unlock" => {
+                let account = ctx.account().await?;
+                if let Ok(stealth) = account.clone().as_stealth_account() {
+                    let (wallet_secret, payment_secret) = ctx.ask_wallet_secret(Some(&account)).await?;
+                    stealth.unlock(&wallet_secret, payment_secret.as_ref()).await?;
+                    tprintln!(ctx, "Stealth account unlocked successfully");
+                    tprintln!(ctx, "Stealth address: {}", stealth.stealth_address());
+                } else {
+                    return Err(Error::custom("'unlock' is only available for stealth accounts"));
+                }
+            }
+            "lock" => {
+                let account = ctx.account().await?;
+                if let Ok(stealth) = account.clone().as_stealth_account() {
+                    stealth.lock().await;
+                    tprintln!(ctx, "Stealth account locked successfully");
+                } else {
+                    return Err(Error::custom("'lock' is only available for stealth accounts"));
+                }
+            }
             v => {
                 tprintln!(ctx, "unknown command: '{v}'\r\n");
                 return self.display_help(ctx, argv).await;
@@ -250,7 +275,7 @@ impl Account {
     async fn display_help(self: Arc<Self>, ctx: Arc<KaspaCli>, _argv: Vec<String>) -> Result<()> {
         ctx.term().help(
             &[
-                ("create [<type>] [<name>]", "Create a new account (types: 'bip32' (default), 'legacy', 'multisig')"),
+                ("create [<type>] [<name>]", "Create a new account (types: 'bip32' (default), 'legacy', 'multisig', 'stealth')"),
                 (
                     "import <import-type> [<key-type> [extra keys]]",
                     "Import accounts from a private key using 24 or 12 word mnemonic or legacy data \
@@ -262,6 +287,8 @@ impl Account {
                     "sweep [<derivations>] or sweep [<start>] [<derivations>]",
                     "Sweep extended address derivation chain (legacy accounts)",
                 ),
+                ("unlock", "Unlock a stealth account for scanning and spending"),
+                ("lock", "Lock a stealth account (clear keys from memory)"),
                 // ("purge", "Purge an account from the wallet"),
             ],
             None,

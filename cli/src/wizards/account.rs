@@ -145,3 +145,40 @@ pub(crate) async fn multisig_watch(ctx: &Arc<KaspaCli>, name: Option<&str>) -> R
     wallet.select(Some(&account)).await?;
     Ok(())
 }
+
+/// Creates a new stealth account for privacy-preserving transactions.
+pub(crate) async fn create_stealth(ctx: &Arc<KaspaCli>, prv_key_data_info: Arc<PrvKeyDataInfo>, name: Option<&str>) -> Result<()> {
+    let term = ctx.term();
+    let wallet = ctx.wallet();
+
+    let name = if let Some(name) = name {
+        Some(name.to_string())
+    } else {
+        Some(term.ask(false, "Please enter account name (optional, press <enter> to skip): ").await?.trim().to_string())
+    };
+
+    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    if wallet_secret.as_ref().is_empty() {
+        return Err(Error::WalletSecretRequired);
+    }
+
+    let payment_secret = if prv_key_data_info.is_encrypted() {
+        let payment_secret = Secret::new(term.ask(true, "Enter payment password: ").await?.trim().as_bytes().to_vec());
+        if payment_secret.as_ref().is_empty() {
+            return Err(Error::PaymentSecretRequired);
+        } else {
+            Some(payment_secret)
+        }
+    } else {
+        None
+    };
+
+    let account = wallet.create_account_stealth(&wallet_secret, prv_key_data_info.id, payment_secret.as_ref(), name, None).await?;
+
+    tprintln!(ctx, "\nStealth account created: {}\n", account.get_list_string()?);
+    if let Ok(address) = account.receive_address() {
+        tprintln!(ctx, "Stealth address (share with senders): {}\n", address);
+    }
+    wallet.select(Some(&account)).await?;
+    Ok(())
+}

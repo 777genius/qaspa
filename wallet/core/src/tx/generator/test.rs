@@ -443,6 +443,7 @@ where
         final_transaction_priority_fee: final_priority_fee,
         final_transaction_destination,
         final_transaction_payload,
+        stealth_change_creator: None,
     };
 
     Generator::try_new(settings, None, None)

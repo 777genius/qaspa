@@ -66,6 +66,8 @@ message KaspadRequest {
     GetFeeEstimateExperimentalRequestMessage getFeeEstimateExperimentalRequest = 1108;
     GetCurrentBlockColorRequestMessage getCurrentBlockColorRequest = 1110;
     GetUtxoReturnAddressRequestMessage GetUtxoReturnAddressRequest = 1112;
+    GetUtxosByScriptVersionRequestMessage getUtxosByScriptVersionRequest = 1114;
+    GetBlockViewTagsRequestMessage getBlockViewTagsRequest = 1116;
   }
 }
 
@@ -132,6 +134,8 @@ message KaspadResponse {
     GetFeeEstimateExperimentalResponseMessage getFeeEstimateExperimentalResponse = 1109;
     GetCurrentBlockColorResponseMessage getCurrentBlockColorResponse = 1111;
     GetUtxoReturnAddressResponseMessage GetUtxoReturnAddressResponse = 1113;
+    GetUtxosByScriptVersionResponseMessage getUtxosByScriptVersionResponse = 1115;
+    GetBlockViewTagsResponseMessage getBlockViewTagsResponse = 1117;
   }
 }
 

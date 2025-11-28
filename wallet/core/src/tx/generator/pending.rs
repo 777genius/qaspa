@@ -7,6 +7,7 @@
 use crate::imports::*;
 use crate::result::Result;
 use crate::rpc::DynRpcApi;
+use crate::tx::generator::stealth_change::PendingStealthChange;
 use crate::tx::{DataKind, Generator, MAXIMUM_STANDARD_TRANSACTION_MASS};
 use crate::utxo::{UtxoContext, UtxoEntryId, UtxoEntryReference, UtxoIterator};
 use kaspa_consensus_core::hashing::sighash_type::SigHashType;
@@ -47,6 +48,10 @@ pub(crate) struct PendingTransactionInner {
     pub(crate) fees: u64,
     /// Indicates the type of the transaction
     pub(crate) kind: DataKind,
+    /// Pre-calculated stealth change key data (if change is to stealth address).
+    /// This allows the caller to store the spending key immediately after
+    /// transaction submission, without needing to re-scan the blockchain.
+    pub(crate) stealth_change: Mutex<Option<PendingStealthChange>>,
 }
 
 impl std::fmt::Debug for PendingTransaction {
@@ -114,8 +119,31 @@ impl PendingTransaction {
                 mass,
                 fees,
                 kind,
+                stealth_change: Mutex::new(None),
             }),
         })
+    }
+
+    /// Sets the pre-calculated stealth change data for this transaction.
+    ///
+    /// This should be called by the Generator after creating a stealth change output.
+    /// The data will be stored until the transaction is submitted, at which point
+    /// it can be retrieved via [`take_stealth_change`] for permanent storage.
+    pub fn set_stealth_change(&self, pending: PendingStealthChange) {
+        *self.inner.stealth_change.lock().unwrap() = Some(pending);
+    }
+
+    /// Returns a reference to the stealth change data if present.
+    pub fn stealth_change(&self) -> Option<PendingStealthChange> {
+        self.inner.stealth_change.lock().unwrap().clone()
+    }
+
+    /// Takes the stealth change data, leaving None in its place.
+    ///
+    /// This should be called after the transaction is successfully submitted
+    /// to retrieve the pre-calculated key data for permanent storage.
+    pub fn take_stealth_change(&self) -> Option<PendingStealthChange> {
+        self.inner.stealth_change.lock().unwrap().take()
     }
 
     pub fn id(&self) -> TransactionId {
@@ -242,10 +270,63 @@ impl PendingTransaction {
         Ok(())
     }
 
+    /// Signs regular (non-stealth) inputs using the standard signer.
+    /// If the transaction has stealth inputs, they will remain unsigned.
     pub fn try_sign(&self) -> Result<()> {
         let signer = self.inner.generator.signer().as_ref().expect("no signer in tx generator");
-        let signed_tx = signer.try_sign(self.inner.signable_tx.lock()?.clone(), self.addresses())?;
+        // If transaction has stealth inputs, use partial signing (stealth inputs will be signed separately)
+        let has_stealth = self.has_stealth_inputs();
+        let signed_tx = signer.try_sign_partial(self.inner.signable_tx.lock()?.clone(), self.addresses(), !has_stealth)?;
         *self.inner.signable_tx.lock().unwrap() = signed_tx;
+        Ok(())
+    }
+
+    /// Signs stealth inputs using the provided signer.
+    ///
+    /// This should be called in addition to try_sign() when the
+    /// transaction contains stealth inputs.
+    pub async fn try_sign_stealth(&self, signer: &super::stealth_signer::StealthSigner) -> Result<()> {
+        let signable_tx = self.inner.signable_tx.lock()?.clone();
+        let signed = signer.sign(signable_tx).await?;
+        *self.inner.signable_tx.lock().unwrap() = signed.unwrap();
+        Ok(())
+    }
+
+    /// Checks if this transaction has any stealth inputs.
+    ///
+    /// Stealth inputs are identified by their script version (STEALTH_SCRIPT_VERSION = 16).
+    pub fn has_stealth_inputs(&self) -> bool {
+        use kaspa_txscript::STEALTH_SCRIPT_VERSION;
+
+        let signable_tx = match self.inner.signable_tx.lock() {
+            Ok(tx) => tx,
+            Err(_) => return false,
+        };
+
+        signable_tx
+            .entries
+            .iter()
+            .any(|entry| entry.as_ref().map(|e| e.script_public_key.version() == STEALTH_SCRIPT_VERSION).unwrap_or(false))
+    }
+
+    /// Combined signing method that handles both regular and stealth inputs.
+    ///
+    /// This is a convenience method that:
+    /// 1. Signs all regular inputs using the standard signer
+    /// 2. If stealth inputs are present and a stealth_signer is provided, signs those too
+    pub async fn try_sign_with_stealth(&self, stealth_signer: Option<&super::stealth_signer::StealthSigner>) -> Result<()> {
+        // First, sign with regular signer
+        self.try_sign()?;
+
+        // Then, sign stealth inputs if any
+        if self.has_stealth_inputs() {
+            if let Some(signer) = stealth_signer {
+                self.try_sign_stealth(signer).await?;
+            } else {
+                return Err(Error::Custom("Transaction has stealth inputs but no stealth signer provided".to_string()));
+            }
+        }
+
         Ok(())
     }
 

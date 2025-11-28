@@ -1059,6 +1059,13 @@ declare! {
         prvKeyDataId:string;
         paymentSecret?:string;
         ecdsa?:boolean;
+    } | {
+        walletSecret: string;
+        type: "kaspa-stealth";
+        accountName?:string;
+        accountIndex?:number;
+        prvKeyDataId:string;
+        paymentSecret?:string;
     };
 
     //   |{
@@ -1099,8 +1106,19 @@ try_from! (args: IAccountsCreateRequest, AccountsCreateRequest, {
                 ecdsa: args.get_bool("ecdsa").unwrap_or(false),
             }
         }
+        crate::account::STEALTH_ACCOUNT_KIND => {
+            let prv_key_data_args = PrvKeyDataArgs {
+                prv_key_data_id: args.try_get_prv_key_data_id("prvKeyDataId")?.ok_or(Error::custom("prvKeyDataId is required"))?,
+                payment_secret: args.try_get_secret("paymentSecret")?,
+            };
+            AccountCreateArgs::Stealth {
+                prv_key_data_args,
+                account_name: args.try_get_string("accountName")?,
+                account_index: args.get_u64("accountIndex").ok(),
+            }
+        }
         _ => {
-            return Err(Error::custom("only BIP32/kaspa-keypair-standard accounts are currently supported"));
+            return Err(Error::custom("only BIP32/kaspa-keypair-standard/kaspa-stealth accounts are supported"));
         }
     };
 
@@ -1126,6 +1144,96 @@ try_from!(args: AccountsCreateResponse, IAccountsCreateResponse, {
     response.set("accountDescriptor", &IAccountDescriptor::try_from(args.account_descriptor)?.into())?;
     Ok(response)
 });
+
+// ---
+// STEALTH ACCOUNT OPERATIONS
+// ---
+
+declare! {
+    IStealthAccountUnlockRequest,
+    r#"
+    /**
+     * Request to unlock a stealth account for scanning and spending.
+     * Must be called before scanning for stealth UTXOs or sending from stealth account.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountUnlockRequest {
+        accountId: HexString;
+        walletSecret: string;
+        paymentSecret?: string;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountUnlockResponse,
+    r#"
+    /**
+     * Response from unlocking a stealth account.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountUnlockResponse {
+        stealthAddress: string;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountLockRequest,
+    r#"
+    /**
+     * Request to lock a stealth account (clear keys from memory).
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountLockRequest {
+        accountId: HexString;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountLockResponse,
+    r#"
+    /**
+     * Response from locking a stealth account.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountLockResponse { }
+    "#,
+}
+
+declare! {
+    IStealthAccountScanRequest,
+    r#"
+    /**
+     * Request to scan blockchain for stealth UTXOs belonging to this account.
+     * Account must be unlocked first.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountScanRequest {
+        accountId: HexString;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountScanResponse,
+    r#"
+    /**
+     * Response from stealth account scan.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountScanResponse {
+        utxosFound: number;
+    }
+    "#,
+}
 
 // ---
 

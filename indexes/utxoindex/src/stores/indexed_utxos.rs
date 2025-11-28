@@ -4,7 +4,7 @@ use kaspa_consensus_core::tx::{
     ScriptPublicKey, ScriptPublicKeyVersion, ScriptPublicKeys, ScriptVec, TransactionIndexType, TransactionOutpoint,
 };
 use kaspa_core::debug;
-use kaspa_database::prelude::{CachePolicy, CachedDbAccess, DirectDbWriter, StoreResult, DB};
+use kaspa_database::prelude::{CachePolicy, CachedDbAccess, DirectDbWriter, StoreError, StoreResult, DB};
 use kaspa_database::registry::DatabaseStorePrefixes;
 use kaspa_hashes::Hash;
 use kaspa_index_core::indexed_utxos::BalanceByScriptPublicKey;
@@ -92,6 +92,30 @@ impl AsRef<[u8]> for TransactionOutpointKey {
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Serialize, Deserialize)]
 struct UtxoEntryFullAccessKey(Arc<Vec<u8>>);
 
+impl UtxoEntryFullAccessKey {
+    fn from_boxed_slice(bytes: Box<[u8]>) -> Self {
+        Self(Arc::new(Vec::from(bytes)))
+    }
+
+    fn split(&self) -> (ScriptPublicKeyBucket, TransactionOutpointKey) {
+        let len = self.0.len();
+        let script_bytes = self.0[..len - TRANSACTION_OUTPOINT_KEY_SIZE].to_vec();
+        let mut outpoint_bytes = [0u8; TRANSACTION_OUTPOINT_KEY_SIZE];
+        outpoint_bytes.copy_from_slice(&self.0[len - TRANSACTION_OUTPOINT_KEY_SIZE..]);
+        (ScriptPublicKeyBucket(script_bytes), TransactionOutpointKey(outpoint_bytes))
+    }
+
+    fn extract_script_public_key(&self) -> ScriptPublicKey {
+        let (bucket, _) = self.split();
+        bucket.into()
+    }
+
+    fn extract_transaction_outpoint(&self) -> TransactionOutpoint {
+        let (_, outpoint_key) = self.split();
+        outpoint_key.into()
+    }
+}
+
 impl Display for UtxoEntryFullAccessKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self) // TODO: Deserialize first
@@ -124,6 +148,13 @@ pub trait UtxoSetByScriptPublicKeyStoreReader {
     /// Get [UtxoSetByScriptPublicKey] set by queried [ScriptPublicKeys],
     fn get_utxos_from_script_public_keys(&self, script_public_keys: ScriptPublicKeys) -> StoreResult<UtxoSetByScriptPublicKey>;
     fn get_balance_from_script_public_keys(&self, script_public_keys: ScriptPublicKeys) -> StoreResult<BalanceByScriptPublicKey>;
+
+    fn get_utxos_by_script_version(
+        &self,
+        version: ScriptPublicKeyVersion,
+        cursor_key: Option<Vec<u8>>,
+        limit: usize,
+    ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>>;
     fn get_all_outpoints(&self) -> StoreResult<HashSet<TransactionOutpoint>>; // This can have a big memory footprint, so it should be used only for tests.
 }
 
@@ -194,6 +225,41 @@ impl UtxoSetByScriptPublicKeyStoreReader for DbUtxoSetByScriptPublicKeyStore {
         }
         debug!("IDXPRC, Executed a query for the balance of {} script public keys involving {} entries", script_count, entries_count);
         Ok(balance_by_script_public_keys)
+    }
+
+    fn get_utxos_by_script_version(
+        &self,
+        version: ScriptPublicKeyVersion,
+        cursor_key: Option<Vec<u8>>,
+        limit: usize,
+    ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>> {
+        let mut results = Vec::new();
+        let skip_first = cursor_key.is_some();
+        let seek_from = cursor_key.map(|key| UtxoEntryFullAccessKey(Arc::new(key)));
+        let mut iterator = self.access.seek_iterator(None, seek_from, usize::MAX, skip_first);
+
+        while let Some(item) = iterator.next() {
+            let (key_bytes, entry) = match item {
+                Ok((k, v)) => (k, v),
+                Err(e) => return Err(StoreError::DataInconsistency(e.to_string())),
+            };
+            let key = UtxoEntryFullAccessKey::from_boxed_slice(key_bytes);
+            let script_public_key = key.extract_script_public_key();
+
+            if script_public_key.version() != version {
+                continue;
+            }
+
+            let outpoint = key.extract_transaction_outpoint();
+            let raw_key = key.as_ref().to_vec();
+
+            results.push((script_public_key, outpoint, entry, raw_key));
+            if results.len() >= limit {
+                break;
+            }
+        }
+
+        Ok(results)
     }
 
     // This can have a big memory footprint, so it should be used only for tests.

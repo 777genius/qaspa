@@ -3,7 +3,7 @@ use crate::{
     error::Result,
     events::EventType,
     listener::ListenerId,
-    scope::{Scope, UtxosChangedScope, VirtualChainChangedScope},
+    scope::{BlockAddedScope, Scope, StealthUtxosChangedScope, UtxosChangedScope, VirtualChainChangedScope},
     subscription::{
         context::SubscriptionContext, BroadcastingSingle, Command, DynSubscription, Mutation, MutationOutcome, MutationPolicies,
         Single, Subscription, UtxosChangedMutationPolicy,
@@ -172,6 +172,99 @@ impl Subscription for VirtualChainChangedSubscription {
     }
 }
 
+/// Subscription to BlockAdded notifications with optional stealth outputs
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Default)]
+pub struct BlockAddedSubscription {
+    active: bool,
+    include_stealth_outputs: bool,
+}
+
+impl BlockAddedSubscription {
+    pub fn new(active: bool, include_stealth_outputs: bool) -> Self {
+        Self { active, include_stealth_outputs }
+    }
+    pub fn include_stealth_outputs(&self) -> bool {
+        self.include_stealth_outputs
+    }
+}
+
+impl Single for BlockAddedSubscription {
+    fn apply_mutation(
+        &self,
+        _: &Arc<dyn Single>,
+        mutation: Mutation,
+        _: MutationPolicies,
+        _: &SubscriptionContext,
+    ) -> Result<MutationOutcome> {
+        assert_eq!(self.event_type(), mutation.event_type());
+        let result = if let Scope::BlockAdded(ref scope) = mutation.scope {
+            #[allow(clippy::collapsible_else_if)]
+            if !self.active {
+                // State None
+                if !mutation.active() {
+                    // Mutation None
+                    None
+                } else {
+                    // Mutations Reduced or All
+                    let mutated = Self::new(true, scope.include_stealth_outputs);
+                    Some((Arc::new(mutated), vec![mutation]))
+                }
+            } else if !self.include_stealth_outputs {
+                // State Reduced (no stealth)
+                if !mutation.active() {
+                    // Mutation None
+                    let mutated = Self::new(false, false);
+                    Some((Arc::new(mutated), vec![Mutation::new(Command::Stop, BlockAddedScope::new(false).into())]))
+                } else if !scope.include_stealth_outputs {
+                    // Mutation Reduced
+                    None
+                } else {
+                    // Mutation All (with stealth)
+                    let mutated = Self::new(true, true);
+                    Some((Arc::new(mutated), vec![Mutation::new(Command::Stop, BlockAddedScope::new(false).into()), mutation]))
+                }
+            } else {
+                // State All (with stealth)
+                if !mutation.active() {
+                    // Mutation None
+                    let mutated = Self::new(false, false);
+                    Some((Arc::new(mutated), vec![Mutation::new(Command::Stop, BlockAddedScope::new(true).into())]))
+                } else if !scope.include_stealth_outputs {
+                    // Mutation Reduced
+                    let mutated = Self::new(true, false);
+                    Some((Arc::new(mutated), vec![mutation, Mutation::new(Command::Stop, BlockAddedScope::new(true).into())]))
+                } else {
+                    // Mutation All
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let outcome = match result {
+            Some((mutated, mutations)) => MutationOutcome::with_mutated(mutated, mutations),
+            None => MutationOutcome::new(),
+        };
+        Ok(outcome)
+    }
+}
+
+impl Subscription for BlockAddedSubscription {
+    #[inline(always)]
+    fn event_type(&self) -> EventType {
+        EventType::BlockAdded
+    }
+
+    #[inline(always)]
+    fn active(&self) -> bool {
+        self.active
+    }
+
+    fn scope(&self, _context: &SubscriptionContext) -> Scope {
+        BlockAddedScope::new(self.include_stealth_outputs).into()
+    }
+}
+
 static UTXOS_CHANGED_SUBSCRIPTIONS: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -325,11 +418,8 @@ impl UtxosChangedSubscription {
     pub fn with_capacity(state: UtxosChangedState, listener_id: ListenerId, capacity: usize) -> Self {
         let data = RwLock::new(UtxosChangedSubscriptionData::with_capacity(state, capacity));
         let subscription = Self { data, listener_id };
-        trace!(
-            "UtxosChangedSubscription: {} in total (new {})",
-            UTXOS_CHANGED_SUBSCRIPTIONS.fetch_add(1, Ordering::SeqCst) + 1,
-            subscription
-        );
+        let total = UTXOS_CHANGED_SUBSCRIPTIONS.fetch_add(1, Ordering::SeqCst);
+        trace!("UtxosChangedSubscription: {} in total (new {})", total.saturating_add(1), subscription);
         subscription
     }
 
@@ -366,11 +456,8 @@ impl UtxosChangedSubscription {
 impl Clone for UtxosChangedSubscription {
     fn clone(&self) -> Self {
         let subscription = Self { data: RwLock::new(self.data().clone()), listener_id: self.listener_id };
-        trace!(
-            "UtxosChangedSubscription: {} in total (clone {})",
-            UTXOS_CHANGED_SUBSCRIPTIONS.fetch_add(1, Ordering::SeqCst) + 1,
-            subscription
-        );
+        let total = UTXOS_CHANGED_SUBSCRIPTIONS.fetch_add(1, Ordering::SeqCst);
+        trace!("UtxosChangedSubscription: {} in total (clone {})", total.saturating_add(1), subscription);
         subscription
     }
 }
@@ -383,11 +470,8 @@ impl Display for UtxosChangedSubscription {
 
 impl Drop for UtxosChangedSubscription {
     fn drop(&mut self) {
-        trace!(
-            "UtxosChangedSubscription: {} in total (drop {})",
-            UTXOS_CHANGED_SUBSCRIPTIONS.fetch_sub(1, Ordering::SeqCst) - 1,
-            self
-        );
+        let total = UTXOS_CHANGED_SUBSCRIPTIONS.fetch_sub(1, Ordering::SeqCst);
+        trace!("UtxosChangedSubscription: {} in total (drop {})", total.saturating_sub(1), self);
     }
 }
 
@@ -582,6 +666,138 @@ impl BroadcastingSingle for DynSubscription {
     }
 }
 
+// ============================================================================
+// STEALTH UTXOS CHANGED SUBSCRIPTION
+// ============================================================================
+
+/// Subscription for stealth UTXO notifications filtered by script version.
+///
+/// This is a simpler subscription compared to UtxosChangedSubscription:
+/// - No address tracking (stealth outputs don't have addresses)
+/// - Only filters by script version
+/// - Clients must still do full ECDH check to claim ownership
+#[derive(Debug, Clone, Default)]
+pub struct StealthUtxosChangedSubscription {
+    /// Whether the subscription is active
+    active: bool,
+    /// Script versions to subscribe to (e.g., [16] for stealth)
+    script_versions: Vec<u16>,
+}
+
+impl StealthUtxosChangedSubscription {
+    pub fn new(active: bool, script_versions: Vec<u16>) -> Self {
+        Self { active, script_versions }
+    }
+
+    pub fn script_versions(&self) -> &[u16] {
+        &self.script_versions
+    }
+}
+
+impl PartialEq for StealthUtxosChangedSubscription {
+    fn eq(&self, other: &Self) -> bool {
+        self.active == other.active
+            && self.script_versions.len() == other.script_versions.len()
+            && self.script_versions.iter().all(|v| other.script_versions.contains(v))
+    }
+}
+
+impl Eq for StealthUtxosChangedSubscription {}
+
+impl Hash for StealthUtxosChangedSubscription {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.active.hash(state);
+        // Sort versions for consistent hashing
+        let mut sorted = self.script_versions.clone();
+        sorted.sort();
+        sorted.hash(state);
+    }
+}
+
+impl Display for StealthUtxosChangedSubscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.active {
+            write!(f, "inactive")
+        } else if self.script_versions.is_empty() {
+            write!(f, "all versions")
+        } else {
+            write!(f, "versions {:?}", self.script_versions)
+        }
+    }
+}
+
+impl Single for StealthUtxosChangedSubscription {
+    fn apply_mutation(
+        &self,
+        _: &Arc<dyn Single>,
+        mutation: Mutation,
+        _: MutationPolicies,
+        _: &SubscriptionContext,
+    ) -> Result<MutationOutcome> {
+        assert_eq!(self.event_type(), mutation.event_type());
+
+        let result = if let Scope::StealthUtxosChanged(ref scope) = mutation.scope {
+            if !self.active {
+                // Currently inactive
+                if mutation.active() {
+                    // Start listening
+                    let mutated = Self::new(true, scope.script_versions.clone());
+                    Some((Arc::new(mutated), vec![mutation]))
+                } else {
+                    // Already inactive, no change
+                    None
+                }
+            } else {
+                // Currently active
+                if !mutation.active() {
+                    // Stop listening
+                    let mutated = Self::new(false, vec![]);
+                    Some((
+                        Arc::new(mutated),
+                        vec![Mutation::new(Command::Stop, StealthUtxosChangedScope::new(self.script_versions.clone()).into())],
+                    ))
+                } else {
+                    // Update versions if different
+                    let mut combined = self.script_versions.clone();
+                    for v in &scope.script_versions {
+                        if !combined.contains(v) {
+                            combined.push(*v);
+                        }
+                    }
+                    if combined.len() != self.script_versions.len() {
+                        let mutated = Self::new(true, combined);
+                        Some((Arc::new(mutated), vec![mutation]))
+                    } else {
+                        None
+                    }
+                }
+            }
+        } else {
+            None
+        };
+
+        let outcome = match result {
+            Some((mutated, mutations)) => MutationOutcome::with_mutated(mutated, mutations),
+            None => MutationOutcome::new(),
+        };
+        Ok(outcome)
+    }
+}
+
+impl Subscription for StealthUtxosChangedSubscription {
+    fn event_type(&self) -> EventType {
+        EventType::StealthUtxosChanged
+    }
+
+    fn active(&self) -> bool {
+        self.active
+    }
+
+    fn scope(&self, _context: &SubscriptionContext) -> Scope {
+        StealthUtxosChangedScope::new(self.script_versions.clone()).into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::*;
@@ -761,13 +977,15 @@ mod tests {
 
     #[test]
     fn test_overall_mutation() {
+        use crate::scope::SinkBlueScoreChangedScope;
+
         let context = SubscriptionContext::new();
 
         fn s(active: bool) -> DynSubscription {
-            Arc::new(OverallSubscription { event_type: EventType::BlockAdded, active })
+            Arc::new(OverallSubscription { event_type: EventType::SinkBlueScoreChanged, active })
         }
         fn m(command: Command) -> Mutation {
-            Mutation { command, scope: Scope::BlockAdded(BlockAddedScope {}) }
+            Mutation { command, scope: Scope::SinkBlueScoreChanged(SinkBlueScoreChangedScope {}) }
         }
 
         // Subscriptions
@@ -803,6 +1021,118 @@ mod tests {
             },
             MutationTest {
                 name: "OverallSubscription All to None",
+                state: all(),
+                mutation: stop_all(),
+                new_state: none(),
+                outcome: MutationOutcome::with_mutated(none(), vec![stop_all()]),
+            },
+        ]);
+        tests.run(&context)
+    }
+
+    #[test]
+    fn test_block_added_mutation() {
+        let context = SubscriptionContext::new();
+
+        fn s(active: bool, include_stealth_outputs: bool) -> DynSubscription {
+            Arc::new(BlockAddedSubscription { active, include_stealth_outputs })
+        }
+        fn m(command: Command, include_stealth_outputs: bool) -> Mutation {
+            Mutation { command, scope: Scope::BlockAdded(BlockAddedScope { include_stealth_outputs }) }
+        }
+
+        // Subscriptions
+        let none = || s(false, false);
+        let reduced = || s(true, false);
+        let all = || s(true, true);
+
+        // Mutations
+        let start_all = || m(Command::Start, true);
+        let stop_all = || m(Command::Stop, true);
+        let start_reduced = || m(Command::Start, false);
+        let stop_reduced = || m(Command::Stop, false);
+
+        // Tests
+        let tests = MutationTests::new(vec![
+            MutationTest {
+                name: "BlockAddedSubscription None to All",
+                state: none(),
+                mutation: start_all(),
+                new_state: all(),
+                outcome: MutationOutcome::with_mutated(all(), vec![start_all()]),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription None to Reduced",
+                state: none(),
+                mutation: start_reduced(),
+                new_state: reduced(),
+                outcome: MutationOutcome::with_mutated(reduced(), vec![start_reduced()]),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription None to None (stop reduced)",
+                state: none(),
+                mutation: stop_reduced(),
+                new_state: none(),
+                outcome: MutationOutcome::new(),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription None to None (stop all)",
+                state: none(),
+                mutation: stop_all(),
+                new_state: none(),
+                outcome: MutationOutcome::new(),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription Reduced to All",
+                state: reduced(),
+                mutation: start_all(),
+                new_state: all(),
+                outcome: MutationOutcome::with_mutated(all(), vec![stop_reduced(), start_all()]),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription Reduced to Reduced",
+                state: reduced(),
+                mutation: start_reduced(),
+                new_state: reduced(),
+                outcome: MutationOutcome::new(),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription Reduced to None (stop reduced)",
+                state: reduced(),
+                mutation: stop_reduced(),
+                new_state: none(),
+                outcome: MutationOutcome::with_mutated(none(), vec![stop_reduced()]),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription Reduced to None (stop all)",
+                state: reduced(),
+                mutation: stop_all(),
+                new_state: none(),
+                outcome: MutationOutcome::with_mutated(none(), vec![stop_reduced()]),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription All to All",
+                state: all(),
+                mutation: start_all(),
+                new_state: all(),
+                outcome: MutationOutcome::new(),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription All to Reduced",
+                state: all(),
+                mutation: start_reduced(),
+                new_state: reduced(),
+                outcome: MutationOutcome::with_mutated(reduced(), vec![start_reduced(), stop_all()]),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription All to None (stop reduced)",
+                state: all(),
+                mutation: stop_reduced(),
+                new_state: none(),
+                outcome: MutationOutcome::with_mutated(none(), vec![stop_all()]),
+            },
+            MutationTest {
+                name: "BlockAddedSubscription All to None (stop all)",
                 state: all(),
                 mutation: stop_all(),
                 new_state: none(),

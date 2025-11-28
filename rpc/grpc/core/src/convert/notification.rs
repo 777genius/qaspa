@@ -34,10 +34,19 @@ from!(item: &kaspa_rpc_core::Notification, Payload, {
         Notification::PruningPointUtxoSetOverride(ref notification) => {
             Payload::PruningPointUtxoSetOverrideNotification(notification.into())
         }
+        // StealthUtxosChanged is not supported over gRPC - use wRPC instead
+        Notification::StealthUtxosChanged(_) => {
+            panic!("StealthUtxosChanged notifications are not supported over gRPC. Use wRPC instead.")
+        }
     }
 });
 
-from!(item: &kaspa_rpc_core::BlockAddedNotification, BlockAddedNotificationMessage, { Self { block: Some((&*item.block).into()) } });
+from!(item: &kaspa_rpc_core::BlockAddedNotification, BlockAddedNotificationMessage, {
+    Self {
+        block: Some((&*item.block).into()),
+        stealth_outputs: item.stealth_outputs.as_ref().map(|v| v.iter().map(|x| x.into()).collect()).unwrap_or_default(),
+    }
+});
 
 from!(&kaspa_rpc_core::NewBlockTemplateNotification, NewBlockTemplateNotificationMessage);
 
@@ -129,6 +138,11 @@ try_from!(item: &BlockAddedNotificationMessage, kaspa_rpc_core::BlockAddedNotifi
                 .ok_or_else(|| RpcError::MissingRpcFieldError("BlockAddedNotificationMessage".to_string(), "block".to_string()))?
                 .try_into()?,
         ),
+        stealth_outputs: if item.stealth_outputs.is_empty() {
+            None
+        } else {
+            Some(item.stealth_outputs.iter().map(|x| x.try_into()).collect::<Result<Vec<_>, _>>()?)
+        },
     }
 });
 

@@ -31,6 +31,7 @@ kaspa-utils-tower.workspace = true
 kaspa-utxoindex.workspace = true
 
 async-trait.workspace = true
+faster-hex.workspace = true
 log.workspace = true
 tokio.workspace = true
 triggered.workspace = true

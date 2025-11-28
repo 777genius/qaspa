@@ -171,7 +171,7 @@ from!(item: RpcResult<&kaspa_rpc_core::GetBlockResponse>, protowire::GetBlockRes
 });
 
 from!(item: &kaspa_rpc_core::NotifyBlockAddedRequest, protowire::NotifyBlockAddedRequestMessage, {
-    Self { command: item.command.into() }
+    Self { command: item.command.into(), include_stealth_outputs: item.include_stealth_outputs }
 });
 from!(RpcResult<&kaspa_rpc_core::NotifyBlockAddedResponse>, protowire::NotifyBlockAddedResponseMessage);
 
@@ -441,6 +441,58 @@ from!(item: RpcResult<&kaspa_rpc_core::GetUtxoReturnAddressResponse>, protowire:
     Self { return_address: item.return_address.address_to_string(), error: None }
 });
 
+// GetBlockViewTags
+from!(item: &kaspa_rpc_core::RpcStealthOutputInfo, protowire::RpcStealthOutputInfo, {
+    Self {
+        transaction_id: item.transaction_id.to_string(),
+        output_index: item.output_index,
+        view_tag: item.view_tag as u32,
+        ephemeral_pubkey: item.ephemeral_pubkey.clone(),
+        destination_pubkey: item.destination_pubkey.clone(),
+        amount: item.amount,
+    }
+});
+from!(item: &kaspa_rpc_core::GetBlockViewTagsRequest, protowire::GetBlockViewTagsRequestMessage, {
+    Self { hash: item.hash.to_string() }
+});
+from!(item: RpcResult<&kaspa_rpc_core::GetBlockViewTagsResponse>, protowire::GetBlockViewTagsResponseMessage, {
+    Self {
+        block_hash: item.block_hash.to_string(),
+        daa_score: item.daa_score,
+        stealth_outputs: item.stealth_outputs.iter().map(|o| o.into()).collect(),
+        error: None,
+    }
+});
+
+// GetUtxosByScriptVersion
+from!(item: &kaspa_rpc_core::RpcScriptVersionCursor, protowire::RpcScriptVersionCursor, {
+    Self {
+        transaction_id: item.transaction_id.to_string(),
+        index: item.index,
+        cursor_key: item.cursor_key.clone(),
+    }
+});
+from!(item: &kaspa_rpc_core::RpcUtxosByScriptVersionEntry, protowire::RpcUtxosByScriptVersionEntry, {
+    Self {
+        outpoint: Some((&item.outpoint).into()),
+        utxo_entry: Some((&item.utxo_entry).into()),
+    }
+});
+from!(item: &kaspa_rpc_core::GetUtxosByScriptVersionRequest, protowire::GetUtxosByScriptVersionRequestMessage, {
+    Self {
+        script_version: item.script_version as u32,
+        cursor: item.cursor.as_ref().map(|c| c.into()),
+        limit: item.limit.unwrap_or(0),
+    }
+});
+from!(item: RpcResult<&kaspa_rpc_core::GetUtxosByScriptVersionResponse>, protowire::GetUtxosByScriptVersionResponseMessage, {
+    Self {
+        entries: item.entries.iter().map(|x| x.into()).collect(),
+        next_cursor: item.next_cursor.as_ref().map(|c| c.into()),
+        error: None,
+    }
+});
+
 from!(&kaspa_rpc_core::PingRequest, protowire::PingRequestMessage);
 from!(RpcResult<&kaspa_rpc_core::PingResponse>, protowire::PingResponseMessage);
 
@@ -506,6 +558,7 @@ from!(item: RpcResult<&kaspa_rpc_core::GetServerInfoResponse>, protowire::GetSer
         has_utxo_index: item.has_utxo_index,
         is_synced: item.is_synced,
         virtual_daa_score: item.virtual_daa_score,
+        has_stealth_support: item.has_stealth_support,
         error: None,
     }
 });
@@ -636,7 +689,7 @@ try_from!(item: &protowire::GetBlockResponseMessage, RpcResult<kaspa_rpc_core::G
 });
 
 try_from!(item: &protowire::NotifyBlockAddedRequestMessage, kaspa_rpc_core::NotifyBlockAddedRequest, {
-    Self { command: item.command.into() }
+    Self { command: item.command.into(), include_stealth_outputs: item.include_stealth_outputs }
 });
 try_from!(&protowire::NotifyBlockAddedResponseMessage, RpcResult<kaspa_rpc_core::NotifyBlockAddedResponse>);
 
@@ -937,6 +990,64 @@ try_from!(item: &protowire::GetUtxoReturnAddressResponseMessage, RpcResult<kaspa
     Self { return_address: Address::try_from(item.return_address.clone())? }
 });
 
+// GetBlockViewTags
+try_from!(item: &protowire::RpcStealthOutputInfo, kaspa_rpc_core::RpcStealthOutputInfo, {
+    Self {
+        transaction_id: RpcHash::from_str(&item.transaction_id)?,
+        output_index: item.output_index,
+        view_tag: item.view_tag as u8,
+        ephemeral_pubkey: item.ephemeral_pubkey.clone(),
+        destination_pubkey: item.destination_pubkey.clone(),
+        amount: item.amount,
+    }
+});
+try_from!(item: &protowire::GetBlockViewTagsRequestMessage, kaspa_rpc_core::GetBlockViewTagsRequest, {
+    Self { hash: RpcHash::from_str(&item.hash)? }
+});
+try_from!(item: &protowire::GetBlockViewTagsResponseMessage, RpcResult<kaspa_rpc_core::GetBlockViewTagsResponse>, {
+    Self {
+        block_hash: RpcHash::from_str(&item.block_hash)?,
+        daa_score: item.daa_score,
+        stealth_outputs: item.stealth_outputs.iter().map(|o| o.try_into()).collect::<Result<Vec<_>, _>>()?,
+    }
+});
+
+// GetUtxosByScriptVersion
+try_from!(item: &protowire::RpcScriptVersionCursor, kaspa_rpc_core::RpcScriptVersionCursor, {
+    Self {
+        transaction_id: RpcHash::from_str(&item.transaction_id)?,
+        index: item.index,
+        cursor_key: item.cursor_key.clone(),
+    }
+});
+try_from!(item: &protowire::RpcUtxosByScriptVersionEntry, kaspa_rpc_core::RpcUtxosByScriptVersionEntry, {
+    Self {
+        outpoint: item
+            .outpoint
+            .as_ref()
+            .ok_or_else(|| RpcError::MissingRpcFieldError("RpcUtxosByScriptVersionEntry".to_string(), "outpoint".to_string()))?
+            .try_into()?,
+        utxo_entry: item
+            .utxo_entry
+            .as_ref()
+            .ok_or_else(|| RpcError::MissingRpcFieldError("RpcUtxosByScriptVersionEntry".to_string(), "utxo_entry".to_string()))?
+            .try_into()?,
+    }
+});
+try_from!(item: &protowire::GetUtxosByScriptVersionRequestMessage, kaspa_rpc_core::GetUtxosByScriptVersionRequest, {
+    Self {
+        script_version: item.script_version as u16,
+        cursor: item.cursor.as_ref().map(|c| c.try_into()).transpose()?,
+        limit: if item.limit > 0 { Some(item.limit) } else { None },
+    }
+});
+try_from!(item: &protowire::GetUtxosByScriptVersionResponseMessage, RpcResult<kaspa_rpc_core::GetUtxosByScriptVersionResponse>, {
+    Self {
+        entries: item.entries.iter().map(|x| x.try_into()).collect::<Result<Vec<_>, _>>()?,
+        next_cursor: item.next_cursor.as_ref().map(|c| c.try_into()).transpose()?,
+    }
+});
+
 try_from!(&protowire::PingRequestMessage, kaspa_rpc_core::PingRequest);
 try_from!(&protowire::PingResponseMessage, RpcResult<kaspa_rpc_core::PingResponse>);
 
@@ -997,6 +1108,7 @@ try_from!(item: &protowire::GetServerInfoResponseMessage, RpcResult<kaspa_rpc_co
         has_utxo_index: item.has_utxo_index,
         is_synced: item.is_synced,
         virtual_daa_score: item.virtual_daa_score,
+        has_stealth_support: item.has_stealth_support,
     }
 });
 

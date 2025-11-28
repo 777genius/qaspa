@@ -277,6 +277,27 @@ pub enum Error {
     #[error("Transaction exceeds the maximum allowed mass")]
     GeneratorTransactionIsTooHeavy,
 
+    #[error("Stealth change creator is required for stealth change address")]
+    StealthChangeCreatorRequired,
+
+    #[error("Stealth change address cannot be used for batch transactions (too many UTXOs). Please use a regular P2PK change address or consolidate UTXOs first.")]
+    StealthChangeBatchNotSupported,
+
+    #[error("Account is locked. Please unlock the account first.")]
+    AccountLocked,
+
+    #[error("Ephemeral key not found for outpoint {0}")]
+    EphemeralKeyNotFound(kaspa_consensus_core::tx::TransactionOutpoint),
+
+    #[error("Invalid network prefix for stealth address")]
+    InvalidNetworkPrefix,
+
+    #[error("Connected node does not support stealth transactions")]
+    StealthNotSupported,
+
+    #[error("Missing UTXO entry at index {0}")]
+    MissingUtxoEntry(usize),
+
     #[error("Storage mass exceeds maximum")]
     StorageMassExceedsMaximumTransactionMass { storage_mass: u64 },
 

@@ -31,6 +31,15 @@ impl NotificationTrait for Notification {
         }
     }
 
+    fn apply_block_added_subscription(
+        &self,
+        _subscription: &kaspa_notify::subscription::single::BlockAddedSubscription,
+        _context: &SubscriptionContext,
+    ) -> Option<Self> {
+        // Index notifications don't include block added events
+        None
+    }
+
     fn apply_virtual_chain_changed_subscription(
         &self,
         _subscription: &VirtualChainChangedSubscription,
