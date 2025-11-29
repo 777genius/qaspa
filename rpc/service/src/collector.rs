@@ -142,6 +142,3 @@ impl Collector<Notification> for StealthAwareIndexCollector {
         self.join_collecting_task().await
     }
 }
-
-// Keep the old type alias for backward compatibility if needed elsewhere
-pub(crate) type CollectorFromIndex = kaspa_notify::collector::CollectorFrom<IndexConverter>;

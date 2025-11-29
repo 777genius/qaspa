@@ -50,7 +50,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 // ============================================================================
 
 /// Miner keypair for test transactions
-struct MinerKeypair {
+pub struct MinerKeypair {
     keypair: Keypair,
     address: Address,
     spk: ScriptPublicKey,
@@ -117,7 +117,7 @@ impl StealthTestEnv {
 
         // Create wallet with resident storage (in-memory)
         let resident_store = Wallet::resident_store().expect("Failed to create resident store");
-        let wallet = Arc::new(Wallet::try_new(resident_store, None, Some(daemon.network.into())).expect("Failed to create wallet"));
+        let wallet = Arc::new(Wallet::try_new(resident_store, None, Some(daemon.network)).expect("Failed to create wallet"));
 
         // Bind RPC to wallet - need to create Rpc struct
         let rpc_ctl = RpcCtl::new();
@@ -439,7 +439,7 @@ async fn test_stealth_reorg_cleanup() {
 
     // Create wallet on daemon1
     let resident_store = Wallet::resident_store().expect("Failed to create resident store");
-    let wallet = Arc::new(Wallet::try_new(resident_store, None, Some(daemon1.network.into())).expect("Failed to create wallet"));
+    let wallet = Arc::new(Wallet::try_new(resident_store, None, Some(daemon1.network)).expect("Failed to create wallet"));
 
     let rpc = Rpc::new(Arc::new(client1.clone()), RpcCtl::new());
     wallet.utxo_processor().bind_rpc(Some(rpc)).await.expect("Failed to bind RPC");
@@ -669,7 +669,7 @@ async fn test_stealth_seed_recovery() {
     original_account.clone().connect().await.expect("Failed to connect");
 
     // Save original stealth address for comparison
-    let original_stealth_addr = original_account.stealth_address().clone();
+    let original_stealth_addr = *original_account.stealth_address();
 
     println!("✅ Phase 1: Original account created");
     println!("   Stealth address: {:?}", original_stealth_addr);
