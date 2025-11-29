@@ -1167,6 +1167,7 @@ async fn test_stealth_to_stealth_full_send() {
             payment_outputs.into(),
             None,                // fee_rate
             Fees::SenderPays(0), // auto-calculate fee
+            None,                // random_fee_settings
             None,                // payload
             env.wallet_secret.clone(),
             None, // payment_secret
@@ -1236,6 +1237,7 @@ async fn test_stealth_to_stealth_full_send() {
             payment_outputs_2.into(),
             None,
             Fees::SenderPays(0), // auto-calculate fee
+            None,                // random_fee_settings
             None,
             env.wallet_secret.clone(),
             None,
@@ -1346,7 +1348,7 @@ async fn test_stealth_to_stealth_full_flow() {
     let abortable = Abortable::new();
     let (summary_1, tx_ids_1) = sender
         .clone()
-        .send(payment_outputs.into(), None, Fees::SenderPays(0), None, env.wallet_secret.clone(), None, &abortable, None)
+        .send(payment_outputs.into(), None, Fees::SenderPays(0), None, None, env.wallet_secret.clone(), None, &abortable, None)
         .await
         .expect("First send should succeed");
 
@@ -1412,7 +1414,7 @@ async fn test_stealth_to_stealth_full_flow() {
     let abortable_2 = Abortable::new();
     let (summary_2, tx_ids_2) = sender
         .clone()
-        .send(payment_outputs_2.into(), None, Fees::SenderPays(0), None, env.wallet_secret.clone(), None, &abortable_2, None)
+        .send(payment_outputs_2.into(), None, Fees::SenderPays(0), None, None, env.wallet_secret.clone(), None, &abortable_2, None)
         .await
         .expect("Second send should succeed - change MUST be spendable!");
 
@@ -1550,7 +1552,7 @@ async fn test_stealth_stress() {
             let abortable = Abortable::new();
             match sender
                 .clone()
-                .send(payment_outputs.into(), None, Fees::None, None, env.wallet_secret.clone(), None, &abortable, None)
+                .send(payment_outputs.into(), None, Fees::None, None, None, env.wallet_secret.clone(), None, &abortable, None)
                 .await
             {
                 Ok((summary, _)) => {
