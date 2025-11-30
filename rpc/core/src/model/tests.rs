@@ -1079,11 +1079,33 @@ mod mockery {
                 ephemeral_pubkey: "02".to_string() + &"0".repeat(64),
                 destination_pubkey: "0".repeat(64),
                 amount: mock(),
+                is_coinbase: false,
             }
         }
     }
 
     test!(RpcStealthOutputInfo);
+
+    #[test]
+    fn rpc_stealth_output_info_supports_legacy_version() {
+        let info = RpcStealthOutputInfo::mock();
+        let mut buffer = Vec::new();
+        let writer = &mut buffer;
+        store!(u16, &1, writer).unwrap();
+        store!(RpcTransactionId, &info.transaction_id, writer).unwrap();
+        store!(u32, &info.output_index, writer).unwrap();
+        store!(u8, &info.view_tag, writer).unwrap();
+        store!(String, &info.ephemeral_pubkey, writer).unwrap();
+        store!(String, &info.destination_pubkey, writer).unwrap();
+        store!(u64, &info.amount, writer).unwrap();
+
+        let reader = &mut buffer.as_slice();
+        use workflow_serializer::serializer::Deserializer as RpcDeserializer;
+        let decoded = <RpcStealthOutputInfo as RpcDeserializer>::deserialize(reader).unwrap();
+        assert!(!decoded.is_coinbase);
+        assert_eq!(decoded.transaction_id, info.transaction_id);
+        assert_eq!(decoded.output_index, info.output_index);
+    }
 
     impl Mock for GetBlockViewTagsRequest {
         fn mock() -> Self {

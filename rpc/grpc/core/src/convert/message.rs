@@ -450,6 +450,7 @@ from!(item: &kaspa_rpc_core::RpcStealthOutputInfo, protowire::RpcStealthOutputIn
         ephemeral_pubkey: item.ephemeral_pubkey.clone(),
         destination_pubkey: item.destination_pubkey.clone(),
         amount: item.amount,
+        is_coinbase: item.is_coinbase,
     }
 });
 from!(item: &kaspa_rpc_core::GetBlockViewTagsRequest, protowire::GetBlockViewTagsRequestMessage, {
@@ -999,6 +1000,7 @@ try_from!(item: &protowire::RpcStealthOutputInfo, kaspa_rpc_core::RpcStealthOutp
         ephemeral_pubkey: item.ephemeral_pubkey.clone(),
         destination_pubkey: item.destination_pubkey.clone(),
         amount: item.amount,
+        is_coinbase: item.is_coinbase,
     }
 });
 try_from!(item: &protowire::GetBlockViewTagsRequestMessage, kaspa_rpc_core::GetBlockViewTagsRequest, {

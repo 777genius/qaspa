@@ -999,6 +999,7 @@ message RpcStealthOutputInfo {
   string ephemeralPubkey = 4;
   string destinationPubkey = 5;
   uint64 amount = 6;
+  bool isCoinbase = 7;
 }
 
 message GetBlockViewTagsRequestMessage {

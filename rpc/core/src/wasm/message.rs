@@ -1787,6 +1787,7 @@ declare! {
         ephemeralPubkey: HexString;
         destinationPubkey: HexString;
         amount: bigint;
+        isCoinbase: boolean;
     }
     "#,
 }

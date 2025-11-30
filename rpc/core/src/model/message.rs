@@ -1670,6 +1670,7 @@ pub struct RpcStealthOutputInfo {
     pub ephemeral_pubkey: String,
     pub destination_pubkey: String,
     pub amount: u64,
+    pub is_coinbase: bool,
 }
 
 impl RpcStealthOutputInfo {
@@ -1680,34 +1681,37 @@ impl RpcStealthOutputInfo {
         ephemeral_pubkey: String,
         destination_pubkey: String,
         amount: u64,
+        is_coinbase: bool,
     ) -> Self {
-        Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount }
+        Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount, is_coinbase }
     }
 }
 
 impl Serializer for RpcStealthOutputInfo {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &1, writer)?;
+        store!(u16, &2, writer)?;
         store!(RpcTransactionId, &self.transaction_id, writer)?;
         store!(u32, &self.output_index, writer)?;
         store!(u8, &self.view_tag, writer)?;
         store!(String, &self.ephemeral_pubkey, writer)?;
         store!(String, &self.destination_pubkey, writer)?;
         store!(u64, &self.amount, writer)?;
+        store!(bool, &self.is_coinbase, writer)?;
         Ok(())
     }
 }
 
 impl Deserializer for RpcStealthOutputInfo {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let _version = load!(u16, reader)?;
+        let version = load!(u16, reader)?;
         let transaction_id = load!(RpcTransactionId, reader)?;
         let output_index = load!(u32, reader)?;
         let view_tag = load!(u8, reader)?;
         let ephemeral_pubkey = load!(String, reader)?;
         let destination_pubkey = load!(String, reader)?;
         let amount = load!(u64, reader)?;
-        Ok(Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount })
+        let is_coinbase = if version >= 2 { load!(bool, reader)? } else { false };
+        Ok(Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount, is_coinbase })
     }
 }
 

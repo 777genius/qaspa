@@ -186,6 +186,7 @@ impl ConsensusConverter {
             .iter()
             .flat_map(|tx| {
                 let tx_id = tx.id();
+                let is_coinbase = tx.is_coinbase();
                 tx.outputs.iter().enumerate().filter_map(move |(idx, out)| {
                     if out.script_public_key.version() != STEALTH_SCRIPT_VERSION {
                         return None;
@@ -198,6 +199,7 @@ impl ConsensusConverter {
                         faster_hex::hex_string(&eph.ephemeral_pubkey.serialize()),
                         faster_hex::hex_string(&eph.destination_pubkey.serialize()),
                         out.value,
+                        is_coinbase,
                     ))
                 })
             })
