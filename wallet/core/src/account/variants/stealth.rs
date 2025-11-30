@@ -508,6 +508,11 @@ impl StealthAccount {
         updated_contexts: &mut Vec<UtxoContext>,
         current_daa_score: u64,
     ) -> Result<bool> {
+        let outpoint: TransactionOutpoint = entry.outpoint.into();
+        if Account::utxo_context(self).contains_outpoint(&outpoint) {
+            return Ok(false);
+        }
+
         if let Some(context) = self.try_claim_utxo(entry).await {
             let utxo_ref: crate::utxo::UtxoEntryReference = entry.into();
             context.handle_utxo_added(vec![utxo_ref], current_daa_score).await?;
@@ -573,6 +578,9 @@ impl StealthAccount {
         let mut updated_contexts: Vec<UtxoContext> = Vec::new();
         let mut total_claimed = 0usize;
         let mut live_entries: HashMap<RpcTransactionOutpoint, RpcUtxosByAddressesEntry> = HashMap::new();
+        let min_daa_score = self.creation_daa_score.unwrap_or(0);
+        let mut encountered_full_blocks = false;
+        let mut header_only_encountered = false;
 
         loop {
             let response =
@@ -594,6 +602,20 @@ impl StealthAccount {
 
                 processed_new = true;
                 if let Some(block) = response.blocks.get(idx) {
+                    if block.header.daa_score < min_daa_score {
+                        continue;
+                    }
+
+                    if block.transactions.is_empty() {
+                        header_only_encountered = true;
+                        log_warn!(
+                            "Skipping header-only block {} during stealth fallback (node likely pruned before DAA {})",
+                            hash,
+                            min_daa_score
+                        );
+                        continue;
+                    }
+                    encountered_full_blocks = true;
                     Self::collect_live_stealth_utxos(block, &mut live_entries);
                 }
             }
@@ -606,6 +628,13 @@ impl StealthAccount {
             if cursor.is_none() {
                 break;
             }
+        }
+
+        if !encountered_full_blocks && header_only_encountered {
+            return Err(Error::Custom(format!(
+                "Stealth block replay fallback requires a node with block bodies at or after DAA {}",
+                min_daa_score
+            )));
         }
 
         for entry in live_entries.into_values() {
@@ -915,19 +944,18 @@ impl Account for StealthAccount {
         // Get current DAA score for maturity calculation
         let current_daa_score = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
 
-        // Check if server supports stealth features
+        // Check server capabilities (used for logging / diagnostics)
         let server_info = rpc.get_server_info().await.map_err(|e| Error::Custom(e.to_string()))?;
-        if !server_info.has_stealth_support {
-            // Server doesn't support stealth - rely on notifications only
-            log_warn!("Server does not support stealth features - scan skipped");
-            return Ok(());
-        }
 
         if self.scan_via_utxoindex(&rpc, current_daa_score).await? {
             return Ok(());
         }
 
-        log_info!("Stealth RPC fallback: scanning blocks via view tags");
+        if !server_info.has_stealth_support {
+            log_warn!("Server lacks stealth-specific RPC extensions; falling back to block replay");
+        } else {
+            log_info!("Stealth RPC fallback: scanning blocks via block replay");
+        }
         self.scan_via_view_tags(&rpc, current_daa_score).await
     }
 }
@@ -976,7 +1004,7 @@ impl StealthUtxoHandler for StealthAccount {
     }
 
     fn has_outpoint(&self, outpoint: &TransactionOutpoint) -> bool {
-        self.ephemeral_keys.contains(outpoint)
+        Account::utxo_context(self).contains_outpoint(outpoint)
     }
 
     async fn handle_utxo_removed(&self, outpoint: &TransactionOutpoint) -> Result<()> {

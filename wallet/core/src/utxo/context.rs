@@ -14,7 +14,9 @@ use crate::utxo::{
     Maturity, NetworkParams, OutgoingTransaction, PendingUtxoEntryReference, UtxoContextBinding, UtxoEntryId, UtxoEntryReference,
     UtxoEntryReferenceExtension, UtxoProcessor,
 };
+use kaspa_consensus_client::TransactionOutpoint as ClientTransactionOutpoint;
 use kaspa_consensus_client::UtxoEntry;
+use kaspa_consensus_core::tx::TransactionOutpoint;
 use kaspa_hashes::Hash;
 use sorted_insert::SortedInsertBinaryByKey;
 
@@ -213,6 +215,12 @@ impl UtxoContext {
 
     pub fn addresses(&self) -> Arc<DashSet<Arc<Address>>> {
         self.context().addresses.clone()
+    }
+
+    pub fn contains_outpoint(&self, outpoint: &TransactionOutpoint) -> bool {
+        let client_outpoint = ClientTransactionOutpoint::new(outpoint.transaction_id, outpoint.index);
+        let id = client_outpoint.inner().clone();
+        self.context().map.contains_key(&id)
     }
 
     pub async fn clear(&self) -> Result<()> {
