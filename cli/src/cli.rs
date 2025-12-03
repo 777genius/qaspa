@@ -484,6 +484,25 @@ impl KaspaCli {
 
                                     this.term().refresh_prompt();
                                 }
+                                // Stealth scan progress notification
+                                // last_daa_score is omitted as blocks/claimed are more meaningful to users
+                                Events::StealthScanProgress {
+                                    account_id,
+                                    processed_blocks,
+                                    last_daa_score: _,
+                                    claimed,
+                                } => {
+                                    if !this.is_mutted() {
+                                        let id = account_id.short();
+                                        tprintln!(
+                                            this,
+                                            "{NOTIFY} {} {id}: scanned {} blocks, found {} UTXOs",
+                                            style("stealth".pad_to_width(8)).cyan(),
+                                            processed_blocks.separated_string(),
+                                            claimed.separated_string()
+                                        );
+                                    }
+                                }
                             }
                         }
                     }
