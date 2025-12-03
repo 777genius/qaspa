@@ -263,7 +263,7 @@ async fn daemon_utxos_propagation_test() {
     assert_eq!(miner_balance, initial_blocks * SIMNET_PARAMS.pre_deflationary_phase_base_subsidy);
 
     // Get the miner UTXOs
-    let utxos = fetch_spendable_utxos(&rpc_client1, miner_address.clone(), coinbase_maturity).await;
+    let utxos = fetch_spendable_utxos(&rpc_client1, miner_address.clone(), coinbase_maturity, None).await;
     assert_eq!(utxos.len(), EXTRA_BLOCKS - 1);
     for utxo in utxos.iter() {
         assert!(utxo.1.is_coinbase);

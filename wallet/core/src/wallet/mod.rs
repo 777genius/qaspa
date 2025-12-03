@@ -879,7 +879,14 @@ impl Wallet {
         let derivation = stealth::StealthKeyDerivation::from_xprv(&xprv, account_index)?;
 
         // Get current DAA score for account creation timestamp
-        let creation_daa_score = self.utxo_processor().current_daa_score();
+        let mut creation_daa_score = self.utxo_processor().current_daa_score();
+        if creation_daa_score.is_none() {
+            if let Some(rpc) = self.utxo_processor().try_rpc_api() {
+                if let Ok(info) = rpc.get_server_info().await {
+                    creation_daa_score = Some(info.virtual_daa_score);
+                }
+            }
+        }
 
         // Create account
         let account: Arc<dyn Account> = Arc::new(

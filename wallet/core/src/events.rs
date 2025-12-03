@@ -222,6 +222,13 @@ pub enum Events {
         /// contain a developer-assigned internal id.
         id: UtxoContextId,
     },
+    #[serde(rename_all = "camelCase")]
+    StealthScanProgress {
+        account_id: AccountId,
+        processed_blocks: u64,
+        last_daa_score: u64,
+        claimed: u64,
+    },
     /// Periodic metrics updates (on-request)
     #[serde(rename_all = "camelCase")]
     Metrics {
@@ -298,6 +305,7 @@ pub enum EventKind {
     Maturity,
     Discovery,
     Balance,
+    StealthScanProgress,
     Metrics,
     FeeRate,
     Error,
@@ -336,6 +344,7 @@ impl From<&Events> for EventKind {
             Events::Maturity { .. } => EventKind::Maturity,
             Events::Discovery { .. } => EventKind::Discovery,
             Events::Balance { .. } => EventKind::Balance,
+            Events::StealthScanProgress { .. } => EventKind::StealthScanProgress,
             Events::Metrics { .. } => EventKind::Metrics,
             Events::FeeRate { .. } => EventKind::FeeRate,
             Events::Error { .. } => EventKind::Error,
@@ -377,6 +386,7 @@ impl FromStr for EventKind {
             "maturity" => Ok(EventKind::Maturity),
             "discovery" => Ok(EventKind::Discovery),
             "balance" => Ok(EventKind::Balance),
+            "stealth-scan-progress" => Ok(EventKind::StealthScanProgress),
             "metrics" => Ok(EventKind::Metrics),
             "fee-rate" => Ok(EventKind::FeeRate),
             "error" => Ok(EventKind::Error),
@@ -426,6 +436,7 @@ impl std::fmt::Display for EventKind {
             EventKind::Maturity => "maturity",
             EventKind::Discovery => "discovery",
             EventKind::Balance => "balance",
+            EventKind::StealthScanProgress => "stealth-scan-progress",
             EventKind::Metrics => "metrics",
             EventKind::FeeRate => "fee-rate",
             EventKind::Error => "error",

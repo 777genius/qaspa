@@ -21,13 +21,15 @@ use kaspa_bip32::{Language, Mnemonic, WordCount};
 use kaspa_consensus::params::SIMNET_PARAMS;
 use kaspa_consensus_core::{
     constants::TX_VERSION,
+    header::Header,
     sign::sign,
     subnets::SUBNETWORK_ID_NATIVE,
     tx::{MutableTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry},
 };
+use kaspa_core::info;
 use kaspa_grpc_client::GrpcClient;
 use kaspa_notify::scope::{BlockAddedScope, VirtualDaaScoreChangedScope};
-use kaspa_rpc_core::{api::rpc::RpcApi, Notification};
+use kaspa_rpc_core::{api::rpc::RpcApi, Notification, RpcRawBlock};
 use kaspa_stealth::{create_stealth_output, StealthAddress};
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use kaspa_wallet_core::{
@@ -35,6 +37,7 @@ use kaspa_wallet_core::{
     account::Account,
     api::WalletApi,
     encryption::EncryptionKind,
+    events::Events,
     rpc::{Rpc, RpcCtl},
     storage::keydata::PrvKeyDataVariantKind,
     wallet::{AccountCreateArgs, PrvKeyDataCreateArgs, Wallet, WalletCreateArgs},
@@ -43,7 +46,13 @@ use kaspa_wallet_keys::secret::Secret;
 use kaspad_lib::args::Args;
 use rand::thread_rng;
 use secp256k1::{Keypair, SECP256K1};
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{
+    collections::{HashSet, VecDeque},
+    convert::{TryFrom, TryInto},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::sync::{oneshot, Mutex};
 
 // ============================================================================
 // TEST INFRASTRUCTURE
@@ -74,23 +83,17 @@ pub struct StealthTestEnv {
     pub wallet: Arc<Wallet>,
     pub wallet_secret: Secret,
     pub coinbase_maturity: u64,
+    miner_utxo_cache: Mutex<VecDeque<(TransactionOutpoint, UtxoEntry)>>,
+    pending_miner_spends: Mutex<HashSet<TransactionOutpoint>>,
+    spent_miner_utxos: Mutex<HashSet<TransactionOutpoint>>,
     _event_receiver: async_channel::Receiver<Notification>,
 }
 
 impl StealthTestEnv {
-    /// Creates an isolated test environment with simnet daemon
-    pub async fn new() -> Self {
+    async fn from_args(args: Args) -> Self {
         init_allocator_with_default_settings();
         kaspa_core::log::try_init_logger("INFO");
 
-        let args = Args {
-            simnet: true,
-            unsafe_rpc: true,
-            enable_unsynced_mining: true,
-            disable_upnp: true,
-            utxoindex: true,
-            ..Default::default()
-        };
         let total_fd_limit = 10;
 
         let mut daemon = Daemon::new_random_with_args(args, total_fd_limit);
@@ -137,18 +140,88 @@ impl StealthTestEnv {
 
         wallet.clone().wallet_create(wallet_secret.clone(), wallet_create_args).await.expect("Failed to create wallet storage");
 
-        Self { daemon, rpc_client, miner, wallet, wallet_secret, coinbase_maturity, _event_receiver: event_receiver }
+        Self {
+            daemon,
+            rpc_client,
+            miner,
+            wallet,
+            wallet_secret,
+            coinbase_maturity,
+            miner_utxo_cache: Mutex::new(VecDeque::new()),
+            pending_miner_spends: Mutex::new(HashSet::new()),
+            spent_miner_utxos: Mutex::new(HashSet::new()),
+            _event_receiver: event_receiver,
+        }
+    }
+
+    /// Creates an isolated test environment with simnet daemon
+    pub async fn new() -> Self {
+        let args = Args {
+            simnet: true,
+            unsafe_rpc: true,
+            enable_unsynced_mining: true,
+            disable_upnp: true,
+            utxoindex: true,
+            ..Default::default()
+        };
+        Self::from_args(args).await
+    }
+
+    /// Creates an environment without UTXO index (forces fallback scanning path).
+    pub async fn new_without_utxoindex() -> Self {
+        let args = Args {
+            simnet: true,
+            unsafe_rpc: true,
+            enable_unsynced_mining: true,
+            disable_upnp: true,
+            utxoindex: false,
+            archival: false,
+            ..Default::default()
+        };
+        Self::from_args(args).await
     }
 
     /// Mines N blocks and waits for VirtualDaaScoreChanged notification
     pub async fn mine_blocks(&self, count: u64) {
+        const BLOCK_MINE_DELAY_MS: u64 = 5;
         for _ in 0..count {
             let template =
                 self.rpc_client.get_block_template(self.miner.address.clone(), vec![]).await.expect("Failed to get block template");
+            let block = template.block.clone();
+            let header: Header = (&block.header).try_into().expect("Failed to convert raw header");
             self.rpc_client.submit_block(template.block, false).await.expect("Failed to submit block");
+            self.cache_coinbase_from_block(&block, header.daa_score).await;
             // Brief wait for notification processing
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            tokio::time::sleep(Duration::from_millis(BLOCK_MINE_DELAY_MS)).await;
         }
+        self.clear_pending_miner_spends().await;
+    }
+
+    async fn cache_coinbase_from_block(&self, block: &RpcRawBlock, block_daa_score: u64) {
+        if let Some((outpoint, entry)) = Self::extract_coinbase_utxo(block, block_daa_score, &self.miner.spk) {
+            self.miner_utxo_cache.lock().await.push_back((outpoint, entry));
+        }
+    }
+
+    fn extract_coinbase_utxo(
+        block: &RpcRawBlock,
+        block_daa_score: u64,
+        miner_spk: &ScriptPublicKey,
+    ) -> Option<(TransactionOutpoint, UtxoEntry)> {
+        let coinbase_tx = block.transactions.first()?;
+        let consensus_tx = Transaction::try_from(coinbase_tx.clone()).ok()?;
+        let first_output = coinbase_tx.outputs.first()?;
+        if first_output.script_public_key != *miner_spk {
+            return None;
+        }
+        let outpoint = TransactionOutpoint::new(consensus_tx.id(), 0);
+        let entry = UtxoEntry {
+            amount: first_output.value,
+            script_public_key: first_output.script_public_key.clone(),
+            block_daa_score,
+            is_coinbase: true,
+        };
+        Some((outpoint, entry))
     }
 
     /// Creates and unlocks a new stealth account
@@ -187,10 +260,18 @@ impl StealthTestEnv {
 
     /// Sends to a stealth address from the miner's coinbase UTXOs
     pub async fn send_to_stealth(&self, amount: u64, stealth_addr: &StealthAddress) -> (Transaction, TransactionOutpoint) {
-        // Fetch miner UTXOs
-        let utxos = fetch_spendable_utxos(&self.rpc_client, self.miner.address.clone(), self.coinbase_maturity).await;
+        const FEE: u64 = 10_000;
+        let target_amount = amount.saturating_add(FEE);
+        let utxos = self.take_miner_utxos(target_amount).await;
 
-        assert!(!utxos.is_empty(), "No spendable UTXOs for miner");
+        info!(
+            "miner spend: using {} inputs {:?}",
+            utxos.len(),
+            utxos
+                .iter()
+                .map(|(op, entry)| (op.transaction_id, op.index, entry.amount, entry.block_daa_score, entry.is_coinbase))
+                .collect::<Vec<_>>()
+        );
 
         // Create stealth output
         let ephemeral_output = create_stealth_output(stealth_addr, &mut thread_rng()).expect("Failed to create stealth output");
@@ -202,8 +283,7 @@ impl StealthTestEnv {
 
         // Build transaction
         let total_in: u64 = utxos.iter().map(|(_, e)| e.amount).sum();
-        let fee = 10_000u64; // 0.0001 KAS
-        let change_amount = total_in.saturating_sub(amount).saturating_sub(fee);
+        let change_amount = total_in.saturating_sub(amount).saturating_sub(FEE);
 
         let inputs: Vec<TransactionInput> = utxos
             .iter()
@@ -228,6 +308,89 @@ impl StealthTestEnv {
 
         let outpoint = TransactionOutpoint::new(tx_id, 0);
         (signed_tx.tx, outpoint)
+    }
+
+    async fn take_miner_utxos(&self, target_amount: u64) -> Vec<(TransactionOutpoint, UtxoEntry)> {
+        assert!(target_amount > 0, "target amount must be positive");
+
+        let mut selected = self.consume_cached_miner_utxos(target_amount).await;
+        let mut gathered: u64 = selected.iter().map(|(_, entry)| entry.amount).sum();
+
+        if gathered < target_amount {
+            let remaining = target_amount.saturating_sub(gathered);
+            let mut fetched =
+                fetch_spendable_utxos(&self.rpc_client, self.miner.address.clone(), self.coinbase_maturity, Some(remaining)).await;
+            if fetched.is_empty() {
+                panic!("No spendable UTXOs for miner (need at least {target_amount})");
+            }
+            {
+                let mut pending = self.pending_miner_spends.lock().await;
+                for (outpoint, _) in &fetched {
+                    pending.insert(*outpoint);
+                }
+            }
+            gathered = gathered.saturating_add(fetched.iter().map(|(_, entry)| entry.amount).sum::<u64>());
+            selected.append(&mut fetched);
+        }
+
+        if gathered < target_amount {
+            panic!("No spendable UTXOs for miner (need at least {target_amount})");
+        }
+
+        selected
+    }
+
+    async fn consume_cached_miner_utxos(&self, target_amount: u64) -> Vec<(TransactionOutpoint, UtxoEntry)> {
+        if target_amount == 0 {
+            return Vec::new();
+        }
+
+        let virtual_daa_score = self.rpc_client.get_server_info().await.expect("Failed to query server info").virtual_daa_score;
+        let pending_snapshot = { self.pending_miner_spends.lock().await.clone() };
+        let spent_snapshot = { self.spent_miner_utxos.lock().await.clone() };
+
+        let mut cache = self.miner_utxo_cache.lock().await;
+        let mut remaining = VecDeque::with_capacity(cache.len());
+        let mut selected = Vec::new();
+        let mut gathered = 0u64;
+
+        while let Some((outpoint, entry)) = cache.pop_front() {
+            let matured = if entry.is_coinbase { entry.block_daa_score + self.coinbase_maturity <= virtual_daa_score } else { true };
+
+            if !matured || pending_snapshot.contains(&outpoint) || spent_snapshot.contains(&outpoint) {
+                remaining.push_back((outpoint, entry));
+                continue;
+            }
+
+            gathered = gathered.saturating_add(entry.amount);
+            selected.push((outpoint, entry));
+            if gathered >= target_amount {
+                break;
+            }
+        }
+
+        remaining.extend(cache.drain(..));
+        *cache = remaining;
+
+        if !selected.is_empty() {
+            let mut pending = self.pending_miner_spends.lock().await;
+            for (outpoint, _) in &selected {
+                pending.insert(*outpoint);
+            }
+        }
+
+        selected
+    }
+
+    async fn clear_pending_miner_spends(&self) {
+        let mut pending = self.pending_miner_spends.lock().await;
+        if pending.is_empty() {
+            return;
+        }
+        let mut spent = self.spent_miner_utxos.lock().await;
+        for outpoint in pending.drain() {
+            spent.insert(outpoint);
+        }
     }
 
     /// Shuts down the test environment
@@ -342,6 +505,201 @@ async fn test_stealth_change_flow() {
     // Verify ephemeral key contains the funding outpoint
     assert!(stealth.ephemeral_keys().contains(&funding_outpoint), "Funding outpoint should have ephemeral key");
 
+    env.shutdown().await;
+}
+
+// ============================================================================
+// TEST 4: Fallback scan without UTXO index
+// ============================================================================
+
+#[derive(Debug, Clone)]
+struct ProgressSnapshot {
+    processed_blocks: u64,
+    last_daa_score: u64,
+    claimed: u64,
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_stealth_fallback_scan_without_utxoindex() {
+    const SCAN_TIMEOUT: Duration = Duration::from_secs(90);
+
+    let env = StealthTestEnv::new_without_utxoindex().await;
+
+    StealthAccount::override_fallback_scan_lookback_for_testing(128);
+
+    let warmup_blocks = env.coinbase_maturity + 200;
+    env.mine_blocks(warmup_blocks).await;
+
+    let receiver = env.create_stealth_account("fallback_receiver").await;
+    receiver.unlock(&env.wallet_secret, None).await.expect("Failed to unlock");
+    receiver.clone().connect().await.expect("Failed to connect");
+
+    let send_amounts = [2_000_000_000u64, 3_000_000_000u64];
+    let mut expected_outpoints = Vec::new();
+    for amount in send_amounts {
+        let (_, outpoint) = env.send_to_stealth(amount, receiver.stealth_address()).await;
+        expected_outpoints.push(outpoint);
+        env.mine_blocks(1).await;
+    }
+
+    // Mine enough blocks to mature user transactions
+    env.mine_blocks(105).await;
+
+    let current_daa = env.rpc_client.get_server_info().await.expect("server info").virtual_daa_score;
+    receiver.override_creation_daa_score_for_testing(Some(current_daa));
+
+    // Explicitly trigger fallback scan now that utxoindex is disabled
+    tokio::time::timeout(SCAN_TIMEOUT, receiver.clone().scan(None, None))
+        .await
+        .expect("Initial fallback scan timed out")
+        .expect("Fallback scan should detect freshly funded stealth outputs");
+
+    let expected_utxo_count = expected_outpoints.len();
+    assert_eq!(receiver.ephemeral_keys().len(), expected_utxo_count, "Fallback scan should populate all ephemeral keys");
+
+    // Verify all expected outpoints have ephemeral keys
+    for outpoint in &expected_outpoints {
+        assert!(receiver.ephemeral_keys().contains(outpoint), "Fallback scan should find ephemeral key for {:?}", outpoint);
+    }
+
+    println!("✅ Fallback scan test passed: found {} stealth UTXOs", expected_utxo_count);
+
+    StealthAccount::override_fallback_scan_lookback_for_testing(0);
+
+    env.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_stealth_fallback_progress_events() {
+    const SCAN_TIMEOUT: Duration = Duration::from_secs(120);
+
+    let env = StealthTestEnv::new_without_utxoindex().await;
+    StealthAccount::override_fallback_scan_lookback_for_testing(320);
+
+    let warmup_blocks = env.coinbase_maturity + 320;
+    env.mine_blocks(warmup_blocks).await;
+
+    let receiver = env.create_stealth_account("fallback_progress").await;
+    receiver.unlock(&env.wallet_secret, None).await.expect("Failed to unlock");
+    receiver.clone().connect().await.expect("Failed to connect");
+
+    let send_amounts = [1_500_000_000u64, 2_500_000_000u64];
+    let mut expected_outpoints = Vec::new();
+    for amount in send_amounts {
+        let (_, outpoint) = env.send_to_stealth(amount, receiver.stealth_address()).await;
+        expected_outpoints.push(outpoint);
+        env.mine_blocks(1).await;
+    }
+
+    env.mine_blocks(105).await;
+
+    let current_daa = env.rpc_client.get_server_info().await.expect("server info").virtual_daa_score;
+    receiver.override_creation_daa_score_for_testing(Some(current_daa));
+
+    let event_channel = env.wallet.multiplexer().channel();
+    let (stop_tx, stop_rx) = oneshot::channel();
+    let (ready_tx, ready_rx) = oneshot::channel();
+    let progress_events = Arc::new(Mutex::new(Vec::<ProgressSnapshot>::new()));
+    let progress_clone = progress_events.clone();
+    let receiver_id = *receiver.id();
+    let listener = tokio::spawn(async move {
+        let mut stop_rx = stop_rx;
+        let _ = ready_tx.send(());
+        loop {
+            tokio::select! {
+                _ = &mut stop_rx => break,
+                msg = event_channel.recv() => {
+                    match msg {
+                        Ok(event) => {
+                            if let Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed } = *event {
+                                if account_id == receiver_id {
+                                    progress_clone.lock().await.push(ProgressSnapshot { processed_blocks, last_daa_score, claimed });
+                                }
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }
+        }
+    });
+
+    ready_rx.await.expect("Progress listener failed to start");
+
+    tokio::time::timeout(SCAN_TIMEOUT, receiver.clone().scan(None, None))
+        .await
+        .expect("Fallback scan with progress timed out")
+        .expect("Fallback scan with progress failed");
+
+    let _ = stop_tx.send(());
+    listener.await.expect("Progress listener task failed");
+
+    let snapshots = progress_events.lock().await.clone();
+    assert!(!snapshots.is_empty(), "Expected at least one StealthScanProgress event");
+
+    let last = snapshots.last().expect("Missing final progress snapshot");
+    assert_eq!(last.claimed as usize, expected_outpoints.len(), "Final progress should report all claimed UTXOs");
+    assert!(last.processed_blocks >= 320, "Expected to process at least 320 blocks, got {}", last.processed_blocks);
+    let min_daa = current_daa.saturating_sub(320);
+    assert!(last.last_daa_score >= min_daa, "Expected last processed DAA >= {}, got {}", min_daa, last.last_daa_score);
+
+    for outpoint in &expected_outpoints {
+        assert!(receiver.ephemeral_keys().contains(outpoint), "Receiver should detect {:?}", outpoint);
+    }
+
+    StealthAccount::override_fallback_scan_lookback_for_testing(0);
+    env.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_stealth_fallback_rescan_after_state_reset() {
+    const SCAN_TIMEOUT: Duration = Duration::from_secs(120);
+
+    let env = StealthTestEnv::new_without_utxoindex().await;
+    StealthAccount::override_fallback_scan_lookback_for_testing(256);
+
+    let warmup_blocks = env.coinbase_maturity + 220;
+    env.mine_blocks(warmup_blocks).await;
+
+    let receiver = env.create_stealth_account("fallback_rescan").await;
+    receiver.unlock(&env.wallet_secret, None).await.expect("Failed to unlock");
+    receiver.clone().connect().await.expect("Failed to connect");
+
+    let send_amounts = [1_250_000_000u64, 2_750_000_000u64];
+    let mut expected_outpoints = Vec::new();
+    for amount in send_amounts {
+        let (_, outpoint) = env.send_to_stealth(amount, receiver.stealth_address()).await;
+        expected_outpoints.push(outpoint);
+        env.mine_blocks(1).await;
+    }
+
+    env.mine_blocks(105).await;
+
+    let current_daa = env.rpc_client.get_server_info().await.expect("server info").virtual_daa_score;
+    receiver.override_creation_daa_score_for_testing(Some(current_daa));
+
+    tokio::time::timeout(SCAN_TIMEOUT, receiver.clone().scan(None, None))
+        .await
+        .expect("Initial fallback scan timed out")
+        .expect("Initial fallback scan failed");
+
+    assert_eq!(receiver.ephemeral_keys().len(), expected_outpoints.len(), "Initial fallback scan should populate all keys");
+
+    receiver.ephemeral_keys().clear();
+    assert_eq!(receiver.ephemeral_keys().len(), 0, "Ephemeral keys should be cleared");
+    receiver.utxo_context().clear().await.expect("Failed to clear utxo context before rescan");
+
+    tokio::time::timeout(SCAN_TIMEOUT, receiver.clone().scan(None, None))
+        .await
+        .expect("Fallback rescan timed out")
+        .expect("Fallback rescan failed");
+
+    assert_eq!(receiver.ephemeral_keys().len(), expected_outpoints.len(), "Rescan should repopulate all ephemeral keys");
+    for outpoint in &expected_outpoints {
+        assert!(receiver.ephemeral_keys().contains(outpoint), "Rescan should find {:?}", outpoint);
+    }
+
+    StealthAccount::override_fallback_scan_lookback_for_testing(0);
     env.shutdown().await;
 }
 

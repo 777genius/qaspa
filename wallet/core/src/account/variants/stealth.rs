@@ -7,7 +7,8 @@
 //!
 
 use crate::account::{Account, AccountKind, GenerationNotifier, Inner};
-use crate::deterministic::make_account_hashes;
+use crate::deterministic::{make_account_hashes, AccountId};
+use crate::events::Events;
 use crate::imports::*;
 use crate::serializer::StorageHeader;
 use crate::storage::account::{AccountSettings, AccountStorable, AccountStorage};
@@ -19,21 +20,25 @@ use crate::tx::generator::stealth_signer::StealthSigner;
 use crate::tx::{Fees, GeneratorSummary, PaymentDestination, RandomFeeSettings};
 use crate::utxo::stealth_handler::StealthUtxoHandler;
 use crate::utxo::UtxoContext;
-use faster_hex::{hex_decode, hex_string};
 use kaspa_addresses::{Address, Version};
 use kaspa_bip32::ExtendedPrivateKey;
 use kaspa_consensus_core::{
+    network::NetworkId,
     subnets,
-    tx::{ScriptPublicKey, ScriptVec, TransactionOutpoint},
+    tx::{Transaction, TransactionOutpoint},
 };
-use kaspa_rpc_core::{
-    RpcBlock, RpcHash, RpcStealthOutputInfo, RpcTransactionId, RpcTransactionOutpoint, RpcUtxoEntry, RpcUtxosByAddressesEntry,
-};
-use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAddress, EPHEMERAL_OUTPUT_SIZE};
+#[cfg(test)]
+use kaspa_rpc_core::RpcTransactionOutpoint;
+use kaspa_rpc_core::{RpcBlock, RpcHash, RpcTransactionId, RpcUtxoEntry, RpcUtxosByAddressesEntry};
+#[cfg(test)]
+use kaspa_stealth::EPHEMERAL_OUTPUT_SIZE;
+use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAddress};
 use kaspa_txscript::{extract_stealth_output, STEALTH_SCRIPT_VERSION};
 use secp256k1::{PublicKey, SecretKey, XOnlyPublicKey, SECP256K1};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
+use std::sync::atomic::{AtomicU64, Ordering};
+use workflow_core::time::Instant;
 
 // ============================================================================
 // CONSTANTS
@@ -50,6 +55,19 @@ pub const STEALTH_SPEND_CHANGE: u32 = 0;
 
 /// Derivation path change index for scan key: m/44'/111111'/account'/1'/0
 pub const STEALTH_SCAN_CHANGE: u32 = 1;
+
+/// How far (in DAA score) fallback scanning is allowed to rewind behind `creation_daa_score`.
+const DEFAULT_FALLBACK_SCAN_LOOKBACK_DAA: u64 = 1_000_000;
+const FALLBACK_PROGRESS_REPORT_INTERVAL: usize = 200;
+const FALLBACK_PROGRESS_REPORT_INTERVAL_SECS: u64 = 5;
+static FALLBACK_SCAN_LOOKBACK_OVERRIDE: AtomicU64 = AtomicU64::new(0);
+
+fn fallback_scan_lookback_daa() -> u64 {
+    match FALLBACK_SCAN_LOOKBACK_OVERRIDE.load(Ordering::Relaxed) {
+        0 => DEFAULT_FALLBACK_SCAN_LOOKBACK_DAA,
+        override_val => override_val,
+    }
+}
 
 // ============================================================================
 // PAYLOAD (Serializable storage data)
@@ -168,6 +186,60 @@ impl Drop for UnlockedStealthKeys {
     }
 }
 
+#[derive(Default)]
+struct PendingEphemeralPersist {
+    queue: VecDeque<TransactionOutpoint>,
+    dirty: bool,
+}
+
+impl PendingEphemeralPersist {
+    fn new() -> Self {
+        Self { queue: VecDeque::new(), dirty: false }
+    }
+
+    fn mark_dirty(&mut self, outpoint: TransactionOutpoint) {
+        self.queue.push_back(outpoint);
+        self.dirty = true;
+    }
+
+    fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    async fn try_flush(
+        &mut self,
+        secret: Option<&Secret>,
+        wallet_folder: Option<&str>,
+        network_id: Option<NetworkId>,
+        store: &EphemeralKeyStore,
+    ) -> Result<()> {
+        if !self.dirty {
+            return Ok(());
+        }
+
+        let Some(secret) = secret else {
+            return Err(Error::Custom("wallet secret unavailable".to_string()));
+        };
+
+        let Some(wallet_folder) = wallet_folder else {
+            return Ok(());
+        };
+
+        let Some(network_id) = network_id else {
+            return Ok(());
+        };
+
+        store.save_to_storage(wallet_folder, network_id, secret).await?;
+        self.queue.clear();
+        self.dirty = false;
+        Ok(())
+    }
+}
+
 // ============================================================================
 // KEY DERIVATION
 // ============================================================================
@@ -265,9 +337,11 @@ pub struct StealthAccount {
 
     /// Unlocked keys (populated after unlock())
     unlocked_keys: Arc<AsyncRwLock<Option<UnlockedStealthKeys>>>,
+    wallet_secret_cache: Arc<AsyncRwLock<Option<Secret>>>,
 
     /// Ephemeral key store for spending received UTXOs
     ephemeral_keys: Arc<EphemeralKeyStore>,
+    pending_ephemeral_persist: Arc<AsyncMutex<PendingEphemeralPersist>>,
 
     /// DAA score when account was created
     creation_daa_score: Option<u64>,
@@ -277,6 +351,10 @@ impl StealthAccount {
     // ========================================================================
     // CONSTRUCTION
     // ========================================================================
+
+    pub fn override_fallback_scan_lookback_for_testing(value: u64) {
+        FALLBACK_SCAN_LOOKBACK_OVERRIDE.store(value, Ordering::Relaxed);
+    }
 
     /// Creates a new stealth account
     pub async fn try_new(
@@ -307,9 +385,22 @@ impl StealthAccount {
             spend_pubkey,
             stealth_address,
             unlocked_keys: Arc::new(AsyncRwLock::new(None)),
+            wallet_secret_cache: Arc::new(AsyncRwLock::new(None)),
             ephemeral_keys,
+            pending_ephemeral_persist: Arc::new(AsyncMutex::new(PendingEphemeralPersist::new())),
             creation_daa_score,
         })
+    }
+
+    /// Testing helper: override stored creation DAA score to control fallback window.
+    ///
+    /// # Safety
+    /// This uses interior mutation to adjust an immutable field and is intended strictly for tests.
+    pub fn override_creation_daa_score_for_testing(&self, value: Option<u64>) {
+        unsafe {
+            let ptr = self as *const Self as *mut Self;
+            (*ptr).creation_daa_score = value;
+        }
     }
 
     /// Loads an existing stealth account from storage
@@ -333,7 +424,9 @@ impl StealthAccount {
             spend_pubkey,
             stealth_address,
             unlocked_keys: Arc::new(AsyncRwLock::new(None)),
+            wallet_secret_cache: Arc::new(AsyncRwLock::new(None)),
             ephemeral_keys,
+            pending_ephemeral_persist: Arc::new(AsyncMutex::new(PendingEphemeralPersist::new())),
             creation_daa_score: payload.creation_daa_score,
         })
     }
@@ -353,6 +446,8 @@ impl StealthAccount {
 
         let mut keys = self.unlocked_keys.write().await;
         *keys = Some(derivation.into_unlocked_keys());
+        let mut cached = self.wallet_secret_cache.write().await;
+        *cached = Some(wallet_secret.clone());
 
         // Load ephemeral keys from storage
         if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.wallet().store().location() {
@@ -362,6 +457,9 @@ impl StealthAccount {
         }
 
         self.register_cached_stealth_outpoints();
+        if let Err(err) = self.flush_pending_ephemeral_keys().await {
+            log_warn!("Failed to flush pending stealth keys after unlock: {}", err);
+        }
 
         Ok(())
     }
@@ -371,6 +469,11 @@ impl StealthAccount {
         let mut keys = self.unlocked_keys.write().await;
         // Keys will be zeroized on drop via UnlockedStealthKeys::drop()
         *keys = None;
+        if let Err(err) = self.flush_pending_ephemeral_keys().await {
+            log_warn!("Failed to flush pending stealth keys before lock: {}", err);
+        }
+        let mut cached = self.wallet_secret_cache.write().await;
+        *cached = None;
     }
 
     /// Returns true if the account is currently unlocked
@@ -418,32 +521,67 @@ impl StealthAccount {
         }
     }
 
-    fn decode_hex_array<const N: usize>(value: &str) -> Option<[u8; N]> {
-        if value.len() != N * 2 {
-            return None;
+    async fn flush_pending_ephemeral_keys(&self) -> Result<()> {
+        {
+            let pending = self.pending_ephemeral_persist.lock().await;
+            if !pending.is_dirty() {
+                return Ok(());
+            }
         }
-        let mut buffer = [0u8; N];
-        hex_decode(value.as_bytes(), buffer.as_mut_slice()).ok()?;
-        Some(buffer)
+
+        let secret = { self.wallet_secret_cache.read().await.clone() };
+        let wallet_folder = match self.wallet().store().location() {
+            Ok(StorageDescriptor::Internal(path)) => Some(path),
+            _ => None,
+        };
+        let network_id = self.wallet().network_id().ok();
+
+        {
+            let mut pending = self.pending_ephemeral_persist.lock().await;
+            pending.try_flush(secret.as_ref(), wallet_folder.as_deref(), network_id, &self.ephemeral_keys).await?;
+        }
+
+        Ok(())
     }
 
-    fn stealth_output_to_entry(info: &RpcStealthOutputInfo, block_daa_score: u64) -> Option<RpcUtxosByAddressesEntry> {
-        const EPHEMERAL_KEY_LEN: usize = 33;
-        const DESTINATION_KEY_LEN: usize = 32;
+    async fn note_pending_ephemeral_key(&self, outpoint: TransactionOutpoint) {
+        {
+            let mut pending = self.pending_ephemeral_persist.lock().await;
+            pending.mark_dirty(outpoint);
+        }
 
-        let ephemeral = Self::decode_hex_array::<EPHEMERAL_KEY_LEN>(&info.ephemeral_pubkey)?;
-        let destination = Self::decode_hex_array::<DESTINATION_KEY_LEN>(&info.destination_pubkey)?;
+        if let Err(err) = self.flush_pending_ephemeral_keys().await {
+            let pending_len = {
+                let pending = self.pending_ephemeral_persist.lock().await;
+                pending.len()
+            };
+            log_warn!("Stealth key persistence deferred ({} pending entries): {}", pending_len, err);
+        }
+    }
 
-        let mut script_bytes = [0u8; EPHEMERAL_OUTPUT_SIZE];
-        script_bytes[..EPHEMERAL_KEY_LEN].copy_from_slice(&ephemeral);
-        script_bytes[EPHEMERAL_KEY_LEN] = info.view_tag;
-        script_bytes[EPHEMERAL_KEY_LEN + 1..].copy_from_slice(&destination);
+    fn fallback_progress_event(account_id: AccountId, processed_blocks: u64, last_daa_score: u64, claimed: u64) -> Events {
+        Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed }
+    }
 
-        let script_public_key = ScriptPublicKey::new(STEALTH_SCRIPT_VERSION, ScriptVec::from_slice(&script_bytes));
-        let outpoint = RpcTransactionOutpoint { transaction_id: info.transaction_id, index: info.output_index };
-        let utxo_entry = RpcUtxoEntry::new(info.amount, script_public_key, block_daa_score, info.is_coinbase);
+    fn should_emit_fallback_progress(processed_blocks: usize, elapsed_secs_since_last_emit: u64) -> bool {
+        processed_blocks > 0
+            && (processed_blocks % FALLBACK_PROGRESS_REPORT_INTERVAL == 0
+                || elapsed_secs_since_last_emit >= FALLBACK_PROGRESS_REPORT_INTERVAL_SECS)
+    }
 
-        Some(RpcUtxosByAddressesEntry { address: None, outpoint, utxo_entry })
+    async fn emit_fallback_progress(&self, processed_blocks: u64, last_daa_score: u64, claimed: u64) {
+        log_info!(
+            "Stealth fallback progress for {}: processed {} blocks (daa {}), claimed {} UTXOs",
+            self.id().short(),
+            processed_blocks,
+            last_daa_score,
+            claimed
+        );
+
+        let event = Self::fallback_progress_event(*self.id(), processed_blocks, last_daa_score, claimed);
+        if let Err(err) = self.wallet().notify(event).await {
+            log_warn!("Failed to emit stealth fallback progress: {}", err);
+        }
     }
 
     fn stealth_entry_from_transaction_output(
@@ -452,54 +590,60 @@ impl StealthAccount {
         output: &kaspa_rpc_core::RpcTransactionOutput,
         block_daa_score: u64,
         is_coinbase: bool,
-    ) -> Option<RpcUtxosByAddressesEntry> {
+    ) -> Option<(TransactionOutpoint, RpcUtxoEntry)> {
         if output.script_public_key.version() != STEALTH_SCRIPT_VERSION {
             return None;
         }
 
-        let ephemeral_output = extract_stealth_output(&output.script_public_key).ok()?;
-        let info = RpcStealthOutputInfo::new(
-            tx_id,
-            output_index,
-            ephemeral_output.view_tag,
-            hex_string(&ephemeral_output.ephemeral_pubkey.serialize()),
-            hex_string(&ephemeral_output.destination_pubkey.serialize()),
-            output.value,
-            is_coinbase,
-        );
+        // Ensure script encodes a valid stealth payload before accepting it.
+        extract_stealth_output(&output.script_public_key).ok()?;
 
-        Self::stealth_output_to_entry(&info, block_daa_score)
+        let outpoint = TransactionOutpoint::new(tx_id, output_index);
+        let utxo_entry = RpcUtxoEntry::new(output.value, output.script_public_key.clone(), block_daa_score, is_coinbase);
+
+        Some((outpoint, utxo_entry))
     }
 
-    fn collect_live_stealth_utxos(block: &RpcBlock, live_entries: &mut HashMap<RpcTransactionOutpoint, RpcUtxosByAddressesEntry>) {
+    fn resolve_transaction_id(tx: &kaspa_rpc_core::RpcTransaction, tx_index: usize) -> Option<RpcTransactionId> {
+        if let Some(verbose) = tx.verbose_data.as_ref() {
+            return Some(verbose.transaction_id);
+        }
+
+        match Transaction::try_from(tx.clone()) {
+            Ok(cons_tx) => Some(cons_tx.id()),
+            Err(err) => {
+                log_warn!("Stealth fallback: failed to derive transaction id for tx index {} (error: {})", tx_index, err);
+                None
+            }
+        }
+    }
+
+    fn collect_live_stealth_utxos(block: &RpcBlock) -> Vec<(TransactionOutpoint, RpcUtxoEntry)> {
         let block_daa_score = block.header.daa_score;
-        let verbose = block.verbose_data.as_ref();
+        let mut live_entries: HashMap<TransactionOutpoint, RpcUtxoEntry> = HashMap::new();
 
         for (tx_index, tx) in block.transactions.iter().enumerate() {
-            let tx_id = tx
-                .verbose_data
-                .as_ref()
-                .map(|data| data.transaction_id)
-                .or_else(|| verbose.and_then(|data| data.transaction_ids.get(tx_index).copied()));
-
-            let Some(tx_id) = tx_id else {
+            let Some(tx_id) = Self::resolve_transaction_id(tx, tx_index) else {
                 continue;
             };
 
             let is_coinbase = tx.subnetwork_id == subnets::SUBNETWORK_ID_COINBASE;
 
             for (output_index, output) in tx.outputs.iter().enumerate() {
-                if let Some(entry) =
+                if let Some((outpoint, utxo_entry)) =
                     Self::stealth_entry_from_transaction_output(tx_id, output_index as u32, output, block_daa_score, is_coinbase)
                 {
-                    live_entries.insert(entry.outpoint, entry);
+                    live_entries.insert(outpoint, utxo_entry);
                 }
             }
 
             for input in tx.inputs.iter() {
-                live_entries.remove(&input.previous_outpoint);
+                let spent: TransactionOutpoint = input.previous_outpoint.into();
+                live_entries.remove(&spent);
             }
         }
+
+        live_entries.into_iter().collect()
     }
 
     async fn process_potential_entry(
@@ -536,7 +680,12 @@ impl StealthAccount {
                 Ok(r) => r,
                 Err(e) => {
                     let err_str = e.to_string();
-                    if err_str.contains("not yet supported over gRPC") || err_str.contains("not supported") {
+                    if err_str.contains("not yet supported over gRPC")
+                        || err_str.contains("not supported")
+                        || err_str.contains("utxo index")
+                        || err_str.contains("utxoindex")
+                        || err_str.contains("Method unavailable")
+                    {
                         return Ok(false);
                     }
                     return Err(Error::Custom(format!("RPC error during stealth scan: {}", err_str)));
@@ -577,12 +726,26 @@ impl StealthAccount {
         let mut seen_hashes = HashSet::new();
         let mut updated_contexts: Vec<UtxoContext> = Vec::new();
         let mut total_claimed = 0usize;
-        let mut live_entries: HashMap<RpcTransactionOutpoint, RpcUtxosByAddressesEntry> = HashMap::new();
-        let min_daa_score = self.creation_daa_score.unwrap_or(0);
         let mut encountered_full_blocks = false;
         let mut header_only_encountered = false;
+        let mut header_only_before_first_full = false;
+        let mut earliest_header_daa: Option<u64> = None;
+        let creation_daa_score = self.creation_daa_score.unwrap_or(0);
+        let lookback_daa = fallback_scan_lookback_daa();
+        let reference_daa = if creation_daa_score == 0 { current_daa_score } else { creation_daa_score };
+        let min_daa_score = Some(reference_daa).map(|score| score.saturating_sub(lookback_daa)).filter(|score| *score > 0);
+        log_info!(
+            "Stealth fallback scanning with lookback DAA {} (creation_daa_score={}, current_daa_score={}, min_daa_score={:?})",
+            lookback_daa,
+            creation_daa_score,
+            current_daa_score,
+            min_daa_score
+        );
+        let mut processed_blocks = 0usize;
+        let mut last_processed_daa_score = 0u64;
+        let mut last_progress_emit = Instant::now();
 
-        loop {
+        'outer: loop {
             let response =
                 rpc.get_blocks(cursor, true, true).await.map_err(|e| Error::Custom(format!("GetBlocks RPC error: {}", e)))?;
 
@@ -602,26 +765,52 @@ impl StealthAccount {
 
                 processed_new = true;
                 if let Some(block) = response.blocks.get(idx) {
-                    if block.header.daa_score < min_daa_score {
-                        continue;
-                    }
-
                     if block.transactions.is_empty() {
                         header_only_encountered = true;
+                        if !encountered_full_blocks {
+                            header_only_before_first_full = true;
+                            earliest_header_daa = Some(block.header.daa_score);
+                        }
                         log_warn!(
-                            "Skipping header-only block {} during stealth fallback (node likely pruned before DAA {})",
-                            hash,
-                            min_daa_score
+                            "Skipping header-only block {} during stealth fallback (node likely pruned before needed history)",
+                            hash
                         );
                         continue;
                     }
+
+                    if let Some(min_daa) = min_daa_score {
+                        if block.header.daa_score < min_daa {
+                            continue;
+                        }
+                    }
+
                     encountered_full_blocks = true;
-                    Self::collect_live_stealth_utxos(block, &mut live_entries);
+                    last_processed_daa_score = block.header.daa_score;
+                    processed_blocks += 1;
+                    let live_outputs = Self::collect_live_stealth_utxos(block);
+                    if !live_outputs.is_empty() {
+                        log_info!(
+                            "Stealth fallback: block {} (daa {}) yielded {} stealth candidates",
+                            hash,
+                            block.header.daa_score,
+                            live_outputs.len()
+                        );
+                    }
+                    for (outpoint, utxo_entry) in live_outputs {
+                        let rpc_entry = RpcUtxosByAddressesEntry { address: None, outpoint: outpoint.into(), utxo_entry };
+                        if self.process_potential_entry(&rpc_entry, &mut updated_contexts, current_daa_score).await? {
+                            total_claimed += 1;
+                        }
+                    }
+                    if Self::should_emit_fallback_progress(processed_blocks, last_progress_emit.elapsed().as_secs()) {
+                        self.emit_fallback_progress(processed_blocks as u64, last_processed_daa_score, total_claimed as u64).await;
+                        last_progress_emit = Instant::now();
+                    }
                 }
             }
 
             if !processed_new {
-                break;
+                break 'outer;
             }
 
             cursor = response.block_hashes.last().cloned();
@@ -631,16 +820,27 @@ impl StealthAccount {
         }
 
         if !encountered_full_blocks && header_only_encountered {
-            return Err(Error::Custom(format!(
-                "Stealth block replay fallback requires a node with block bodies at or after DAA {}",
-                min_daa_score
-            )));
+            return Err(Error::Custom(
+                "Stealth block replay fallback requires a node with historical block bodies (current node appears pruned)".into(),
+            ));
+        }
+        if header_only_before_first_full && total_claimed == 0 {
+            if let Some(header_daa) = earliest_header_daa {
+                if creation_daa_score > 0 && creation_daa_score < header_daa {
+                    return Err(Error::Custom(
+                        "Stealth fallback detected missing historical block bodies before account creation; please use archival node"
+                            .into(),
+                    ));
+                }
+            }
+            return Err(Error::Custom(
+                "Stealth fallback detected missing historical block bodies before available data (node pruned too aggressively)"
+                    .into(),
+            ));
         }
 
-        for entry in live_entries.into_values() {
-            if self.process_potential_entry(&entry, &mut updated_contexts, current_daa_score).await? {
-                total_claimed += 1;
-            }
+        if processed_blocks > 0 {
+            self.emit_fallback_progress(processed_blocks as u64, last_processed_daa_score, total_claimed as u64).await;
         }
 
         for context in updated_contexts.iter() {
@@ -701,7 +901,7 @@ impl StealthAccount {
         &self,
         tx_id: kaspa_consensus_core::tx::TransactionId,
         pending: &PendingStealthChange,
-        wallet_secret: &Secret,
+        _wallet_secret: &Secret,
     ) -> Result<()> {
         let outpoint = TransactionOutpoint::new(tx_id, pending.output_index as u32);
 
@@ -719,13 +919,7 @@ impl StealthAccount {
         // Register in UtxoProcessor's outpoint index
         self.wallet().utxo_processor().register_stealth_outpoint(outpoint, *self.id());
 
-        // Save to storage
-        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.wallet().store().location() {
-            if let Ok(network_id) = self.wallet().network_id() {
-                let _ = self.ephemeral_keys.save_to_storage(&wallet_folder, network_id, wallet_secret).await;
-            }
-        }
-
+        self.note_pending_ephemeral_key(outpoint).await;
         Ok(())
     }
 }
@@ -942,10 +1136,13 @@ impl Account for StealthAccount {
         let rpc = self.wallet().rpc_api();
 
         // Get current DAA score for maturity calculation
-        let current_daa_score = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
+        let mut current_daa_score = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
 
         // Check server capabilities (used for logging / diagnostics)
         let server_info = rpc.get_server_info().await.map_err(|e| Error::Custom(e.to_string()))?;
+        if current_daa_score == 0 {
+            current_daa_score = server_info.virtual_daa_score;
+        }
 
         if self.scan_via_utxoindex(&rpc, current_daa_score).await? {
             return Ok(());
@@ -984,6 +1181,7 @@ impl StealthUtxoHandler for StealthAccount {
                     return None;
                 }
                 self.wallet().utxo_processor().register_stealth_outpoint(outpoint, *self.id());
+                self.note_pending_ephemeral_key(outpoint).await;
 
                 Some(Account::utxo_context(self).clone())
             }
@@ -1063,12 +1261,18 @@ impl StealthChangeCreator for StealthChangeCreatorImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::deterministic::AccountId;
+    use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStore};
+    use kaspa_consensus_core::network::{NetworkId, NetworkType};
     use kaspa_consensus_core::subnets;
     use kaspa_hashes::Hash;
     use kaspa_rpc_core::{RpcBlock, RpcHeader, RpcTransaction, RpcTransactionInput, RpcTransactionOutput, RpcTransactionVerboseData};
     use kaspa_stealth::create_stealth_output;
     use kaspa_txscript::pay_to_stealth;
+    use kaspa_wallet_keys::secret::Secret;
     use rand::{rngs::StdRng, SeedableRng};
+    #[cfg(not(target_arch = "wasm32"))]
+    use tempfile::tempdir;
 
     fn sample_header(hash_byte: u8, daa_score: u64) -> RpcHeader {
         RpcHeader {
@@ -1124,16 +1328,6 @@ mod tests {
         let script_public_key = pay_to_stealth(&ephemeral_output);
         let tx_id = Hash::from_bytes([1u8; 32]);
         let outpoint = RpcTransactionOutpoint { transaction_id: tx_id, index: 0 };
-        let info = RpcStealthOutputInfo::new(
-            tx_id,
-            0,
-            ephemeral_output.view_tag,
-            hex_string(&ephemeral_output.ephemeral_pubkey.serialize()),
-            hex_string(&ephemeral_output.destination_pubkey.serialize()),
-            amount,
-            true,
-        );
-        let _ = StealthAccount::stealth_output_to_entry(&info, 5).expect("entry");
         (RpcTransactionOutput { value: amount, script_public_key, verbose_data: None }, outpoint)
     }
 
@@ -1158,6 +1352,11 @@ mod tests {
         let block = RpcBlock { header: sample_header(9, 5), transactions, verbose_data: None };
 
         (block, expected_outpoint)
+    }
+
+    fn test_account_id(suffix: &str) -> AccountId {
+        let hex = format!("cafe0000000000000000000000000000000000000000000000000000{}", suffix);
+        AccountId::from_hex(&hex).unwrap()
     }
 
     #[test]
@@ -1212,49 +1411,9 @@ mod tests {
     }
 
     #[test]
-    fn test_stealth_output_to_entry_builds_valid_script() {
-        use kaspa_hashes::Hash;
-
-        let tx_id = Hash::from_bytes([7u8; 32]);
-        let info = RpcStealthOutputInfo {
-            transaction_id: tx_id,
-            output_index: 3,
-            view_tag: 0xAA,
-            ephemeral_pubkey: format!("02{}", "11".repeat(32)),
-            destination_pubkey: "22".repeat(32),
-            amount: 12345,
-            is_coinbase: true,
-        };
-
-        let entry = StealthAccount::stealth_output_to_entry(&info, 99).expect("entry");
-        assert_eq!(entry.outpoint.transaction_id, tx_id);
-        assert_eq!(entry.outpoint.index, 3);
-        assert_eq!(entry.utxo_entry.block_daa_score, 99);
-        assert!(entry.utxo_entry.is_coinbase);
-        assert_eq!(entry.utxo_entry.script_public_key.version(), STEALTH_SCRIPT_VERSION);
-        assert_eq!(entry.utxo_entry.script_public_key.script().len(), EPHEMERAL_OUTPUT_SIZE);
-    }
-
-    #[test]
-    fn test_stealth_output_to_entry_rejects_invalid_hex() {
-        let bad_info = RpcStealthOutputInfo {
-            transaction_id: Hash::from_bytes([0u8; 32]),
-            output_index: 0,
-            view_tag: 0,
-            ephemeral_pubkey: "00".to_string(), // invalid length
-            destination_pubkey: "00".repeat(32),
-            amount: 0,
-            is_coinbase: false,
-        };
-
-        assert!(StealthAccount::stealth_output_to_entry(&bad_info, 0).is_none());
-    }
-
-    #[test]
     fn test_collect_live_stealth_utxos_filters_spent_outputs() {
         let (block, _) = build_block(true);
-        let mut live_entries = HashMap::new();
-        StealthAccount::collect_live_stealth_utxos(&block, &mut live_entries);
+        let live_entries = StealthAccount::collect_live_stealth_utxos(&block);
         assert!(live_entries.is_empty());
     }
 
@@ -1273,9 +1432,71 @@ mod tests {
             true
         )
         .is_some());
-        let mut live_entries = HashMap::new();
-        StealthAccount::collect_live_stealth_utxos(&block, &mut live_entries);
+        let live_entries = StealthAccount::collect_live_stealth_utxos(&block);
         assert_eq!(live_entries.len(), 1);
-        assert!(live_entries.contains_key(&expected_outpoint));
+        let expected: TransactionOutpoint = expected_outpoint.into();
+        assert!(live_entries.iter().any(|(outpoint, _)| *outpoint == expected));
+    }
+
+    #[test]
+    fn test_fallback_progress_event_contents() {
+        let account_id = test_account_id("00000001");
+        let processed_blocks = 321;
+        let last_daa = 654;
+        let claimed = 7;
+
+        let event = StealthAccount::fallback_progress_event(account_id, processed_blocks, last_daa, claimed);
+        match event {
+            Events::StealthScanProgress { account_id: id, processed_blocks: blocks, last_daa_score: daa, claimed: total } => {
+                assert_eq!(id, account_id);
+                assert_eq!(blocks, processed_blocks);
+                assert_eq!(daa, last_daa);
+                assert_eq!(total, claimed);
+            }
+            other => panic!("Unexpected event variant: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_should_emit_fallback_progress_by_interval() {
+        assert!(!StealthAccount::should_emit_fallback_progress(FALLBACK_PROGRESS_REPORT_INTERVAL - 1, 0));
+        assert!(StealthAccount::should_emit_fallback_progress(FALLBACK_PROGRESS_REPORT_INTERVAL, 0));
+    }
+
+    #[test]
+    fn test_should_emit_fallback_progress_by_timer() {
+        assert!(!StealthAccount::should_emit_fallback_progress(1, FALLBACK_PROGRESS_REPORT_INTERVAL_SECS - 1));
+        assert!(StealthAccount::should_emit_fallback_progress(1, FALLBACK_PROGRESS_REPORT_INTERVAL_SECS));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn test_pending_ephemeral_keys_flush_after_unlock() {
+        let account_id = test_account_id("00000005");
+        let store = EphemeralKeyStore::new(account_id);
+        let mut pending = PendingEphemeralPersist::new();
+
+        let tx_id = Hash::from_bytes([9u8; 32]);
+        let outpoint = TransactionOutpoint::new(tx_id, 0);
+        let key_data = EphemeralKeyData::new_xonly([1u8; 32], [2u8; 32], [3u8; 32]);
+        store.store(outpoint, key_data, 123).await.unwrap();
+
+        pending.mark_dirty(outpoint);
+
+        let temp_dir = tempdir().unwrap();
+        let wallet_folder = temp_dir.path().to_string_lossy().to_string();
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 17);
+
+        let err = pending.try_flush(None, Some(wallet_folder.as_str()), Some(network_id), &store).await.unwrap_err();
+        assert!(matches!(err, Error::Custom(_)));
+        assert!(pending.is_dirty());
+        assert_eq!(pending.len(), 1);
+
+        let wallet_secret = Secret::from("stealth-persist-test");
+        pending.try_flush(Some(&wallet_secret), Some(wallet_folder.as_str()), Some(network_id), &store).await.unwrap();
+
+        assert!(!pending.is_dirty());
+        assert_eq!(pending.len(), 0);
+        assert!(EphemeralKeyStore::storage_exists(&wallet_folder, &account_id, network_id).await.unwrap());
     }
 }
