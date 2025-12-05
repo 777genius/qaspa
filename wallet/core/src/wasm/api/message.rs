@@ -925,6 +925,102 @@ try_from! ( _args: PrvKeyDataGetResponse, IPrvKeyDataGetResponse, {
 // ---
 
 declare! {
+    IMasterAnchorListRequest,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterAnchorListRequest { }
+    "#,
+}
+
+try_from!(_args: IMasterAnchorListRequest, MasterAnchorListRequest, {
+    Ok(MasterAnchorListRequest {})
+});
+
+declare! {
+    IMasterAnchorInfo,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterAnchorInfo {
+        id: HexString;
+        anchor?: HexString;
+        level?: number;
+        isEncrypted: boolean;
+    }
+    "#,
+}
+
+declare! {
+    IMasterAnchorListResponse,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterAnchorListResponse {
+        anchors: IMasterAnchorInfo[];
+    }
+    "#,
+}
+
+try_from!(args: MasterAnchorListResponse, IMasterAnchorListResponse, {
+    Ok(to_value(&args)?.into())
+});
+
+// ---
+
+declare! {
+    IMasterSeedExportRequest,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterSeedExportRequest {
+        walletSecret: string;
+        masterId: HexString;
+        confirmation: string;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterSeedExportRequest, MasterSeedExportRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let master_id = args.get_prv_key_data_id("masterId")?;
+    let confirmation = args.get_string("confirmation")?;
+    Ok(MasterSeedExportRequest { wallet_secret, master_id, confirmation })
+});
+
+declare! {
+    IMasterSeedExportResponse,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterSeedExportResponse {
+        seedHex: HexString;
+    }
+    "#,
+}
+
+try_from!(args: MasterSeedExportResponse, IMasterSeedExportResponse, {
+    Ok(to_value(&args)?.into())
+});
+
+// ---
+
+declare! {
     IAccountsEnumerateRequest,
     r#"
     /**
@@ -2508,3 +2604,46 @@ try_from! ( args: AccountsCommitRevealManualResponse, IAccountsCommitRevealManua
 });
 
 // ---
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use js_sys::{Object, Reflect};
+    use wasm_bindgen::{JsCast, JsValue};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn master_anchor_list_response_js_roundtrip() {
+        let anchors = vec![
+            MasterAnchorInfo { id: PrvKeyDataId::new(1), anchor: Some("deadbeef".into()), level: Some(2), is_encrypted: false },
+            MasterAnchorInfo { id: PrvKeyDataId::new(2), anchor: None, level: None, is_encrypted: true },
+        ];
+
+        let rust_response = MasterAnchorListResponse { anchors: anchors.clone() };
+        let js_response = IMasterAnchorListResponse::try_from(rust_response).expect("js response");
+        let decoded: MasterAnchorListResponse = from_value(JsValue::from(js_response)).expect("roundtrip decode");
+
+        assert_eq!(decoded.anchors, anchors);
+    }
+
+    #[wasm_bindgen_test]
+    fn master_seed_export_js_bridge() {
+        let master_id = PrvKeyDataId::new(42);
+        let request_object = Object::new();
+        Reflect::set(&request_object, &JsValue::from_str("walletSecret"), &JsValue::from_str("secret")).expect("walletSecret");
+        Reflect::set(&request_object, &JsValue::from_str("masterId"), &JsValue::from_str(&master_id.to_hex())).expect("masterId");
+        Reflect::set(&request_object, &JsValue::from_str("confirmation"), &JsValue::from_str("EXPORT")).expect("confirmation");
+
+        let js_request: IMasterSeedExportRequest = request_object.unchecked_into();
+        let rust_request = MasterSeedExportRequest::try_from(js_request).expect("request parse");
+
+        assert_eq!(rust_request.master_id, master_id);
+        assert_eq!(rust_request.confirmation, "EXPORT");
+        assert_eq!(rust_request.wallet_secret.as_str().unwrap(), "secret");
+
+        let js_response =
+            IMasterSeedExportResponse::try_from(MasterSeedExportResponse { seed_hex: "cafebabe".into() }).expect("response");
+        let seed_hex_value = Reflect::get(&JsValue::from(js_response), &JsValue::from_str("seedHex")).expect("seedHex");
+        assert_eq!(seed_hex_value.as_string().unwrap(), "cafebabe");
+    }
+}

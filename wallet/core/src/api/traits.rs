@@ -276,6 +276,26 @@ pub trait WalletApi: Send + Sync + AnySync {
     /// Obtain a private key data using [`PrvKeyDataId`].
     async fn prv_key_data_get_call(self: Arc<Self>, request: PrvKeyDataGetRequest) -> Result<PrvKeyDataGetResponse>;
 
+    /// Wrapper around [`master_anchor_list_call()`](Self::master_anchor_list_call)
+    async fn master_anchor_list(self: Arc<Self>) -> Result<Vec<MasterAnchorInfo>> {
+        Ok(self.master_anchor_list_call(MasterAnchorListRequest {}).await?.anchors)
+    }
+    /// List stored MLDSA master anchors.
+    async fn master_anchor_list_call(self: Arc<Self>, request: MasterAnchorListRequest) -> Result<MasterAnchorListResponse>;
+
+    /// Wrapper around [`master_seed_export_call()`](Self::master_seed_export_call)
+    async fn master_seed_export(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        master_id: PrvKeyDataId,
+        confirmation: String,
+    ) -> Result<String> {
+        let request = MasterSeedExportRequest { wallet_secret, master_id, confirmation };
+        Ok(self.master_seed_export_call(request).await?.seed_hex)
+    }
+    /// Export MLDSA master seed (requires confirmation phrase).
+    async fn master_seed_export_call(self: Arc<Self>, request: MasterSeedExportRequest) -> Result<MasterSeedExportResponse>;
+
     /// Wrapper around [`accounts_rename_call()`](Self::accounts_rename_call)
     async fn accounts_rename(self: Arc<Self>, account_id: AccountId, name: Option<String>, wallet_secret: Secret) -> Result<()> {
         self.accounts_rename_call(AccountsRenameRequest { account_id, name, wallet_secret }).await?;

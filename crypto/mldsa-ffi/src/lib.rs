@@ -21,7 +21,10 @@
 //! }
 //! ```
 
-use kaspa_mldsa::{verify, MlDsaLevel, PublicKey as MlDsaPublicKey, SecretKey as MlDsaSecretKey, Signature as MlDsaSignature};
+use kaspa_mldsa::{
+    derive_keypair_from_seed, verify, MlDsaLevel, PublicKey as MlDsaPublicKey, SecretKey as MlDsaSecretKey,
+    Signature as MlDsaSignature, MASTER_SEED_LEN,
+};
 use std::ptr;
 use std::slice;
 
@@ -174,6 +177,12 @@ pub extern "C" fn kaspa_mldsa_get_level5_signature_size() -> usize {
     4627
 }
 
+/// Returns the required length of a master seed (bytes)
+#[no_mangle]
+pub extern "C" fn kaspa_mldsa_master_seed_len() -> usize {
+    MASTER_SEED_LEN
+}
+
 /// Generate ML-DSA keypair
 ///
 /// # Safety
@@ -213,6 +222,55 @@ pub unsafe extern "C" fn kaspa_mldsa_generate_keypair(
     }
 
     // Copy to output buffers
+    unsafe {
+        ptr::copy_nonoverlapping(keypair.public_key.as_bytes().as_ptr(), public_key_out, keypair.public_key.len());
+        ptr::copy_nonoverlapping(keypair.secret_key.as_bytes().as_ptr(), secret_key_out, keypair.secret_key.len());
+    }
+
+    true
+}
+
+/// Derive a deterministic ML-DSA keypair from a master seed
+///
+/// # Safety
+///
+/// `seed` must point to a buffer of length `kaspa_mldsa_master_seed_len()`.
+/// Output buffers must be large enough for the requested level.
+#[no_mangle]
+pub unsafe extern "C" fn kaspa_mldsa_derive_keypair(
+    seed: *const u8,
+    seed_len: usize,
+    level: u8,
+    public_key_out: *mut u8,
+    public_key_len: usize,
+    secret_key_out: *mut u8,
+    secret_key_len: usize,
+) -> bool {
+    if seed.is_null() || public_key_out.is_null() || secret_key_out.is_null() {
+        return false;
+    }
+
+    if seed_len != MASTER_SEED_LEN {
+        return false;
+    }
+
+    let seed_slice = unsafe { slice::from_raw_parts(seed, seed_len) };
+    let mldsa_level = match level {
+        2 => MlDsaLevel::Level2,
+        3 => MlDsaLevel::Level3,
+        5 => MlDsaLevel::Level5,
+        _ => return false,
+    };
+
+    let keypair = match derive_keypair_from_seed(seed_slice, mldsa_level) {
+        Ok(kp) => kp,
+        Err(_) => return false,
+    };
+
+    if public_key_len < keypair.public_key.len() || secret_key_len < keypair.secret_key.len() {
+        return false;
+    }
+
     unsafe {
         ptr::copy_nonoverlapping(keypair.public_key.as_bytes().as_ptr(), public_key_out, keypair.public_key.len());
         ptr::copy_nonoverlapping(keypair.secret_key.as_bytes().as_ptr(), secret_key_out, keypair.secret_key.len());
@@ -394,5 +452,40 @@ mod tests {
         };
 
         assert!(verify_result, "Signature should verify");
+    }
+
+    #[test]
+    fn test_derive_keypair_deterministic() {
+        let mut seed_bytes = [0u8; MASTER_SEED_LEN];
+        for (i, byte) in seed_bytes.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+
+        let mut pk = vec![0u8; 1312];
+        let mut sk = vec![0u8; 2560];
+
+        let result = unsafe {
+            kaspa_mldsa_derive_keypair(seed_bytes.as_ptr(), seed_bytes.len(), 2, pk.as_mut_ptr(), pk.len(), sk.as_mut_ptr(), sk.len())
+        };
+
+        assert!(result);
+
+        // Derive again and compare
+        let mut pk2 = vec![0u8; 1312];
+        let mut sk2 = vec![0u8; 2560];
+        let result2 = unsafe {
+            kaspa_mldsa_derive_keypair(
+                seed_bytes.as_ptr(),
+                seed_bytes.len(),
+                2,
+                pk2.as_mut_ptr(),
+                pk2.len(),
+                sk2.as_mut_ptr(),
+                sk2.len(),
+            )
+        };
+        assert!(result2);
+        assert_eq!(pk, pk2);
+        assert_eq!(sk, sk2);
     }
 }

@@ -20,6 +20,10 @@ pub enum MlDsaError {
     #[error("Invalid signature length: expected {expected}, got {actual}")]
     InvalidSignatureLength { expected: usize, actual: usize },
 
+    /// Invalid master seed length
+    #[error("Invalid master seed length: expected {expected}, got {actual}")]
+    InvalidMasterSeedLength { expected: usize, actual: usize },
+
     /// Signature verification failed
     #[error("Signature verification failed")]
     VerificationFailed,
@@ -43,6 +47,10 @@ pub enum MlDsaError {
     /// Deserialization error
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
+
+    /// Master key derivation failure
+    #[error("Master key derivation failed: {0}")]
+    MasterDerivationFailed(String),
 }
 
 #[cfg(test)]
@@ -96,12 +104,14 @@ mod tests {
             MlDsaError::InvalidPublicKeyLength { expected: 100, actual: 50 },
             MlDsaError::InvalidSecretKeyLength { expected: 200, actual: 100 },
             MlDsaError::InvalidSignatureLength { expected: 300, actual: 150 },
+            MlDsaError::InvalidMasterSeedLength { expected: 48, actual: 10 },
             MlDsaError::VerificationFailed,
             MlDsaError::InvalidSecurityLevel(7),
             MlDsaError::KeyGenerationFailed("test".into()),
             MlDsaError::SigningFailed("test".into()),
             MlDsaError::SerializationError("test".into()),
             MlDsaError::DeserializationError("test".into()),
+            MlDsaError::MasterDerivationFailed("test".into()),
         ];
 
         for err in errors {

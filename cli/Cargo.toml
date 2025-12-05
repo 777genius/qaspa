@@ -48,6 +48,7 @@ kaspa-wallet-pskt.workspace = true
 kaspa-wrpc-client.workspace = true
 nw-sys.workspace = true
 pad.workspace = true
+qrcode = "0.12"
 regex.workspace = true
 separator.workspace = true
 serde_json.workspace = true
@@ -63,6 +64,7 @@ workflow-nw.workspace = true
 workflow-store.workspace = true
 workflow-terminal.workspace = true
 workflow-wasm.workspace = true
+zeroize.workspace = true
 
 [dependencies.web-sys]
 workspace = true

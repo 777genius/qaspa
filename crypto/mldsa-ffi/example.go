@@ -97,6 +97,39 @@ func GenerateKeypair(level MLDSALevel) (publicKey, secretKey []byte, err error) 
 	return publicKey, secretKey, nil
 }
 
+// MasterSeedLen returns expected seed length
+func MasterSeedLen() int {
+	return int(C.kaspa_mldsa_master_seed_len())
+}
+
+// DeriveKeypair deterministically derives a keypair from a master seed
+func DeriveKeypair(seed []byte, level MLDSALevel) (publicKey, secretKey []byte, err error) {
+	if len(seed) != MasterSeedLen() {
+		return nil, nil, fmt.Errorf("seed must be %d bytes", MasterSeedLen())
+	}
+
+	pkSize := GetPublicKeySize(level)
+	skSize := GetSecretKeySize(level)
+	publicKey = make([]byte, pkSize)
+	secretKey = make([]byte, skSize)
+
+	result := C.kaspa_mldsa_derive_keypair(
+		(*C.uint8_t)(unsafe.Pointer(&seed[0])),
+		C.size_t(len(seed)),
+		C.uint8_t(level),
+		(*C.uint8_t)(unsafe.Pointer(&publicKey[0])),
+		C.size_t(pkSize),
+		(*C.uint8_t)(unsafe.Pointer(&secretKey[0])),
+		C.size_t(skSize),
+	)
+
+	if !bool(result) {
+		return nil, nil, fmt.Errorf("deterministic derivation failed")
+	}
+
+	return publicKey, secretKey, nil
+}
+
 // Sign creates an ML-DSA signature
 func Sign(message, secretKey []byte) ([]byte, error) {
 	if len(message) == 0 || len(secretKey) == 0 {
@@ -217,4 +250,23 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("🎉 All tests passed!")
+
+	// Demonstrate deterministic derivation
+	fmt.Println()
+	fmt.Println("Deterministic derivation demo...")
+	seed := make([]byte, MasterSeedLen())
+	for i := range seed {
+		seed[i] = byte(i)
+	}
+	dpkt, dsk, err := DeriveKeypair(seed, Level2)
+	if err != nil {
+		panic(err)
+	}
+	dpkt2, dsk2, err := DeriveKeypair(seed, Level2)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("  Derived PK hash: %s\n", hex.EncodeToString(dpkt[:32]))
+	fmt.Printf("  Derived SK hash: %s\n", hex.EncodeToString(dsk[:32]))
+	fmt.Printf("  Deterministic: %v\n", (hex.EncodeToString(dpkt) == hex.EncodeToString(dpkt2)) && (hex.EncodeToString(dsk) == hex.EncodeToString(dsk2)))
 }

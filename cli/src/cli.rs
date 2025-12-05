@@ -366,6 +366,25 @@ impl KaspaCli {
                                 Events::WalletClose => {
                                     this.term().refresh_prompt();
                                 },
+                                Events::MasterAnchorCreated { info } => {
+                                    if !this.is_mutted() {
+                                        let anchor = info.anchor.clone().unwrap_or_else(|| "n/a".to_string());
+                                        let level = info.level.map(|lvl| format!("L{lvl}")).unwrap_or_else(|| "-".to_string());
+                                        let cipher_state = if info.is_encrypted { "sealed" } else { "plain" };
+                                        tprintln!(
+                                            this,
+                                            "{NOTIFY} MLDSA master {} registered (anchor {anchor}, level {level}, {cipher_state})",
+                                            info.id
+                                        );
+                                    }
+                                },
+                                Events::MasterSeedExported { master_id, .. } => {
+                                    let warning = style("WARNING").yellow().to_string();
+                                    tprintln!(
+                                        this,
+                                        "{NOTIFY} {warning}: MLDSA master {master_id} seed has been exported."
+                                    );
+                                },
                                 Events::PrvKeyDataCreate { .. } => { },
                                 Events::AccountDeactivation { .. } => { },
                                 Events::AccountActivation { .. } => {

@@ -177,6 +177,7 @@ impl Interface for Proxy {
         self.inner()?.cache().user_hint = user_hint;
         Ok(())
     }
+
 }
 
 #[async_trait]

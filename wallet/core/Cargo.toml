@@ -65,6 +65,7 @@ kaspa-core.workspace = true
 kaspa-hashes.workspace = true
 kaspa-metrics-core.workspace = true
 kaspa-notify.workspace = true
+kaspa-mldsa.workspace = true
 kaspa-rpc-core.workspace = true
 kaspa-stealth.workspace = true
 kaspa-txscript-errors.workspace = true
@@ -124,6 +125,7 @@ home.workspace = true
 hex-literal.workspace = true
 serde_repr.workspace = true
 tempfile.workspace = true
+wasm-bindgen-test.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio.workspace = true

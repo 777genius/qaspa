@@ -15,25 +15,34 @@ pub mod maps;
 pub use args::*;
 
 use crate::account::ScanNotifier;
+use crate::api::message::MasterAnchorInfo;
 use crate::api::traits::WalletApi;
 use crate::compat::gen1::decrypt_mnemonic;
+use crate::encryption::encrypt_xchacha20poly1305;
 use crate::error::Error::Custom;
 use crate::factory::try_load_account;
 use crate::imports::*;
 use crate::settings::{SettingsStore, WalletSettings};
 use crate::storage::interface::{OpenArgs, StorageDescriptor};
+use crate::storage::keydata::MlDsaMasterPayload;
 use crate::storage::local::interface::LocalStore;
 use crate::storage::local::Storage;
+use crate::storage::{self, PrvKeyDataId, PrvKeyDataInfo};
 use crate::wallet::keydata::PrvKeyDataVariantKind;
 use crate::wallet::maps::ActiveAccountMap;
+use futures::TryStreamExt;
 use kaspa_bip32::{ExtendedKey, Language, Mnemonic, Prefix as KeyPrefix, WordCount};
+use kaspa_mldsa::MlDsaLevel;
 use kaspa_notify::{
     listener::ListenerId,
     scope::{Scope, VirtualDaaScoreChangedScope},
 };
+use kaspa_utils::hex::ToHex;
+use kaspa_wallet_keys::keypair_mldsa::MlDsaKeypair;
 use kaspa_wallet_keys::xpub::NetworkTaggedXpub;
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use workflow_core::task::spawn;
+use zeroize::Zeroizing;
 
 pub type WalletGuard<'l> = AsyncMutexGuard<'l, ()>;
 
@@ -351,6 +360,10 @@ impl Wallet {
         let was_open = self.is_open();
 
         self.store().open(wallet_secret, OpenArgs::new(filename)).await?;
+        let masters_created = self.hydrate_mldsa_masters(wallet_secret).await?;
+        if masters_created {
+            self.inner.store.commit(wallet_secret).await?;
+        }
         let wallet_name = self.store().descriptor();
 
         if was_open {
@@ -1084,17 +1097,17 @@ impl Wallet {
         prv_key_data_create_args: PrvKeyDataCreateArgs,
     ) -> Result<PrvKeyDataId> {
         let PrvKeyDataCreateArgs { secret, payment_secret, kind, name } = prv_key_data_create_args;
-        let prv_key_data = match kind {
+        let (prv_key_data, master_mnemonic) = match kind {
             PrvKeyDataVariantKind::Mnemonic => {
                 let mnemonic = Mnemonic::new(secret.as_str()?, Language::default())?;
-                PrvKeyData::try_from_mnemonic(mnemonic.clone(), payment_secret.as_ref(), self.store().encryption_kind()?, name)?
+                let prv =
+                    PrvKeyData::try_from_mnemonic(mnemonic.clone(), payment_secret.as_ref(), self.store().encryption_kind()?, name)?;
+                (prv, Some(mnemonic))
             }
             PrvKeyDataVariantKind::SecretKey => {
-                //let secp = secp256k1::Secp256k1::new();
                 let secret_key = secp256k1::SecretKey::from_slice(secret.as_ref())?;
-                //let public_key = secret_key.public_key(&secp);
-                //log_info!("public_key: {}", public_key.to_string());
-                PrvKeyData::try_from_secret_key(secret_key, payment_secret.as_ref(), self.store().encryption_kind()?, name)?
+                let prv = PrvKeyData::try_from_secret_key(secret_key, payment_secret.as_ref(), self.store().encryption_kind()?, name)?;
+                (prv, None)
             }
             _ => {
                 return Err(Error::Custom("Invalid prv key data kind, supported types are Mnemonic and SecretKey".to_string()));
@@ -1105,6 +1118,13 @@ impl Wallet {
         let prv_key_data_id = prv_key_data.id;
         let prv_key_data_store = self.inner.store.as_prv_key_data_store()?;
         prv_key_data_store.store(wallet_secret, prv_key_data).await?;
+
+        if let Some(mnemonic) = master_mnemonic.as_ref() {
+            if let Err(err) = self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, mnemonic, payment_secret.as_ref()).await {
+                log_error!("Unable to derive MLDSA master seed: {err}");
+            }
+        }
+
         self.inner.store.commit(wallet_secret).await?;
 
         self.notify(Events::PrvKeyDataCreate { prv_key_data_info }).await?;
@@ -1139,6 +1159,12 @@ impl Wallet {
 
         let prv_key_data_store = self.inner.store.as_prv_key_data_store()?;
         prv_key_data_store.store(wallet_secret, prv_key_data).await?;
+
+        if self.is_mldsa_master_enabled() {
+            if let Err(err) = self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, &mnemonic, payment_secret.as_ref()).await {
+                log_error!("Unable to derive MLDSA master seed: {err}");
+            }
+        }
         self.inner.store.clone().as_account_store()?.store_single(&account.to_storage()?, None).await?;
         self.inner.store.commit(wallet_secret).await?;
 
@@ -1684,6 +1710,7 @@ impl Wallet {
         mnemonic: Mnemonic,
         account_kind: AccountKind,
     ) -> Result<Arc<dyn Account>> {
+        let mnemonic_for_master = mnemonic.clone();
         let prv_key_data = storage::PrvKeyData::try_new_from_mnemonic(mnemonic, payment_secret, self.store().encryption_kind()?)?;
         let prv_key_data_store = self.store().as_prv_key_data_store()?;
         if prv_key_data_store.load_key_data(wallet_secret, &prv_key_data.id).await?.is_some() {
@@ -1709,6 +1736,10 @@ impl Wallet {
         self.inner.store.batch().await?;
         account_store.store_single(&account.to_storage()?, None).await?;
         self.inner.store.flush(wallet_secret).await?;
+
+        if let Err(err) = self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, &mnemonic_for_master, payment_secret).await {
+            log_error!("Unable to derive MLDSA master seed: {err}");
+        }
 
         if let Ok(legacy_account) = account.clone().as_legacy_account() {
             self.legacy_accounts().insert(account.clone());
@@ -1799,6 +1830,7 @@ impl Wallet {
         let prv_key_data_store = self.store().as_prv_key_data_store()?;
 
         for (mnemonic, payment_secret) in mnemonics_secrets {
+            let mnemonic_for_master = mnemonic.clone();
             let prv_key_data =
                 storage::PrvKeyData::try_new_from_mnemonic(mnemonic, payment_secret.as_ref(), self.store().encryption_kind()?)?;
             if prv_key_data_store.load_key_data(wallet_secret, &prv_key_data.id).await?.is_some() {
@@ -1808,6 +1840,12 @@ impl Wallet {
             generated_xpubs.push(xpub_key.to_string(Some(KeyPrefix::XPUB)));
             prv_key_data_ids.push(prv_key_data.id);
             prv_key_data_store.store(wallet_secret, prv_key_data).await?;
+
+            if let Err(err) =
+                self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, &mnemonic_for_master, payment_secret.as_ref()).await
+            {
+                log_error!("Unable to derive MLDSA master seed: {err}");
+            }
         }
 
         generated_xpubs.sort_unstable();
@@ -1842,6 +1880,136 @@ impl Wallet {
         account.clone().start().await?;
 
         Ok(account)
+    }
+
+    fn is_mldsa_master_enabled(&self) -> bool {
+        self.settings().get(WalletSettings::EnableMldsaMaster).unwrap_or(true)
+    }
+
+    async fn maybe_create_mldsa_master_from_mnemonic(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        mnemonic: &Mnemonic,
+        payment_secret: Option<&Secret>,
+    ) -> Result<Option<PrvKeyDataId>> {
+        if !self.is_mldsa_master_enabled() {
+            return Ok(None);
+        }
+
+        let passphrase = payment_secret
+            .map(|secret| std::str::from_utf8(secret.as_ref()).map(|s| s.to_owned()))
+            .transpose()
+            .map_err(|_| Error::Custom("Invalid BIP39 passphrase encoding".to_string()))?;
+        let passphrase_ref = passphrase.as_deref().unwrap_or("");
+        let seed = mnemonic.to_seed(passphrase_ref);
+        let mut root_seed = Zeroizing::new(seed.as_bytes().to_vec());
+        drop(seed);
+
+        let level = MlDsaLevel::Level2;
+        let (_pair, anchor, master_seed) = MlDsaKeypair::from_bip39_root_seed(root_seed.as_slice(), 0, level)
+            .map_err(|err| Error::Custom(format!("Failed to derive MLDSA master seed: {err}")))?;
+        root_seed.zeroize();
+
+        let mut master_seed_bytes = master_seed.into_bytes();
+        let seed_cipher = encrypt_xchacha20poly1305(&master_seed_bytes, wallet_secret)?;
+        master_seed_bytes.zeroize();
+
+        let mut master_prv = storage::PrvKeyData::try_new_mldsa_master(MlDsaMasterPayload::new(level, anchor, seed_cipher))?;
+        master_prv.name = Some(format!("mldsa-master:{}", anchor));
+        let master_id = master_prv.id;
+
+        let prv_key_data_store = self.inner.store.as_prv_key_data_store()?;
+        if prv_key_data_store.load_key_data(wallet_secret, &master_id).await?.is_some() {
+            return Ok(None);
+        }
+
+        let master_info = PrvKeyDataInfo::from(master_prv.as_ref());
+        let anchor_hex = master_info.anchor.as_ref().map(|anchor| anchor.to_vec().to_hex());
+        let anchor_info = MasterAnchorInfo {
+            id: master_info.id,
+            anchor: anchor_hex,
+            level: master_info.level,
+            is_encrypted: master_info.is_encrypted,
+        };
+        prv_key_data_store.store(wallet_secret, master_prv).await?;
+        self.notify(Events::PrvKeyDataCreate { prv_key_data_info: master_info }).await?;
+        self.notify(Events::MasterAnchorCreated { info: anchor_info }).await?;
+
+        Ok(Some(master_id))
+    }
+
+    async fn hydrate_mldsa_masters(self: &Arc<Self>, wallet_secret: &Secret) -> Result<bool> {
+        if !self.is_mldsa_master_enabled() {
+            return Ok(false);
+        }
+
+        let prv_key_data_store = self.inner.store.as_prv_key_data_store()?;
+        let prv_key_data_list = prv_key_data_store.iter().await?.try_collect::<Vec<_>>().await?;
+        let mut created = false;
+
+        for info in prv_key_data_list {
+            if info.kind == PrvKeyDataVariantKind::MlDsaMaster {
+                continue;
+            }
+
+            let Some(prv_key_data) = prv_key_data_store.load_key_data(wallet_secret, &info.id).await? else {
+                continue;
+            };
+
+            if prv_key_data.is_payload_encrypted() {
+                continue;
+            }
+
+            if let Some(mnemonic) = prv_key_data.as_mnemonic(None)? {
+                match self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, &mnemonic, None).await {
+                    Ok(Some(_)) => created = true,
+                    Ok(None) => (),
+                    Err(err) => log_error!("Unable to derive MLDSA master seed: {err}"),
+                }
+            }
+        }
+
+        Ok(created)
+    }
+
+    pub async fn master_anchor_infos(&self) -> Result<Vec<MasterAnchorInfo>> {
+        let store = self.inner.store.as_prv_key_data_store()?;
+        let infos = store.iter().await?.try_collect::<Vec<_>>().await?;
+        let anchors = infos
+            .into_iter()
+            .filter(|info| info.kind == PrvKeyDataVariantKind::MlDsaMaster)
+            .map(|info| MasterAnchorInfo {
+                id: info.id,
+                anchor: info.anchor.map(|anchor| anchor.to_vec().to_hex()),
+                level: info.level,
+                is_encrypted: info.is_encrypted,
+            })
+            .collect();
+        Ok(anchors)
+    }
+
+    pub async fn export_master_seed_hex(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        master_id: &PrvKeyDataId,
+        confirmation: &str,
+    ) -> Result<String> {
+        if confirmation.trim().to_uppercase() != "EXPORT" {
+            return Err(Error::Custom("Master seed export requires typing 'EXPORT' as confirmation".to_string()));
+        }
+
+        let store = self.inner.store.as_prv_key_data_store()?;
+        let master = store.load_key_data(wallet_secret, master_id).await?.ok_or(Error::PrivateKeyNotFound(*master_id))?;
+        let payload =
+            master.as_mldsa_master(None)?.ok_or_else(|| Error::Custom("Specified key is not an MLDSA master record".to_string()))?;
+
+        let anchor_hex = payload.anchor().to_string();
+        let seed = payload.decrypt_seed(wallet_secret)?;
+        let seed_hex = seed.to_hex();
+
+        self.notify(Events::MasterSeedExported { master_id: *master_id, anchor: Some(anchor_hex) }).await?;
+
+        Ok(seed_hex)
     }
 
     async fn rename(&self, title: Option<String>, filename: Option<String>, wallet_secret: &Secret) -> Result<()> {

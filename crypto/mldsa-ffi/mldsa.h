@@ -84,6 +84,29 @@ bool kaspa_mldsa_generate_keypair(
 );
 
 /**
+ * @brief Deterministically derive a keypair from a master seed (48 bytes)
+ *
+ * @param seed Pointer to master seed bytes (must be 48 bytes)
+ * @param seed_len Length of the seed buffer
+ * @param level Security level (2, 3, or 5)
+ * @param public_key_out Output buffer for public key
+ * @param public_key_len Size of public_key_out buffer
+ * @param secret_key_out Output buffer for secret key
+ * @param secret_key_len Size of secret_key_out buffer
+ *
+ * @return true on success, false otherwise
+ */
+bool kaspa_mldsa_derive_keypair(
+    const uint8_t* seed,
+    size_t seed_len,
+    uint8_t level,
+    uint8_t* public_key_out,
+    size_t public_key_len,
+    uint8_t* secret_key_out,
+    size_t secret_key_len
+);
+
+/**
  * @brief Sign a message with ML-DSA
  *
  * @param message Pointer to message bytes (must not be NULL)
@@ -165,6 +188,12 @@ size_t kaspa_mldsa_get_level5_signature_size(void);
  * @return 4896 bytes
  */
 size_t kaspa_mldsa_get_level5_secretkey_size(void);
+
+/**
+ * @brief Get the length of the master seed (bytes)
+ * @return 48 bytes
+ */
+size_t kaspa_mldsa_master_seed_len(void);
 
 #ifdef __cplusplus
 }

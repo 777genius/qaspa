@@ -1,13 +1,17 @@
+use crate::api::message::{MasterAnchorListResponse, MasterSeedExportRequest, MasterSeedExportResponse};
+use crate::api::traits::WalletApi;
 use crate::imports::*;
 use crate::storage::local::interface::LocalStore;
 use crate::storage::WalletDescriptor;
 use crate::wallet as native;
 use crate::wasm::api::extensions::WalletApiObjectExtension;
+use crate::wasm::api::message::{IMasterAnchorListResponse, IMasterSeedExportRequest, IMasterSeedExportResponse};
 use crate::wasm::notify::{WalletEventTarget, WalletNotificationCallback, WalletNotificationTypeOrCallback};
 use kaspa_consensus_core::network::NetworkIdT;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use kaspa_wasm_core::events::{get_event_targets, Sink};
 use kaspa_wrpc_wasm::{IConnectOptions, Resolver, RpcClient, RpcConfig, WrpcEncoding};
+use zeroize::Zeroizing;
 
 declare! {
     IWalletConfig,
@@ -352,6 +356,31 @@ impl Wallet {
         let response = Object::new();
         response.set("utxosFound", &JsValue::from_f64(utxos_found as f64))?;
         Ok(response.unchecked_into())
+    }
+
+    /// List stored MLDSA master anchors along with metadata.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "masterAnchors")]
+    pub async fn master_anchors(&self) -> Result<IMasterAnchorListResponse> {
+        let anchors = self.wallet().clone().master_anchor_list().await?;
+        let response = MasterAnchorListResponse { anchors };
+        IMasterAnchorListResponse::try_from(response)
+    }
+
+    /// Export the encrypted MLDSA master seed (requires wallet secret and confirmation phrase).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "exportMasterAnchor")]
+    pub async fn export_master_anchor(&self, request: IMasterSeedExportRequest) -> Result<IMasterSeedExportResponse> {
+        let request = MasterSeedExportRequest::try_from(request)?;
+        let MasterSeedExportRequest { wallet_secret, master_id, confirmation } = request;
+
+        let mut seed_hex =
+            Zeroizing::new(self.wallet().clone().export_master_seed_hex(&wallet_secret, &master_id, confirmation.trim()).await?);
+
+        let response = MasterSeedExportResponse { seed_hex: seed_hex.to_string() };
+        let result = IMasterSeedExportResponse::try_from(response)?;
+        seed_hex.zeroize();
+        Ok(result)
     }
 }
 

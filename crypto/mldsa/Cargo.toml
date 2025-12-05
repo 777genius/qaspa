@@ -27,6 +27,9 @@ serde = { workspace = true, features = ["derive"] }
 # Utilities
 thiserror.workspace = true
 hex.workspace = true
+hkdf.workspace = true
+sha3.workspace = true
+zeroize.workspace = true
 
 # Kaspa dependencies
 kaspa-hashes.workspace = true

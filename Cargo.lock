@@ -627,6 +627,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
+name = "bytemuck"
+version = "1.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fbdf580320f38b612e485521afda1ee26d10cc9884efaaa750d383e13e3c5f4"
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -765,6 +771,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "checked_int_cast"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17cc5e6b5ab06331c33589842070416baa137e8b0eb912b008cfd4a78ada7919"
+
+[[package]]
 name = "chrome-sys"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -894,6 +906,12 @@ name = "clap_lex"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
+
+[[package]]
+name = "color_quant"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
 name = "colorchoice"
@@ -1933,6 +1951,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hkdf"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b5f8eb2ad728638ea2c7d47a21db23b7b58a72ed6a38256b8a1849f15fbbdf7"
+dependencies = [
+ "hmac",
+]
+
+[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2200,6 +2227,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.23.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24ffcb7e7244a9bf19d35bf2883b9c080c4ced3c07a9895572178cdb8f13f6a1"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "color_quant",
+ "num-iter",
+ "num-rational 0.3.2",
+ "num-traits",
+]
+
+[[package]]
 name = "indexed_db_futures"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2458,6 +2499,7 @@ dependencies = [
  "kaspa-wrpc-client",
  "nw-sys",
  "pad",
+ "qrcode",
  "regex",
  "separator",
  "serde",
@@ -2475,6 +2517,7 @@ dependencies = [
  "workflow-store",
  "workflow-terminal",
  "workflow-wasm",
+ "zeroize",
 ]
 
 [[package]]
@@ -2985,14 +3028,17 @@ dependencies = [
  "criterion",
  "getrandom 0.2.15",
  "hex",
+ "hkdf",
  "kaspa-hashes",
  "ml-dsa",
  "rand 0.8.5",
  "rand_core 0.6.4",
  "serde",
  "serde_json",
+ "sha3 0.10.8",
  "signature",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
@@ -3453,7 +3499,12 @@ version = "1.0.1"
 dependencies = [
  "async-std",
  "async-trait",
+ "faster-hex",
  "kaspa-cli",
+ "kaspa-utils",
+ "kaspa-wallet-core",
+ "serde",
+ "serde_json",
  "tokio",
  "workflow-log",
  "workflow-terminal",
@@ -3512,6 +3563,7 @@ dependencies = [
  "kaspa-core",
  "kaspa-hashes",
  "kaspa-metrics-core",
+ "kaspa-mldsa",
  "kaspa-notify",
  "kaspa-rpc-core",
  "kaspa-stealth",
@@ -3545,6 +3597,7 @@ dependencies = [
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
  "web-sys",
  "workflow-core",
  "workflow-log",
@@ -3561,9 +3614,11 @@ name = "kaspa-wallet-keys"
 version = "1.0.1"
 dependencies = [
  "async-trait",
+ "blake2b_simd",
  "borsh",
  "downcast",
  "faster-hex",
+ "hkdf",
  "hmac",
  "js-sys",
  "kaspa-addresses",
@@ -3581,6 +3636,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "sha2",
+ "sha3 0.10.8",
  "thiserror",
  "tokio",
  "wasm-bindgen",
@@ -4432,7 +4488,7 @@ dependencies = [
  "num-complex",
  "num-integer",
  "num-iter",
- "num-rational",
+ "num-rational 0.4.2",
  "num-traits",
 ]
 
@@ -4475,6 +4531,17 @@ name = "num-iter"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1429034a0490724d0075ebb2bc9e875d6503c3cf69e235a8941aa757d83ef5bf"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
 dependencies = [
  "autocfg",
  "num-integer",
@@ -5007,6 +5074,16 @@ name = "puruspe"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3804877ffeba468c806c2ad9057bbbae92e4b2c410c2f108baaa0042f241fa4c"
+
+[[package]]
+name = "qrcode"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16d2f1455f3630c6e5107b4f2b94e74d76dea80736de0981fd27644216cff57f"
+dependencies = [
+ "checked_int_cast",
+ "image",
+]
 
 [[package]]
 name = "quick-error"

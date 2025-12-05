@@ -1,6 +1,7 @@
 use crate::imports::*;
 use crate::result::Result;
 use crate::storage::keydata;
+use kaspa_utils::hex::ToHex;
 
 /// @category Wallet SDK
 #[wasm_bindgen]
@@ -31,6 +32,21 @@ impl PrvKeyDataInfo {
     #[wasm_bindgen(getter, js_name = "isEncrypted")]
     pub fn is_encrypted(&self) -> JsValue {
         self.inner.is_encrypted.into()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        format!("{:?}", self.inner.kind)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn level(&self) -> JsValue {
+        self.inner.level.map(JsValue::from).unwrap_or(JsValue::UNDEFINED)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn anchor(&self) -> JsValue {
+        self.inner.anchor.map(|anchor| anchor.to_vec().to_hex()).map(JsValue::from).unwrap_or(JsValue::UNDEFINED)
     }
 
     #[wasm_bindgen(js_name = "setName")]

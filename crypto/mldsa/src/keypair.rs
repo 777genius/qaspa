@@ -174,27 +174,32 @@ impl MlDsaKeypair {
 /// assert_eq!(keypair.secret_key.len(), 2560);
 /// ```
 pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
-    use ml_dsa::KeyGen;
-
     // Generate 32 bytes of randomness using getrandom
     let mut seed = [0u8; 32];
     getrandom::getrandom(&mut seed).expect("failed to generate random seed");
+    keypair_from_seed_bytes(&seed, level)
+}
+
+pub(crate) fn keypair_from_seed_bytes(seed: &[u8; 32], level: MlDsaLevel) -> MlDsaKeypair {
+    use ml_dsa::KeyGen;
+
+    let seed_bytes = *seed;
 
     let (pk, sk) = match level {
         MlDsaLevel::Level2 => {
-            let keypair = ml_dsa::MlDsa44::from_seed((&seed).into());
+            let keypair = ml_dsa::MlDsa44::from_seed((&seed_bytes).into());
             let pk_encoded = keypair.verifying_key().encode();
             let sk_encoded = keypair.signing_key().encode();
             (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
         MlDsaLevel::Level3 => {
-            let keypair = ml_dsa::MlDsa65::from_seed((&seed).into());
+            let keypair = ml_dsa::MlDsa65::from_seed((&seed_bytes).into());
             let pk_encoded = keypair.verifying_key().encode();
             let sk_encoded = keypair.signing_key().encode();
             (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
         MlDsaLevel::Level5 => {
-            let keypair = ml_dsa::MlDsa87::from_seed((&seed).into());
+            let keypair = ml_dsa::MlDsa87::from_seed((&seed_bytes).into());
             let pk_encoded = keypair.verifying_key().encode();
             let sk_encoded = keypair.signing_key().encode();
             (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())

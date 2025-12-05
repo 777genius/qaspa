@@ -18,8 +18,21 @@
 //! ```
 //!
 
+use crate::{
+    error::Error,
+    imports::{Deserialize, Serialize},
+};
+use blake2b_simd::Params as Blake2bParams;
+use hkdf::Hkdf;
 use kaspa_addresses::{Address, Prefix, Version};
-use kaspa_mldsa::{generate_keypair, MlDsaKeypair as CryptoMlDsaKeypair, MlDsaLevel, PublicKey, SecretKey};
+use kaspa_mldsa::{
+    derive_keypair_from_master_seed, generate_keypair, MasterSeed, MlDsaKeypair as CryptoMlDsaKeypair, MlDsaLevel, PublicKey,
+    SecretKey, MASTER_SEED_LEN,
+};
+use kaspa_utils::hex::ToHex;
+use sha3::Sha3_512;
+use std::fmt;
+use zeroize::Zeroize;
 
 /// ML-DSA (post-quantum) keypair for wallet use.
 ///
@@ -40,6 +53,37 @@ pub struct MlDsaKeypair {
     keypair: CryptoMlDsaKeypair,
     /// Security level (affects key and signature sizes)
     level: MlDsaLevel,
+}
+
+const ANCHOR_DOMAIN: &[u8] = b"mldsa-anchor";
+const BIP39_TO_MASTER_SALT: &[u8] = b"kaspa.bip39->mldsa";
+const BIP39_TO_MASTER_INFO_PREFIX: &[u8] = b"kaspa.account";
+pub const BIP39_ROOT_SEED_LEN: usize = 64;
+
+/// 32-byte hash of the master public key used as on-chain anchor.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MasterAnchor([u8; 32]);
+
+impl MasterAnchor {
+    pub const fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+impl fmt::Debug for MasterAnchor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "MasterAnchor({})", self.0.to_vec().to_hex())
+    }
+}
+
+impl fmt::Display for MasterAnchor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.to_vec().to_hex())
+    }
 }
 
 impl MlDsaKeypair {
@@ -118,6 +162,59 @@ impl MlDsaKeypair {
     pub fn signature_size(&self) -> usize {
         self.level.signature_len()
     }
+
+    /// Returns the anchor hash for this keypair (BLAKE2b-256 with domain separation).
+    pub fn anchor(&self) -> MasterAnchor {
+        MasterAnchor::new(compute_anchor(self.public_key()))
+    }
+
+    /// Build a keypair from a deterministic master seed returned by [`kaspa_mldsa`].
+    pub fn from_master_seed(master_seed: &MasterSeed, level: MlDsaLevel) -> Result<(Self, MasterAnchor), Error> {
+        let crypto = derive_keypair_from_master_seed(master_seed, level)?;
+        let wallet_pair = Self::new(crypto, level);
+        let anchor = wallet_pair.anchor();
+        Ok((wallet_pair, anchor))
+    }
+
+    /// Derive a master seed from the BIP39 root seed + account index, then return the MLDSA keypair and anchor.
+    pub fn from_bip39_root_seed(
+        root_seed: &[u8],
+        account_index: u32,
+        level: MlDsaLevel,
+    ) -> Result<(Self, MasterAnchor, MasterSeed), Error> {
+        let master_seed = derive_master_seed_from_bip39(root_seed, account_index)?;
+        let (pair, anchor) = Self::from_master_seed(&master_seed, level)?;
+        Ok((pair, anchor, master_seed))
+    }
+}
+
+fn compute_anchor(public_key: &PublicKey) -> [u8; 32] {
+    let mut state = Blake2bParams::new().hash_length(32).to_state();
+    state.update(ANCHOR_DOMAIN);
+    state.update(public_key.as_bytes());
+    let hash = state.finalize();
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(hash.as_bytes());
+    bytes
+}
+
+fn derive_master_seed_from_bip39(root_seed: &[u8], account_index: u32) -> Result<MasterSeed, Error> {
+    if root_seed.len() != BIP39_ROOT_SEED_LEN {
+        return Err(Error::custom(format!("invalid root seed length: expected {}, got {}", BIP39_ROOT_SEED_LEN, root_seed.len())));
+    }
+
+    let mut info = [0u8; BIP39_TO_MASTER_INFO_PREFIX.len() + 4];
+    info[..BIP39_TO_MASTER_INFO_PREFIX.len()].copy_from_slice(BIP39_TO_MASTER_INFO_PREFIX);
+    info[BIP39_TO_MASTER_INFO_PREFIX.len()..].copy_from_slice(&account_index.to_be_bytes());
+
+    let mut okm = [0u8; MASTER_SEED_LEN];
+    Hkdf::<Sha3_512>::new(Some(BIP39_TO_MASTER_SALT), root_seed)
+        .expand(&info, &mut okm)
+        .map_err(|_| Error::custom("failed to derive MLDSA master seed"))?;
+
+    let master_seed = MasterSeed::from_slice(&okm).map_err(|err| Error::custom(format!("invalid MLDSA master seed: {err}")));
+    okm.zeroize();
+    master_seed
 }
 
 impl std::fmt::Display for MlDsaKeypair {
@@ -201,5 +298,23 @@ mod tests {
         assert!(display_str.contains("2560")); // seckey size
 
         println!("✓ Display format: {}", display_str);
+    }
+
+    #[test]
+    fn test_from_bip39_root_seed_deterministic() {
+        let mut root_seed = [0u8; BIP39_ROOT_SEED_LEN];
+        for (i, byte) in root_seed.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+
+        let (kp1, anchor1, seed1) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 0, MlDsaLevel::Level2).unwrap();
+        let (kp2, anchor2, seed2) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 0, MlDsaLevel::Level2).unwrap();
+
+        assert_eq!(kp1.public_key(), kp2.public_key());
+        assert_eq!(kp1.secret_key().as_bytes(), kp2.secret_key().as_bytes());
+        assert_eq!(anchor1, anchor2);
+        assert_eq!(seed1.as_bytes(), seed2.as_bytes());
+
+        assert_eq!(anchor1.to_string(), "0a816d89bab3d6c2b3ea27151efbcbf8224afe628a1120892ba7068a3264a3f5");
     }
 }

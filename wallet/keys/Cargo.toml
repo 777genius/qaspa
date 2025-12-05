@@ -37,12 +37,15 @@ serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
 serde.workspace = true
 sha2.workspace = true
+sha3.workspace = true
 thiserror.workspace = true
 wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 workflow-core.workspace = true
 workflow-wasm.workspace = true
 zeroize.workspace = true
+blake2b_simd.workspace = true
+hkdf.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio.workspace = true

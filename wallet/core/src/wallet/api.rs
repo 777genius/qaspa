@@ -249,6 +249,17 @@ impl WalletApi for super::Wallet {
         Ok(PrvKeyDataGetResponse { prv_key_data })
     }
 
+    async fn master_anchor_list_call(self: Arc<Self>, _request: MasterAnchorListRequest) -> Result<MasterAnchorListResponse> {
+        let anchors = self.master_anchor_infos().await?;
+        Ok(MasterAnchorListResponse { anchors })
+    }
+
+    async fn master_seed_export_call(self: Arc<Self>, request: MasterSeedExportRequest) -> Result<MasterSeedExportResponse> {
+        let MasterSeedExportRequest { wallet_secret, master_id, confirmation } = request;
+        let seed_hex = self.export_master_seed_hex(&wallet_secret, &master_id, &confirmation).await?;
+        Ok(MasterSeedExportResponse { seed_hex })
+    }
+
     async fn accounts_rename_call(self: Arc<Self>, request: AccountsRenameRequest) -> Result<AccountsRenameResponse> {
         let AccountsRenameRequest { account_id, name, wallet_secret } = request;
 

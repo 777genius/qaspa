@@ -4,9 +4,9 @@
 //! produced by the client RPC and the Kaspa node monitoring subsystems.
 //!
 
-use crate::api::message::FeeRateEstimateBucket;
+use crate::api::message::{FeeRateEstimateBucket, MasterAnchorInfo};
 use crate::imports::*;
-use crate::storage::{Hint, PrvKeyDataInfo, StorageDescriptor, TransactionRecord, WalletDescriptor};
+use crate::storage::{Hint, PrvKeyDataId, PrvKeyDataInfo, StorageDescriptor, TransactionRecord, WalletDescriptor};
 use crate::utxo::context::UtxoContextId;
 use transaction::TransactionRecordNotification;
 
@@ -118,6 +118,15 @@ pub enum Events {
     #[serde(rename_all = "camelCase")]
     PrvKeyDataCreate {
         prv_key_data_info: PrvKeyDataInfo,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAnchorCreated {
+        info: MasterAnchorInfo,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterSeedExported {
+        master_id: PrvKeyDataId,
+        anchor: Option<String>,
     },
     /// Accounts have been activated
     AccountActivation {
@@ -289,6 +298,8 @@ pub enum EventKind {
     WalletError,
     WalletClose,
     PrvKeyDataCreate,
+    MasterAnchorCreated,
+    MasterSeedExported,
     AccountActivation,
     AccountDeactivation,
     AccountSelection,
@@ -328,6 +339,8 @@ impl From<&Events> for EventKind {
             Events::WalletError { .. } => EventKind::WalletError,
             Events::WalletClose => EventKind::WalletClose,
             Events::PrvKeyDataCreate { .. } => EventKind::PrvKeyDataCreate,
+            Events::MasterAnchorCreated { .. } => EventKind::MasterAnchorCreated,
+            Events::MasterSeedExported { .. } => EventKind::MasterSeedExported,
             Events::AccountActivation { .. } => EventKind::AccountActivation,
             Events::AccountDeactivation { .. } => EventKind::AccountDeactivation,
             Events::AccountSelection { .. } => EventKind::AccountSelection,
@@ -370,6 +383,8 @@ impl FromStr for EventKind {
             "wallet-error" => Ok(EventKind::WalletError),
             "wallet-close" => Ok(EventKind::WalletClose),
             "prv-key-data-create" => Ok(EventKind::PrvKeyDataCreate),
+            "master-anchor-created" => Ok(EventKind::MasterAnchorCreated),
+            "master-seed-exported" => Ok(EventKind::MasterSeedExported),
             "account-activation" => Ok(EventKind::AccountActivation),
             "account-deactivation" => Ok(EventKind::AccountDeactivation),
             "account-selection" => Ok(EventKind::AccountSelection),
@@ -420,6 +435,8 @@ impl std::fmt::Display for EventKind {
             EventKind::WalletError => "wallet-error",
             EventKind::WalletClose => "wallet-close",
             EventKind::PrvKeyDataCreate => "prv-key-data-create",
+            EventKind::MasterAnchorCreated => "master-anchor-created",
+            EventKind::MasterSeedExported => "master-seed-exported",
             EventKind::AccountActivation => "account-activation",
             EventKind::AccountDeactivation => "account-deactivation",
             EventKind::AccountSelection => "account-selection",

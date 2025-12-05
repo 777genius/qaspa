@@ -3,6 +3,7 @@
 //!
 
 use kaspa_bip32::Error as BIP32Error;
+use kaspa_mldsa::MlDsaError;
 use std::sync::PoisonError;
 use thiserror::Error;
 use wasm_bindgen::JsValue;
@@ -21,6 +22,9 @@ pub enum Error {
 
     #[error("Decoding -> {0}")]
     Decode(#[from] core::array::TryFromSliceError),
+
+    #[error("ML-DSA -> {0}")]
+    MlDsa(#[from] MlDsaError),
 
     #[error("Poison error -> {0}")]
     PoisonError(String),

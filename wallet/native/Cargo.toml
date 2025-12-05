@@ -9,6 +9,10 @@ include.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+name = "kaspa_wallet_native"
+crate-type = ["rlib", "cdylib"]
+
 [features]
 default = []
 
@@ -16,9 +20,14 @@ default = []
 async-std.workspace = true
 async-trait.workspace = true
 kaspa-cli.workspace = true
+kaspa-wallet-core.workspace = true
+kaspa-utils.workspace = true
 tokio.workspace = true
 workflow-log.workspace = true
 workflow-terminal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+faster-hex.workspace = true
 
 [lints]
 workspace = true

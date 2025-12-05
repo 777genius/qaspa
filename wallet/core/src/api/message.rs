@@ -315,6 +315,41 @@ pub struct PrvKeyDataGetResponse {
     pub prv_key_data: Option<PrvKeyData>,
 }
 
+/// @category Wallet API
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterAnchorInfo {
+    pub id: PrvKeyDataId,
+    pub anchor: Option<String>,
+    pub level: Option<u8>,
+    #[serde(rename = "isEncrypted")]
+    pub is_encrypted: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterAnchorListRequest {}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterAnchorListResponse {
+    pub anchors: Vec<MasterAnchorInfo>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterSeedExportRequest {
+    pub wallet_secret: Secret,
+    pub master_id: PrvKeyDataId,
+    pub confirmation: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterSeedExportResponse {
+    pub seed_hex: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountsEnumerateRequest {}
