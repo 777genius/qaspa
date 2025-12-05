@@ -119,3 +119,16 @@
   ```
 - **CI**: `cargo check -p kaspa-wallet` гарантирует, что новый native crate и CLI собираются вместе.
 
+## 12. Master account runtime (Iteration 3)
+
+- Account kind `kaspa-mldsa-master` зарегистрирован в фабрике (`AccountKind::from_str("mldsa-master")`).
+- Payload v1 (`MldsaMasterAccountPayloadV1`): anchor, pubkey, level, created_at_daa, status (`Active/Rotated/Revoked`), delegations (зарезервировано).
+- Статусы и подпись:
+  - `MldsaMasterAccount::unlock_with_master_seed(seed, level)` проверяет anchor и кеширует ключ.
+  - `sign_message(domain, payload)` с domain separation (`anchor-export`, `delegation`, `custom:...`) и включением anchor в подписываемый префикс.
+  - `rotate_master_account(wallet_secret, account_id, level?, new_master_seed?)` обновляет anchor/pubkey, хранит новый seed cipher и эмитит `MasterAccountRotated`.
+- Wallet API / CLI / WASM:
+  - `create_account_mldsa_master`, `list_master_accounts`, `get_master_by_anchor`.
+  - `attach_stealth_to_master` / `detach_stealth_from_master` (stealth payload v1 содержит `master_anchor`, `delegation_id`).
+  - CLI: `account create mldsa-master`, `account attach-stealth`, `account detach-stealth`; события транслируются через notify.
+

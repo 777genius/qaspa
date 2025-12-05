@@ -5,7 +5,10 @@ use crate::storage::local::interface::LocalStore;
 use crate::storage::WalletDescriptor;
 use crate::wallet as native;
 use crate::wasm::api::extensions::WalletApiObjectExtension;
-use crate::wasm::api::message::{IMasterAnchorListResponse, IMasterSeedExportRequest, IMasterSeedExportResponse};
+use crate::wasm::api::message::{
+    IAttachStealthToMasterRequest, ICreateMasterAccountRequest, ICreateMasterAccountResponse, IDetachStealthFromMasterRequest,
+    IMasterAccountsListResponse, IMasterAnchorListResponse, IMasterSeedExportRequest, IMasterSeedExportResponse,
+};
 use crate::wasm::notify::{WalletEventTarget, WalletNotificationCallback, WalletNotificationTypeOrCallback};
 use kaspa_consensus_core::network::NetworkIdT;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
@@ -381,6 +384,61 @@ impl Wallet {
         let result = IMasterSeedExportResponse::try_from(response)?;
         seed_hex.zeroize();
         Ok(result)
+    }
+
+    /// Create MLDSA master account.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "createMasterAccount")]
+    pub async fn create_master_account(&self, request: ICreateMasterAccountRequest) -> Result<ICreateMasterAccountResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let prv_key_data_id = request.get_prv_key_data_id("prvKeyDataId")?;
+        let level = request.get_u8("level").unwrap_or(2);
+        let account_name = request.try_get_string("accountName")?;
+
+        let level = MlDsaLevel::from_u8(level).ok_or(Error::custom("invalid MLDSA level"))?;
+
+        let account = self.wallet().create_account_mldsa_master(&wallet_secret, prv_key_data_id, level, account_name).await?;
+
+        let descriptor = IAccountDescriptor::try_from(account.descriptor()?)?;
+        let response = Object::new();
+        response.set("accountDescriptor", &descriptor.into())?;
+        Ok(response.unchecked_into())
+    }
+
+    /// List master accounts.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "listMasterAccounts")]
+    pub async fn list_master_accounts(&self) -> Result<IMasterAccountsListResponse> {
+        let masters = self.wallet().list_master_accounts().await?;
+        IMasterAccountsListResponse::try_from(masters)
+    }
+
+    /// Attach stealth account to master.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "attachStealthToMaster")]
+    pub async fn attach_stealth_to_master(&self, request: IAttachStealthToMasterRequest) -> Result<JsValue> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let stealth_id = request.get_account_id("stealthId")?;
+        let master_id = request.get_account_id("masterId")?;
+        let guard = self.wallet().guard();
+        let guard = guard.lock().await;
+        self.wallet().attach_stealth_to_master(&wallet_secret, &stealth_id, &master_id, &guard).await?;
+        Ok(JsValue::UNDEFINED)
+    }
+
+    /// Detach stealth account from master.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "detachStealthFromMaster")]
+    pub async fn detach_stealth_from_master(&self, request: IDetachStealthFromMasterRequest) -> Result<JsValue> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let stealth_id = request.get_account_id("stealthId")?;
+        let guard = self.wallet().guard();
+        let guard = guard.lock().await;
+        self.wallet().detach_stealth_from_master(&wallet_secret, &stealth_id, &guard).await?;
+        Ok(JsValue::UNDEFINED)
     }
 }
 

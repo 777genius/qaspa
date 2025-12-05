@@ -14,6 +14,7 @@ pub mod args;
 pub mod maps;
 pub use args::*;
 
+use crate::account::variants::mldsa_master::{MasterStatus, MldsaMasterAccount, MldsaMasterAccountPayloadV1};
 use crate::account::ScanNotifier;
 use crate::api::message::MasterAnchorInfo;
 use crate::api::traits::WalletApi;
@@ -32,13 +33,13 @@ use crate::wallet::keydata::PrvKeyDataVariantKind;
 use crate::wallet::maps::ActiveAccountMap;
 use futures::TryStreamExt;
 use kaspa_bip32::{ExtendedKey, Language, Mnemonic, Prefix as KeyPrefix, WordCount};
-use kaspa_mldsa::MlDsaLevel;
+use kaspa_mldsa::{MasterSeed, MlDsaLevel};
 use kaspa_notify::{
     listener::ListenerId,
     scope::{Scope, VirtualDaaScoreChangedScope},
 };
 use kaspa_utils::hex::ToHex;
-use kaspa_wallet_keys::keypair_mldsa::MlDsaKeypair;
+use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use kaspa_wallet_keys::xpub::NetworkTaggedXpub;
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
 use workflow_core::task::spawn;
@@ -97,6 +98,14 @@ impl<T: AsRef<[u8]>> MultisigWalletFileV1<'_, T> {
 #[derive(Clone)]
 pub enum WalletBusMessage {
     Discovery { record: TransactionRecord },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MasterAccountInfo {
+    pub account_id: AccountId,
+    pub anchor: [u8; 32],
+    pub level: u8,
+    pub status: MasterStatus,
 }
 
 /// Internal wallet state.
@@ -717,6 +726,9 @@ impl Wallet {
                 self.create_account_stealth(wallet_secret, prv_key_data_id, payment_secret.as_ref(), account_name, account_index)
                     .await?
             }
+            AccountCreateArgs::MldsaMaster { prv_key_data_id, level, account_name } => {
+                self.create_account_mldsa_master(wallet_secret, prv_key_data_id, level, account_name).await?
+            }
         };
 
         if notify {
@@ -1030,6 +1042,172 @@ impl Wallet {
         Ok(account)
     }
 
+    pub async fn create_account_mldsa_master(
+        self: &Arc<Wallet>,
+        wallet_secret: &Secret,
+        prv_key_data_id: PrvKeyDataId,
+        level: MlDsaLevel,
+        account_name: Option<String>,
+    ) -> Result<Arc<dyn Account>> {
+        let account_store = self.inner.store.clone().as_account_store()?;
+
+        let prv_key_data = self
+            .inner
+            .store
+            .as_prv_key_data_store()?
+            .load_key_data(wallet_secret, &prv_key_data_id)
+            .await?
+            .ok_or_else(|| Error::PrivateKeyNotFound(prv_key_data_id))?;
+
+        let payload = prv_key_data
+            .as_mldsa_master(None)?
+            .ok_or_else(|| Error::Custom("Specified key is not an MLDSA master record".to_string()))?;
+
+        let payload_level = payload.level().ok_or_else(|| Error::Custom("Invalid MLDSA level in stored payload".to_string()))?;
+        if payload_level != level {
+            return Err(Error::Custom("Requested MLDSA level does not match stored master payload".to_string()));
+        }
+
+        let master_seed =
+            MasterSeed::from_slice(&payload.decrypt_seed(wallet_secret)?).map_err(|err| Error::Custom(format!("{err}")))?;
+        let (pair, anchor) = MlDsaKeypair::from_master_seed(&master_seed, level)?;
+
+        let created_at_daa = self.current_daa_score();
+        let account: Arc<dyn Account> = Arc::new(
+            MldsaMasterAccount::try_new(
+                self,
+                account_name,
+                prv_key_data_id,
+                anchor,
+                pair.public_key_bytes().to_vec(),
+                level,
+                created_at_daa.unwrap_or_default(),
+                MasterStatus::Active,
+                vec![],
+            )
+            .await?,
+        );
+
+        if account_store.load_single(account.id()).await?.is_some() {
+            return Err(Error::AccountAlreadyExists(*account.id()));
+        }
+
+        self.inner.store.clone().as_account_store()?.store_single(&account.to_storage()?, None).await?;
+        self.inner.store.commit(wallet_secret).await?;
+        self.notify(Events::MasterAccountCreated { account_id: *account.id(), anchor: *anchor.as_bytes(), level: level as u8 })
+            .await?;
+
+        Ok(account)
+    }
+
+    pub async fn list_master_accounts(&self) -> Result<Vec<MasterAccountInfo>> {
+        let account_store = self.inner.store.clone().as_account_store()?;
+        let stored_accounts = account_store.iter(None).await?.try_collect::<Vec<_>>().await?;
+        let mut masters = vec![];
+
+        for (account_storage, _) in stored_accounts.into_iter() {
+            if account_storage.kind.as_ref() != MLDSA_MASTER_ACCOUNT_KIND {
+                continue;
+            }
+            let payload = MldsaMasterAccountPayloadV1::try_from_slice(account_storage.serialized.as_slice())?;
+            masters.push(MasterAccountInfo {
+                account_id: account_storage.id,
+                anchor: *payload.anchor.as_bytes(),
+                level: payload.level as u8,
+                status: payload.status.clone(),
+            });
+        }
+
+        Ok(masters)
+    }
+
+    pub async fn get_master_by_anchor(&self, anchor: &MasterAnchor) -> Result<Option<MasterAccountInfo>> {
+        let masters = self.list_master_accounts().await?;
+        Ok(masters.into_iter().find(|info| info.anchor == *anchor.as_bytes()))
+    }
+
+    pub async fn rotate_master_account(
+        self: &Arc<Wallet>,
+        wallet_secret: &Secret,
+        account_id: &AccountId,
+        new_level: Option<MlDsaLevel>,
+        new_master_seed: Option<MasterSeed>,
+    ) -> Result<()> {
+        use crate::encryption::encrypt_xchacha20poly1305;
+        use crate::storage::keydata::data::{MlDsaMasterPayload, PrvKeyDataPayload, PrvKeyDataVariant};
+        use crate::storage::keydata::PrvKeyData;
+
+        let account_store = self.inner.store.clone().as_account_store()?;
+        let (stored_account, _meta) = account_store.load_single(account_id).await?.ok_or(Error::AccountNotFound(*account_id))?;
+        if stored_account.kind.as_ref() != MLDSA_MASTER_ACCOUNT_KIND {
+            return Err(Error::InvalidAccountKind);
+        }
+
+        let mut account_payload = MldsaMasterAccountPayloadV1::try_from_slice(stored_account.serialized())?;
+        let old_anchor = *account_payload.anchor.as_bytes();
+        let level = new_level.unwrap_or(account_payload.level);
+
+        let master_id: PrvKeyDataId = stored_account.prv_key_data_ids.clone().try_into()?;
+        let prv_store = self.inner.store.as_prv_key_data_store()?;
+        let mut prv_key_data: PrvKeyData =
+            prv_store.load_key_data(wallet_secret, &master_id).await?.ok_or_else(|| Error::PrivateKeyNotFound(master_id))?;
+
+        let master_payload = prv_key_data
+            .as_mldsa_master(None)?
+            .ok_or_else(|| Error::Custom("Specified key is not an MLDSA master record".to_string()))?;
+
+        let master_seed = match new_master_seed {
+            Some(seed) => seed,
+            None => {
+                MasterSeed::from_slice(&master_payload.decrypt_seed(wallet_secret)?).map_err(|err| Error::Custom(format!("{err}")))?
+            }
+        };
+
+        let (pair, new_anchor) = MlDsaKeypair::from_master_seed(&master_seed, level)?;
+
+        let seed_cipher = if new_master_seed.is_some() {
+            encrypt_xchacha20poly1305(master_seed.as_bytes(), wallet_secret)?
+        } else {
+            master_payload.seed_cipher().to_vec()
+        };
+
+        let updated_master_payload = MlDsaMasterPayload::new(level, new_anchor, seed_cipher);
+        let updated_prv_payload = PrvKeyDataPayload { prv_key_variant: PrvKeyDataVariant::from_mldsa_master(updated_master_payload) };
+
+        prv_key_data.payload = match prv_key_data.payload {
+            crate::encryption::Encryptable::Plain(_) => crate::encryption::Encryptable::Plain(updated_prv_payload),
+            crate::encryption::Encryptable::XChaCha20Poly1305(enc) => {
+                let kind = enc.kind();
+                let encrypted =
+                    crate::encryption::Encryptable::Plain(updated_prv_payload.clone()).into_encrypted(wallet_secret, kind)?;
+                crate::encryption::Encryptable::XChaCha20Poly1305(encrypted)
+            }
+        };
+
+        account_payload.level = level;
+        account_payload.anchor = new_anchor;
+        account_payload.master_pubkey = pair.public_key_bytes().to_vec();
+        account_payload.status =
+            MasterStatus::Rotated { rotated_at_daa: self.current_daa_score().unwrap_or_default(), new_anchor: Some(new_anchor) };
+
+        let updated_account_storage = AccountStorage::try_new(
+            stored_account.kind,
+            stored_account.id(),
+            stored_account.storage_key(),
+            stored_account.prv_key_data_ids.clone(),
+            stored_account.settings.clone(),
+            account_payload,
+        )?;
+
+        prv_store.store(wallet_secret, prv_key_data).await?;
+        account_store.store_single(&updated_account_storage, None).await?;
+        self.inner.store.commit(wallet_secret).await?;
+
+        self.notify(Events::MasterAccountRotated { account_id: *account_id, old_anchor, new_anchor: *new_anchor.as_bytes() }).await?;
+
+        Ok(())
+    }
+
     // ========================================================================
     // STEALTH ACCOUNT OPERATIONS
     // ========================================================================
@@ -1057,6 +1235,57 @@ impl Wallet {
         let account = self.get_account_by_id(account_id, &guard).await?.ok_or(Error::AccountNotFound(*account_id))?;
         let stealth = account.as_stealth_account()?;
         stealth.lock().await;
+        Ok(())
+    }
+
+    pub async fn attach_stealth_to_master(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        stealth_id: &AccountId,
+        master_account_id: &AccountId,
+        guard: &WalletGuard<'_>,
+    ) -> Result<()> {
+        let master_account =
+            self.get_account_by_id(master_account_id, guard).await?.ok_or(Error::AccountNotFound(*master_account_id))?;
+        if master_account.account_kind() != MLDSA_MASTER_ACCOUNT_KIND.into() {
+            return Err(Error::InvalidAccountKind);
+        }
+
+        let master_storage = master_account.to_storage()?;
+        let master_payload = MldsaMasterAccountPayloadV1::try_from_slice(master_storage.serialized.as_slice())?;
+
+        let stealth_account = self.get_account_by_id(stealth_id, guard).await?.ok_or(Error::AccountNotFound(*stealth_id))?;
+        let stealth = stealth_account.as_stealth_account()?;
+
+        stealth.attach_to_master(*master_payload.anchor.as_bytes());
+
+        self.inner.store.clone().as_account_store()?.store_single(&stealth.to_storage()?, None).await?;
+        self.inner.store.commit(wallet_secret).await?;
+        self.notify(Events::StealthAttachedToMaster {
+            stealth_id: *stealth_id,
+            master_id: *master_account_id,
+            anchor: *master_payload.anchor.as_bytes(),
+        })
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn detach_stealth_from_master(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        stealth_id: &AccountId,
+        guard: &WalletGuard<'_>,
+    ) -> Result<()> {
+        let stealth_account = self.get_account_by_id(stealth_id, guard).await?.ok_or(Error::AccountNotFound(*stealth_id))?;
+        let stealth = stealth_account.as_stealth_account()?;
+
+        stealth.detach_master();
+
+        self.inner.store.clone().as_account_store()?.store_single(&stealth.to_storage()?, None).await?;
+        self.inner.store.commit(wallet_secret).await?;
+        self.notify(Events::StealthDetachedFromMaster { stealth_id: *stealth_id }).await?;
+
         Ok(())
     }
 

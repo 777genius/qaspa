@@ -2,6 +2,7 @@ use crate::cli::KaspaCli;
 use crate::imports::*;
 use crate::result::Result;
 use kaspa_bip32::{Language, Mnemonic, WordCount};
+use kaspa_mldsa::MlDsaLevel;
 use kaspa_wallet_core::account::MULTISIG_ACCOUNT_KIND;
 use kaspa_wallet_core::storage::keydata::PrvKeyDataVariantKind;
 // use kaspa_wallet_core::runtime::wallet::AccountCreateArgsBip32;
@@ -179,6 +180,39 @@ pub(crate) async fn create_stealth(ctx: &Arc<KaspaCli>, prv_key_data_info: Arc<P
     if let Ok(address) = account.receive_address() {
         tprintln!(ctx, "Stealth address (share with senders): {}\n", address);
     }
+    wallet.select(Some(&account)).await?;
+    Ok(())
+}
+
+pub(crate) async fn create_mldsa_master(
+    ctx: &Arc<KaspaCli>,
+    prv_key_data_info: Arc<PrvKeyDataInfo>,
+    name: Option<&str>,
+) -> Result<()> {
+    let term = ctx.term();
+    let wallet = ctx.wallet();
+
+    let name = if let Some(name) = name {
+        Some(name.to_string())
+    } else {
+        Some(term.ask(false, "Please enter account name (optional, press <enter> to skip): ").await?.trim().to_string())
+    };
+
+    let level_input = term.ask(false, "Enter MLDSA level (2/3/5, default 2): ").await?;
+    let level = match level_input.trim() {
+        "3" => MlDsaLevel::Level3,
+        "5" => MlDsaLevel::Level5,
+        _ => MlDsaLevel::Level2,
+    };
+
+    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    if wallet_secret.as_ref().is_empty() {
+        return Err(Error::WalletSecretRequired);
+    }
+
+    let account = wallet.create_account_mldsa_master(&wallet_secret, prv_key_data_info.id, level, name).await?;
+
+    tprintln!(ctx, "\nMLDSA master account created: {}\n", account.get_list_string()?);
     wallet.select(Some(&account)).await?;
     Ok(())
 }

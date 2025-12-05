@@ -2,7 +2,7 @@
 //! [`AccountKind`] is a unique type identifier of an [`Account`].
 //!
 
-use crate::account::variants::STEALTH_ACCOUNT_KIND;
+use crate::account::variants::{MLDSA_MASTER_ACCOUNT_KIND, STEALTH_ACCOUNT_KIND};
 use crate::imports::*;
 use fixedstr::*;
 use std::hash::Hash;
@@ -74,6 +74,7 @@ impl FromStr for AccountKind {
                 "keypair" => Ok(KEYPAIR_ACCOUNT_KIND.into()),
                 "bip32watch" => Ok(BIP32_WATCH_ACCOUNT_KIND.into()),
                 "stealth" => Ok(STEALTH_ACCOUNT_KIND.into()),
+                "mldsa-master" => Ok(MLDSA_MASTER_ACCOUNT_KIND.into()),
                 _ => Err(Error::InvalidAccountKind),
             }
         }

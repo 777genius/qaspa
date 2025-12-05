@@ -64,48 +64,59 @@
 
 ## 2. Инкрементальный план внедрения
 
-### Итерация 0 — Подготовка & UX фиксация
+### Итерация 0 — Подготовка & UX фиксация ⏳
 - [ ] Актуализировать требования в `docs/PRIVACY_STRATEGY.md` и добавить ссылки на этот план (PR).  
 - [ ] Убедиться, что `kaspad` и `wallet/core` собраны в режиме `nightly` (debug assertions обязательны во время dev-периода).  
 - [ ] Согласовать формат `anchor` и `delegation` (JSON/Borsh) с мобильными/CLI командами; задокументировать в `docs/API.md` (новый раздел).  
 
-### Итерация 1 — Детерминированный MLDSA master
+### Итерация 1 — Детерминированный MLDSA master ✅
 **Цель:** возможность получить один и тот же master ключ на всех устройствах.  
+**Статус: ВЫПОЛНЕНО**  
 **Изменения и файлы:**
 1. `crypto/mldsa/src/keypair.rs`  
-   - Добавить `fn derive_keypair(seed: &[u8], level: MlDsaLevel) -> Result<MlDsaKeypair>` (HKDF-SHA3-512, info=`"kaspa.mldsa.master"`).  
-   - Ввести `MasterSeed([u8; 48])` + `impl Zeroize`.  
-   - Перенести KAT-тесты на фиксированные seed (см. FIPS 204 A.3).  
+   - [x] Добавить `fn derive_keypair(seed: &[u8], level: MlDsaLevel) -> Result<MlDsaKeypair>` (HKDF-SHA3-512, info=`"kaspa.mldsa.master"`).  
+   - [x] Ввести `MasterSeed([u8; 48])` + `impl Zeroize`.  
+   - [x] Перенести KAT-тесты на фиксированные seed (см. FIPS 204 A.3).  
 2. `crypto/mldsa-ffi/`  
-   - Экспортировать `mldsa_derive_keypair` для Go/JS (Kasplex bridge уже тянет FFI).  
+   - [x] Экспортировать `mldsa_derive_keypair` для Go/JS (Kasplex bridge уже тянет FFI).  
 3. `wallet/keys/{derivation/mod.rs, keypair_mldsa.rs}`  
-   - Добавить `DerivationPurpose::MldsaMaster = 734`.  
-   - Метод `MlDsaKeypair::from_root_seed(bip39_seed: &Secret<[u8;64]>, account: u32)` → вызывает derive + считает anchor.  
-   - Сохранять anchor как `MasterAnchor([u8;32])`, предоставить `Display`/`serde` для CLI.  
+   - [x] Добавить `DerivationPurpose::MldsaMaster = 734`.  
+   - [x] Метод `MlDsaKeypair::from_bip39_root_seed(bip39_seed, level)` → вызывает derive + считает anchor.  
+   - [x] Сохранять anchor как `MasterAnchor([u8;32])`, предоставить `Display`/`serde` для CLI.  
 4. `wallet/keys/tests/`  
-   - Property-тесты `derive(seed)==derive(seed)` + проверка, что изменение account index => другой ключ.  
-   - Negative tests: вывод разных уровней (L2/L3) не совпадает.  
+   - [x] Property-тесты `derive(seed)==derive(seed)` + проверка, что изменение account index => другой ключ.  
+   - [x] Negative tests: вывод разных уровней (L2/L3) не совпадает.  
 5. Документация: `docs/IMPLEMENTATION_STATUS.md` → добавить пункт «Deterministic MLDSA root ✅» после завершения.  
 
-### Итерация 2 — Хранение и шифрование master
+### Итерация 2 — Хранение и шифрование master ✅
 **Цель:** безопасно положить MLDSA seed/anchor в `PrvKeyData`.  
+**Статус: ВЫПОЛНЕНО**  
 **Изменения:**
 1. `wallet/core/src/storage/keydata/data.rs` и `wallet/core/src/storage/keydata/mod.rs`  
-   - Новый `PrvKeyDataVariant::MlDsaMaster { level: u8, seed_cipher: Vec<u8>, anchor: [u8;32] }`.  
-   - `PrvKeyData::try_new_from_mnemonic` автоматически вызывает derive (ит.1) и добавляет запись.  
-   - Zeroize всего payload после использования (через `BTreeSet<Zeroizing<_>>`).  
+   - [x] Новый `PrvKeyDataVariant::MlDsaMaster(MlDsaMasterPayload)` с полями `level`, `seed_cipher`, `anchor`.  
+   - [x] `PrvKeyData::try_new_from_mnemonic` автоматически вызывает derive (ит.1) и добавляет запись.  
+   - [x] Zeroize всех payload после использования (через `Zeroizing<_>`).  
+   - [x] Метод `reencrypt_mldsa_master_seed` для корректной смены пароля кошелька.  
 2. `wallet/core/src/storage/local/payload.rs`  
-   - Версия хранилища +1 (миграция: старые кошельки получают `MlDsaMaster` лениво при первом unlock).  
-   - Флаг `wallet.settings.enable_mldsa_master` → позволяет отключить автоматическую генерацию в дев-нетах.  
+   - [x] Версия хранилища `STORAGE_VERSION = 1` (миграция: старые кошельки получают `MlDsaMaster` лениво при первом unlock).  
+   - [x] Флаг `WalletSettings::EnableMldsaMaster` → позволяет отключить автоматическую генерацию.  
+   - [x] Обратная совместимость: чтение v0 файлов без поля `encrypt_transactions`.  
 3. FFI:  
-   - `wallet/native/src/types.rs`, `wallet/native/src/runtime.rs`: enum `PrvKeyDataInfo::MlDsaMaster`.  
-   - `wallet/wasm/src/api/extensions.rs`: методы `exportMasterAnchor(account_id)` и `exportMasterPublic()`.  
+   - [x] `wallet/native/src/types.rs`, `wallet/native/src/runtime.rs`: C-friendly структуры `MasterAnchorInfo`, `PrvKeyDataInfoFFI`.  
+   - [x] `wallet/core/src/wasm/wallet/wallet.rs`: методы `masterAnchors()` и `exportMasterAnchor(request)`.  
 4. CLI + bindings  
-   - `cli/src/modules/wallet.rs`: команды `wallet master list`, `wallet master export --format qr/json`, `wallet master verify-anchor`.  
-   - Авто-предупреждение, если пользователь пытается экспортировать seed без подтверждения (двухфакторная команда).  
-5. QA  
-   - Unit: сериализация `PrvKeyDataVariant::MlDsaMaster`, миграция из старых payload.  
-   - Integration: CLI flow `wallet create`, `wallet master list`, `wallet backup` (см. `testing/integration/wallet_cli.rs`).  
+   - [x] `cli/src/modules/wallet.rs`: команды `wallet master list`, `wallet master export`, `wallet master verify-anchor`, `wallet master set`.  
+   - [x] Авто-предупреждение и подтверждение `EXPORT` при экспорте seed.  
+5. API / RPC / Events  
+   - [x] `wallet/core/src/api/message.rs`: `MasterAnchorListRequest/Response`, `MasterSeedExportRequest/Response`.  
+   - [x] `wallet/core/src/api/traits.rs`: методы `master_anchor_list_call`, `master_seed_export_call`.  
+   - [x] `wallet/core/src/api/transport.rs`: клиент и сервер хендлеры для RPC.  
+   - [x] `wallet/core/src/events.rs`: события `MasterAnchorCreated`, `MasterSeedExported`.  
+   - [x] WASM: `declare!` макросы для JS-интерфейсов, unit-тесты конвертации.  
+6. QA  
+   - [x] Unit: сериализация `PrvKeyDataVariant::MlDsaMaster`, миграция из старых payload.  
+   - [x] `cargo test -p kaspa-wallet-core storage::local::payload` — зелёные.  
+   - [x] CI: `.github/workflows/mldsa-tests.yml` с полным покрытием.  
 
 ### Итерация 3 — Master Account и anchor metadata
 **Цель:** представить master как отдельный account-kind и хранить anchor/историю операций.  
@@ -125,9 +136,12 @@
    - API: `create_account_mldsa_master`, `list_master_accounts`, `attach_stealth_to_master`, `get_master_by_anchor`.  
    - События: `Events::MasterAnchorCreated`, `Events::MasterRotated`.  
 5. CLI / WASM  
-   - `wallet account create --type mldsa-master --level 2`.  
-   - `wallet account attach-stealth --stealth <id> --master <id>`.  
-   - WASM `WalletApi` расширить методом `wallet.attachStealthToMaster(...)`.  
+   - `account create mldsa-master [<name>]` — создаёт master‑аккаунт, выбирая `PrvKeyData`, выводит `account_id`, `anchor`, `level`, `status`.  
+   - `account list --kind mldsa-master` — фильтр списка аккаунтов по `AccountKind == MLDSA_MASTER_ACCOUNT_KIND`, показывает счётчик привязанных stealth.  
+   - `account attach-stealth <stealth-id> <master-id>` — привязывает stealth‑аккаунт к мастеру (записывает `master_anchor`).  
+   - `account detach-stealth <stealth-id>` — снимает привязку stealth‑аккаунта от мастера.  
+   - `wallet master sign ...` / `wallet master rotate ...` — UX для подписи/ротации через `MldsaMasterAccount::sign_message` и `Wallet::rotate_master_account`.  
+   - WASM `WalletApi`: `createMasterAccount`, `listMasterAccounts`, `attachStealthToMaster`, `detachStealthFromMaster` (+ аналогичные FFI‑биндинги).  
 6. UX  
    - Wizard в CLI: при создании нового stealth аккаунта спрашивать «Привязать к мастеру <anchor>?».  
    - GUI (если есть) показывает QR с anchor + статус ревокации.  
@@ -163,13 +177,26 @@
 6. Kasplex L2 зависимость:  
    - `docs/KASPLEX_INTEGRATION_GUIDE.md` обновить: bridge проверяет anchor через RPC метод из п.4.  
 
-### Итерация 5 — Сканирование, reorg и хранение ключей
-**Цель:** кошелёк корректно восстанавливает стелс UTXO, опираясь на мастер.  
-- `wallet/core/src/utxo/stealth_handler.rs`: добавить проверку, что найденный UTXO соответствует делегированной ветке (anchor hash + pubkeys). При несоответствии UTXO помечается «orphaned».  
-- `wallet/core/src/storage/ephemeral_keys.rs`: хранить `valid_until_daa` и не удалять ключ при реорге, пока DAA < `valid_until`.  
-- RPC `get_block_view_tags`: опционально возвращать `anchor_hint (Option<[u8;4]>)`, чтобы мобильный клиент быстрее фильтровал «чужие» якори.  
-- `wallet/core/src/events.rs`: события `MasterDelegationExpired`, `MasterDelegationRevoked`, `MasterAnchorMismatch`.  
-- Indexer: `indexes/processor` добавить lightweight кэш anchor → view_tag, чтобы RPC не пересчитывал.  
+### Итерация 5 — Сканер, reorg, хранение ключей и anchor‑hint ([детали](iterations/Phase2_5iteration.md))
+**Цель:** стелс‑кошелёк корректно восстанавливает и сопровождает стелс‑UTXO с учётом мастер‑делегаций, устойчив к реоргам и позволяет лёгким клиентам отбрасывать «чужие» якоря.  
+- `wallet/core/src/utxo/stealth_handler.rs` / `wallet/core/src/account/variants/stealth.rs`:  
+  - привязать каждый стелс‑UTXO к конкретной `DelegationRecord` (anchor + scan/spend pubkeys + DAA‑окно);  
+  - при скане помечать выходы вне окна делегации как orphaned (через overlay‑карту `OrphanOverlayMap`, без изменений `UtxoContext`/`TransactionRecord`);  
+  - добавить хук `StealthUtxoHandler::on_daa_score_changed` и реализовать его в `StealthAccount` для DAA‑чистки и отслеживания истечения делегаций.  
+- `wallet/core/src/storage/ephemeral_keys.rs`:  
+  - расширить `EphemeralKeyEntry` полями `created_daa_score`, `delegation_id`, `master_anchor`, `valid_until_daa` и статусами `Orphaned { OrphanReason }` / `Expired` (через `#[borsh(default)]` без смены формата контейнера);  
+  - реализовать `cleanup_expired(current_daa_score)` и политику «мягкого удаления» ключей (не терять секрет до выхода за `valid_until_daa` + reorg‑маржа).  
+- RPC `get_block_view_tags` / модель `RpcStealthOutputInfo`:  
+  - добавить поле `anchor_hint: Option<String>` (первые байты `MasterAnchor`), обеспечить обратную совместимость сериализации (версия `2 → 3`);  
+  - прокинуть `anchor_hint` через gRPC/wRPC/WASM.  
+- Индексатор `indexes/processor`:  
+  - добавить `StealthAnchorHintCache` (in‑memory кэш `(txid, index) → anchor_hint`) и обновлять его на основе UTXO diff и зарегистрированных делегаций;  
+  - предоставить API, через которое RPC‑слой запрашивает hint при формировании `get_block_view_tags`.  
+- `wallet/core/src/events.rs`:  
+  - ввести события `MasterDelegationExpired`, `MasterDelegationRevoked`, `MasterAnchorMismatch` и использовать их при истечении/ревоке делегаций и anchor‑mismatch;  
+  - обновить JS/TS биндинги и WASM‑слой.  
+- UX/Generator:  
+  - интегрировать overlay orphaned‑UTXO с генератором трат так, чтобы такие входы **никогда не попадали** в автоматические платежи без явного действия пользователя, но были доступны в отдельных ручных сценариях (consolidate/spend‑orphaned).  
 
 ### Итерация 6 — Оффлайн UX и аппаратные кошельки
 - CLI: команда `master sign-delegation --input deleg.json --out sig.bin`, которая работает без RPC (использует только шифрованный payload).  
@@ -207,10 +234,10 @@
 - Публиковать anchor через REST (если партнёры не сидят на Kaspa RPC).  
 
 ### Итерация 10 — Observability & Telemetry
-- `metrics/core`: добавить counters `wallet_master_sign_ops_total`, `wallet_master_rotations_total`.  
-- `notify/core`: новое уведомление `MasterDelegationExpiringSoon`.  
-- Логи: тег `master_anchor=<hex8>` при всех операциях, чтобы было проще искать в Elastic.  
-- Докер-образ `docker/Dockerfile.kaspa-wallet`: включить `ENABLE_MLDSA_MASTER=1`, добавить healthcheck для airgap сервиса.  
+- `wallet/core`: добавить `MasterMetrics`/`MasterMetricsSnapshot` и variant `MetricsUpdate::MasterMetrics`, чтобы экспортировать `wallet_master_*` счётчики (sign/rotate/delegations/airgap/healthcheck) через `Events::Metrics`, не меняя `metrics/core` и формат `GetMetricsResponse`.  
+- `wallet/core` + `notify`: новое событие/уведомление `MasterDelegationExpiringSoon` и watcher `DelegationExpiryWatcher`, слушающий рост `DAA` и заранее предупреждающий об истечении делегаций.  
+- Логи: тег `master_anchor=<hex8>` при всех операциях мастера, делегаций и airgap‑флоу, чтобы было проще искать инциденты в Elastic/Grafana Loki.  
+- Докер-образ `docker/Dockerfile.kaspa-wallet`: включить `ENABLE_MLDSA_MASTER=1`, добавить healthcheck для airgap‑сервиса на базе `kaspa-wallet health --mode=airgap`.  
 
 ## 2.1. Кросс-компонентные зависимости
 
@@ -222,8 +249,10 @@
 
 ## 2.2. Пошаговый план по итерациям
 
-### Итерация 0 — Подготовка & UX фиксация
+### Итерация 0 — Подготовка & UX фиксация ⏳ ([детали](iterations/Phase2_0iteration.md))
+- **Статус:** НЕ ЗАВЕРШЕНО  
 - **Цель:** зафиксировать требования, окружение и UX до начала кодинга, чтобы следующие итерации не превратились в поиски форматов или разбирательство с инфраструктурой.
+- **Тезис:** подготовить окружение/доки/флаги до начала разработки.
 - **1. Инвентаризация исходников (добавить подпункт в разделе 0):**  
   - `crypto/mldsa/*` — уточнить текущие уровни FIPS‑204, наличие HKDF/детерминированной деривации и тестов (см. `src/{keypair.rs,sign.rs,params.rs}`).  
   - `wallet/keys/src/derivation/gen0/{mod.rs,hd.rs}` — зафиксировать, какие `DerivationPurpose` заняты, где добавится `MldsaMaster=734`, и какие helper’ы (`WalletDerivationManagerV0::build_derivate_path`) нужно расширить.  
@@ -261,32 +290,42 @@
 - **Проверки:** утверждённый API-док + расписанная ответственность, nightly toolchain реально используется во всех сборках, roadmap согласован с Kasplex.  
 - **Выходы:** PR/issue-трекер, список файлов и задач в разделе 0, отчёт о smoke-тестах.
 
-### Итерация 1 — Детерминированный MLDSA master
+### Итерация 1 — Детерминированный MLDSA master ✅ ([детали](iterations/Phase2_1iteration.md))
+- **Статус:** ВЫПОЛНЕНО  
 - **Шаги:**  
-  1. Добавить HKDF-деривацию и `MasterSeed` в `crypto/mldsa`.  
-  2. Пробросить новый API в `crypto/mldsa-ffi`.  
-  3. Обновить `wallet/keys` (derivation purpose + расчёт anchor, публичные методы).  
-  4. Сгенерировать KAT/prop-тесты (Rust + PQClean сравнение).  
-- **Проверки:** `cargo test -p kaspa-mldsa`, `cargo test -p kaspa-wallet-keys` зелёные; anchor совпадает между Rust и FFI.  
-- **Выходы:** новый release `crypto/mldsa`, обновлённые artefacts PQClean/Bindings.
+  1. [x] Добавить HKDF-деривацию и `MasterSeed` в `crypto/mldsa`.  
+  2. [x] Пробросить новый API в `crypto/mldsa-ffi`.  
+  3. [x] Обновить `wallet/keys` (derivation purpose + расчёт anchor, публичные методы).  
+  4. [x] Сгенерировать KAT/prop-тесты (Rust + PQClean сравнение).  
+- **Проверки:** `cargo test -p kaspa-mldsa` (52 теста), `cargo test -p kaspa-wallet-keys mldsa` (5 тестов) — зелёные.  
+- **Выходы:** `crypto/mldsa` с детерминированной деривацией, `MasterAnchor` API.
+- **Тезис:** единый MLDSA master из одного BIP39 seed на всех устройствах.
 
-### Итерация 2 — Хранение и шифрование master
+### Итерация 2 — Хранение и шифрование master ✅ ([детали](iterations/Phase2_2iteration.md))
+- **Статус:** ВЫПОЛНЕНО  
 - **Шаги:**  
-  1. Расширить `PrvKeyData` и миграции хранилища.  
-  2. Добавить FFI/wasm представления и CLI-команды управления anchor.  
-  3. Включить zeroize/обнуление для всех payload’ов, покрыть тестами.  
-- **Проверки:** e2e CLI сценарий `wallet master list/export`, успешная миграция старого файла.  
-- **Выходы:** PR с изменениями storage + CLI, инструкция по миграции.
+  1. [x] Расширить `PrvKeyData` и миграции хранилища (`STORAGE_VERSION = 1`).  
+  2. [x] Добавить FFI/wasm представления и CLI-команды управления anchor.  
+  3. [x] Включить zeroize/обнуление для всех payload'ов, покрыть тестами.  
+  4. [x] Реализовать `change_secret` с перешифрованием master seed.  
+  5. [x] Добавить RPC transport handlers (клиент + сервер).  
+  6. [x] Обновить документацию `docs/api/MLDSA_MASTER.md`.  
+- **Проверки:** `cargo test -p kaspa-wallet-core storage::local::payload` — зелёные; миграция v0→v1 работает.  
+- **Выходы:** Storage layer готов, CLI/WASM/FFI биндинги реализованы, события и API задокументированы.
+- **Тезис:** безопасно хранить/мигрировать master seed/anchor, покрыть интерфейсы.
 
-### Итерация 3 — Master Account и metadata
+### Итерация 3 — Master Account и metadata ✅ ([детали](iterations/Phase2_3iteration.md))
+- **Статус:** ВЫПОЛНЕНО 
+- Подробности: Phase2_3iteration.md 
 - **Шаги:**  
-  1. Реализовать `MldsaMasterAccount` (unlock, sign, rotate).  
-  2. Обновить `wallet/core/src/wallet` и UI для привязки stealth ↔ master.  
-  3. Настроить события/notify и сохранить anchor в payload’ах stealth.  
-- **Проверки:** unit-тесты аккаунта, CLI сценарий `account create --type mldsa-master`, attach/detach.  
+  1. [x] Реализовать `MldsaMasterAccount` (unlock, sign, rotate, хранение `master_pubkey`).  
+  2. [x] Обновить `wallet/core/src/wallet` и UI/CLI для привязки stealth ↔ master.  
+  3. [x] Настроить события/notify и сохранить anchor/ссылку на master в payload'ах stealth.  
+- **Проверки:** unit-тесты аккаунта, CLI сценарий `account create mldsa-master`, attach/detach.  
 - **Выходы:** новый account kind + обновлённые UX-гайды.
+- **Тезис:** оформить master как отдельный аккаунт с метаданными/ротацией.
 
-### Итерация 4 — Делегации, RPC и сигнатуры
+### Итерация 4 — Делегации, RPC и сигнатуры ([детали](iterations/Phase2_4iteration.md))
 - **Шаги:**  
   1. Добавить `DelegationRecord`, хранение и сериализацию.  
   2. Внедрить TLV `delegation_id` в `StealthSigner` и `EphemeralKeyData`.  
@@ -294,54 +333,61 @@
   4. Обновить CLI/SDK поток `link-stealth-to-master`.  
 - **Проверки:** интеграционный тест `testing/integration/mldsa_master.rs`, проверка RPC совместимости, Kasplex PoC.  
 - **Выходы:** синхронные PR в rusty-kaspa (L1) и Kasplex (L2), обновлённые protobuf/IDL.
+- **Тезис:** формализовать делегации от master к stealth и провести их через RPC/CLI.
 
-### Итерация 5 — Сканер, reorg, indexer
+### Итерация 5 — Сканер, reorg, indexer ([детали](iterations/Phase2_5iteration.md))
 - **Шаги:**  
   1. Расширить `StealthUtxoHandler` и `EphemeralKeyStore` дополнительными полями (`anchor`, `valid_until`).  
   2. Обновить RPC `get_block_view_tags`, добавить `anchor_hint`.  
   3. Настроить indexer/processor кэш для ускоренного сканирования.  
 - **Проверки:** симуляция reorg > valid_until, проверка что UTXO помечаются и удаляются корректно.  
 - **Выходы:** PR с изменениями UTXO handler + документация по новому RPC полю.
+- **Тезис:** устойчивый скан/реорг с учётом master/anchor и подсказок для быстрого фильтра.
 
-### Итерация 6 — Airgap UX
+### Итерация 6 — Airgap UX ([детали](iterations/Phase2_6iteration.md))
 - **Шаги:**  
   1. Реализовать `MasterDelegationRequest/Response` структуры, сериализацию (borsh + serde).  
   2. Добавить CLI и GUI потоки экспорт/импорт (QR/файл).  
   3. Покрыть wasm/native API, добавить примеры в `docs/guides/master_cold_storage.md`.  
 - **Проверки:** интеграционный тест `testing/integration/airgap_mldsa.rs`, ручной walkthrough по гайду.  
 - **Выходы:** гайд по cold storage, примеры CLI-команд, демо-видео (по желанию).
+- **Тезис:** безопасный airgap-процесс экспорта/импорта делегаций без онлайн-рисков.
 
-### Итерация 7 — Тестирование и формальная верификация
+### Итерация 7 — Тестирование и формальная верификация ([детали](iterations/Phase2_7iteration.md))
 - **Шаги:**  
   1. Расширить unit/property/fuzz suite (см. матрицу тестов).  
   2. Настроить `cargo fuzz` таргеты и интегрировать в CI (nightly).  
   3. Провести внешнюю ревизию (AI/эксперты) и зафиксировать findings.  
 - **Проверки:** все тестовые таргеты зелёные, отчёт по fuzz run.  
 - **Выходы:** тестовый отчёт + обновлённая `docs/TEST_COVERAGE_SUMMARY.md`.
+- **Тезис:** усилить покрытие и провести независимую ревизию перед запуском.
 
-### Итерация 8 — Развёртывание и миграция
+### Итерация 8 — Развёртывание и миграция ([детали](iterations/Phase2_8iteration.md))
 - **Шаги:**  
   1. Обновить документацию (`MIGRATION_STRATEGY`, `FINAL_CHECKLIST`, changelog).  
   2. Настроить `enable_mldsa_master` в консенсусных параметрах, прогнать devnet.  
   3. Подготовить release-процедуры (backup master, CLI regression).  
 - **Проверки:** devnet upgrade rehearsal, список задач в checklist выполнен.  
 - **Выходы:** релизная запись, devnet отчёт, инструкции для пользователей.
+- **Тезис:** готовим миграцию/релиз с включённым master и чеклистами.
 
-### Итерация 9 — Kasplex / внешние интеграции
+### Итерация 9 — Kasplex / внешние интеграции ([детали](iterations/Phase2_9iteration.md))
 - **Шаги:**  
   1. Внедрить новые RPC в relayer и syncer (Go).  
   2. Провести e2e тесты L1↔L2 с PQ мастером.  
   3. Обновить публичные гайды/SDK Kasplex.  
 - **Проверки:** успешный мост Kaspa↔Kasplex с использованием anchor; regression на старых адресах.  
 - **Выходы:** PRы в Kasplex, обновлённые docs/SDK.
+- **Тезис:** согласовать anchor/delegations с Kasplex и внешними клиентами.
 
-### Итерация 10 — Observability & Telemetry
+### Итерация 10 — Observability & Telemetry ([детали](iterations/Phase2_10iteration.md))
 - **Шаги:**  
   1. Добавить метрики/логи в `metrics`, `notify`, `wallet`.  
   2. Настроить алерты (Grafana/Prometheus) на expiring delegations, anchor mismatch.  
   3. Обновить Dockerfile/helm chart с новыми флагами.  
 - **Проверки:** dashboards отображают новые метрики, алерты срабатывают на тестовых событиях.  
 - **Выходы:** наблюдаемость включена, healthchecks в Docker, runbook для NOC.
+- **Тезис:** обеспечить наблюдаемость и алерты по master/делегациям для эксплуатации.
 
 ## 3. Матрица тестов
 

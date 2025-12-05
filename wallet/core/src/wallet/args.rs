@@ -7,6 +7,7 @@ use crate::storage::interface::CreateArgs;
 use crate::storage::{Hint, PrvKeyDataId};
 use crate::wallet::keydata::PrvKeyDataVariantKind;
 use borsh::{BorshDeserialize, BorshSerialize};
+use kaspa_mldsa::MlDsaLevel;
 use zeroize::Zeroize;
 
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -169,6 +170,11 @@ pub enum AccountCreateArgs {
         account_name: Option<String>,
         account_index: Option<u64>,
     },
+    MldsaMaster {
+        prv_key_data_id: PrvKeyDataId,
+        level: MlDsaLevel,
+        account_name: Option<String>,
+    },
 }
 
 impl AccountCreateArgs {
@@ -208,5 +214,9 @@ impl AccountCreateArgs {
     ) -> Self {
         let prv_key_data_args = PrvKeyDataArgs { prv_key_data_id, payment_secret };
         AccountCreateArgs::Stealth { prv_key_data_args, account_name, account_index }
+    }
+
+    pub fn new_mldsa_master(prv_key_data_id: PrvKeyDataId, level: MlDsaLevel, account_name: Option<String>) -> Self {
+        AccountCreateArgs::MldsaMaster { prv_key_data_id, level, account_name }
     }
 }

@@ -34,10 +34,12 @@ use kaspa_rpc_core::{RpcBlock, RpcHash, RpcTransactionId, RpcUtxoEntry, RpcUtxos
 use kaspa_stealth::EPHEMERAL_OUTPUT_SIZE;
 use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAddress};
 use kaspa_txscript::{extract_stealth_output, STEALTH_SCRIPT_VERSION};
+use kaspa_utils::hex;
 use secp256k1::{PublicKey, SecretKey, XOnlyPublicKey, SECP256K1};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use workflow_core::time::Instant;
 
 // ============================================================================
@@ -88,6 +90,12 @@ pub struct Payload {
 
     /// DAA score when account was created (for faster restoration scanning)
     pub creation_daa_score: Option<u64>,
+
+    /// Optional anchor of the linked MLDSA master account (Iteration 3)
+    pub master_anchor: Option<[u8; 32]>,
+
+    /// Reserved for Iteration 4 (delegations)
+    pub delegation_id: Option<u64>,
 }
 
 impl Payload {
@@ -96,12 +104,16 @@ impl Payload {
         scan_pubkey: XOnlyPublicKey,
         spend_pubkey: XOnlyPublicKey,
         creation_daa_score: Option<u64>,
+        master_anchor: Option<[u8; 32]>,
+        delegation_id: Option<u64>,
     ) -> Self {
         Self {
             account_index,
             scan_pubkey: scan_pubkey.serialize().to_vec(),
             spend_pubkey: spend_pubkey.serialize().to_vec(),
             creation_daa_score,
+            master_anchor,
+            delegation_id,
         }
     }
 
@@ -120,7 +132,7 @@ impl Payload {
 
 impl Storable for Payload {
     const STORAGE_MAGIC: u32 = 0x53544C48; // "STLH"
-    const STORAGE_VERSION: u32 = 0;
+    const STORAGE_VERSION: u32 = 1;
 }
 
 impl AccountStorable for Payload {}
@@ -132,19 +144,35 @@ impl BorshSerialize for Payload {
         BorshSerialize::serialize(&self.scan_pubkey, writer)?;
         BorshSerialize::serialize(&self.spend_pubkey, writer)?;
         BorshSerialize::serialize(&self.creation_daa_score, writer)?;
+        BorshSerialize::serialize(&self.master_anchor, writer)?;
+        BorshSerialize::serialize(&self.delegation_id, writer)?;
         Ok(())
     }
 }
 
 impl BorshDeserialize for Payload {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> IoResult<Self> {
-        let StorageHeader { version: _, .. } =
-            StorageHeader::deserialize_reader(reader)?.try_magic(Self::STORAGE_MAGIC)?.try_version(Self::STORAGE_VERSION)?;
+        let StorageHeader { version, .. } = StorageHeader::deserialize_reader(reader)?.try_magic(Self::STORAGE_MAGIC)?;
 
-        let account_index = BorshDeserialize::deserialize_reader(reader)?;
-        let scan_pubkey: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
-        let spend_pubkey: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
-        let creation_daa_score = BorshDeserialize::deserialize_reader(reader)?;
+        let (account_index, scan_pubkey, spend_pubkey, creation_daa_score, master_anchor, delegation_id) = match version {
+            0 => {
+                let account_index = BorshDeserialize::deserialize_reader(reader)?;
+                let scan_pubkey: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
+                let spend_pubkey: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
+                let creation_daa_score = BorshDeserialize::deserialize_reader(reader)?;
+                (account_index, scan_pubkey, spend_pubkey, creation_daa_score, None, None)
+            }
+            1 => {
+                let account_index = BorshDeserialize::deserialize_reader(reader)?;
+                let scan_pubkey: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
+                let spend_pubkey: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
+                let creation_daa_score = BorshDeserialize::deserialize_reader(reader)?;
+                let master_anchor = BorshDeserialize::deserialize_reader(reader)?;
+                let delegation_id = BorshDeserialize::deserialize_reader(reader)?;
+                (account_index, scan_pubkey, spend_pubkey, creation_daa_score, master_anchor, delegation_id)
+            }
+            other => return Err(IoError::new(IoErrorKind::InvalidData, format!("invalid stealth payload version {other}"))),
+        };
 
         // Validate key lengths (must be 32 bytes for x-only)
         if scan_pubkey.len() != 32 {
@@ -160,7 +188,7 @@ impl BorshDeserialize for Payload {
             ));
         }
 
-        Ok(Self { account_index, scan_pubkey, spend_pubkey, creation_daa_score })
+        Ok(Self { account_index, scan_pubkey, spend_pubkey, creation_daa_score, master_anchor, delegation_id })
     }
 }
 
@@ -345,6 +373,12 @@ pub struct StealthAccount {
 
     /// DAA score when account was created
     creation_daa_score: Option<u64>,
+
+    /// Optional master anchor link (Iteration 3)
+    master_anchor: Mutex<Option<[u8; 32]>>,
+
+    /// Reserved for delegation id (Iteration 4)
+    delegation_id: Mutex<Option<u64>>,
 }
 
 impl StealthAccount {
@@ -368,7 +402,7 @@ impl StealthAccount {
     ) -> Result<Self> {
         let stealth_address = StealthAddress { scan_pubkey, spend_pubkey };
 
-        let storable = Payload::new(account_index, scan_pubkey, spend_pubkey, creation_daa_score);
+        let storable = Payload::new(account_index, scan_pubkey, spend_pubkey, creation_daa_score, None, None);
 
         let settings = AccountSettings { name, ..Default::default() };
 
@@ -389,6 +423,8 @@ impl StealthAccount {
             ephemeral_keys,
             pending_ephemeral_persist: Arc::new(AsyncMutex::new(PendingEphemeralPersist::new())),
             creation_daa_score,
+            master_anchor: Mutex::new(None),
+            delegation_id: Mutex::new(None),
         })
     }
 
@@ -428,6 +464,8 @@ impl StealthAccount {
             ephemeral_keys,
             pending_ephemeral_persist: Arc::new(AsyncMutex::new(PendingEphemeralPersist::new())),
             creation_daa_score: payload.creation_daa_score,
+            master_anchor: Mutex::new(payload.master_anchor),
+            delegation_id: Mutex::new(payload.delegation_id),
         })
     }
 
@@ -495,6 +533,28 @@ impl StealthAccount {
 
     pub fn account_index(&self) -> u64 {
         self.account_index
+    }
+
+    pub fn master_anchor(&self) -> Option<[u8; 32]> {
+        *self.master_anchor.lock().unwrap()
+    }
+
+    pub fn delegation_id(&self) -> Option<u64> {
+        *self.delegation_id.lock().unwrap()
+    }
+
+    pub fn attach_to_master(&self, anchor: [u8; 32]) {
+        let mut anchor_slot = self.master_anchor.lock().unwrap();
+        *anchor_slot = Some(anchor);
+        let mut delegation_slot = self.delegation_id.lock().unwrap();
+        *delegation_slot = None;
+    }
+
+    pub fn detach_master(&self) {
+        let mut anchor_slot = self.master_anchor.lock().unwrap();
+        *anchor_slot = None;
+        let mut delegation_slot = self.delegation_id.lock().unwrap();
+        *delegation_slot = None;
     }
 
     // ========================================================================
@@ -974,7 +1034,16 @@ impl Account for StealthAccount {
 
     fn to_storage(&self) -> Result<AccountStorage> {
         let settings = self.context().settings.clone();
-        let storable = Payload::new(self.account_index, self.scan_pubkey, self.spend_pubkey, self.creation_daa_score);
+        let master_anchor = *self.master_anchor.lock().unwrap();
+        let delegation_id = *self.delegation_id.lock().unwrap();
+        let storable = Payload::new(
+            self.account_index,
+            self.scan_pubkey,
+            self.spend_pubkey,
+            self.creation_daa_score,
+            master_anchor,
+            delegation_id,
+        );
 
         AccountStorage::try_new(
             STEALTH_ACCOUNT_KIND.into(),
@@ -992,7 +1061,7 @@ impl Account for StealthAccount {
     }
 
     fn descriptor(&self) -> Result<AccountDescriptor> {
-        let descriptor = AccountDescriptor::new(
+        let mut descriptor = AccountDescriptor::new(
             STEALTH_ACCOUNT_KIND.into(),
             *self.id(),
             self.name(),
@@ -1003,6 +1072,15 @@ impl Account for StealthAccount {
             None, // No derived addresses for stealth accounts
         )
         .with_property(AccountDescriptorProperty::AccountIndex, self.account_index.into());
+
+        if let Some(anchor) = *self.master_anchor.lock().unwrap() {
+            descriptor =
+                descriptor.with_property(AccountDescriptorProperty::Other("master_anchor".to_string()), hex::encode(anchor).into());
+        }
+
+        if let Some(delegation_id) = *self.delegation_id.lock().unwrap() {
+            descriptor = descriptor.with_property(AccountDescriptorProperty::Other("delegation_id".to_string()), delegation_id.into());
+        }
 
         Ok(descriptor)
     }
@@ -1396,7 +1474,7 @@ mod tests {
         let (scan_pubkey, _) = scan_pubkey_full.x_only_public_key();
         let (spend_pubkey, _) = spend_pubkey_full.x_only_public_key();
 
-        let payload = Payload::new(42, scan_pubkey, spend_pubkey, Some(12345));
+        let payload = Payload::new(42, scan_pubkey, spend_pubkey, Some(12345), None, None);
 
         // Serialize
         let bytes = borsh::to_vec(&payload).unwrap();

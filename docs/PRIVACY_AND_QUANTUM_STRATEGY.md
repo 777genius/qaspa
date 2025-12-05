@@ -3,6 +3,10 @@
 ## Overview
 Our goal is to build a high-performance DAG (based on Kaspa) that offers **Quantum Resistance** and **Privacy by Default**, without sacrificing the high TPS and low latency characteristics of the protocol.
 
+### MLDSA master plan reference
+- Detailed plan for Phase 2 (master key, anchor, delegation): `docs/plans/phase2/Phase2_MLDSA_master_key.md`.
+- Wallet flag `enable_mldsa_master` (see `wallet/core/src/settings.rs`) controls auto-derivation/storage of the MLDSA master; default is `true`, can be disabled in test/dev.
+
 ## The "Smart" Architecture: Hybrid Approach
 
 Instead of using heavy Post-Quantum (PQ) signatures for every transaction (which would kill throughput), we adopt a tiered key management and privacy approach.

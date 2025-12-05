@@ -3,6 +3,10 @@
 ## Overview
 Our goal is to build a high-performance DAG (based on Kaspa) that offers **Quantum Resistance** and **Full Privacy by Default** (Monero-level), without sacrificing the high TPS and low latency characteristics of the protocol. We aim to achieve this through a "Speedrun" development strategy leveraging AI-assisted coding and rigorous property-based testing.
 
+### MLDSA master plan reference
+- Детализированный план Phase 2 (master key, anchor, делегации): `docs/plans/phase2/Phase2_MLDSA_master_key.md`.
+- Флаг кошелька `enable_mldsa_master` (см. `wallet/core/src/settings.rs`) по умолчанию `true`, отвечает за автоматическое создание и хранение MLDSA master seed/anchor; может быть выключен в тестовых окружениях.
+
 ## The "Smart" Architecture: Hybrid Approach
 
 Instead of using heavy Post-Quantum (PQ) signatures for every transaction (which would kill throughput), we adopt a tiered key management and privacy approach.

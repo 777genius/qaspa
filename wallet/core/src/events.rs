@@ -128,6 +128,33 @@ pub enum Events {
         master_id: PrvKeyDataId,
         anchor: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
+    MasterAccountCreated {
+        account_id: AccountId,
+        anchor: [u8; 32],
+        level: u8,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAccountRotated {
+        account_id: AccountId,
+        old_anchor: [u8; 32],
+        new_anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAccountRevoked {
+        account_id: AccountId,
+        anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    StealthAttachedToMaster {
+        stealth_id: AccountId,
+        master_id: AccountId,
+        anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    StealthDetachedFromMaster {
+        stealth_id: AccountId,
+    },
     /// Accounts have been activated
     AccountActivation {
         ids: Vec<AccountId>,
@@ -300,6 +327,11 @@ pub enum EventKind {
     PrvKeyDataCreate,
     MasterAnchorCreated,
     MasterSeedExported,
+    MasterAccountCreated,
+    MasterAccountRotated,
+    MasterAccountRevoked,
+    StealthAttachedToMaster,
+    StealthDetachedFromMaster,
     AccountActivation,
     AccountDeactivation,
     AccountSelection,
@@ -341,6 +373,11 @@ impl From<&Events> for EventKind {
             Events::PrvKeyDataCreate { .. } => EventKind::PrvKeyDataCreate,
             Events::MasterAnchorCreated { .. } => EventKind::MasterAnchorCreated,
             Events::MasterSeedExported { .. } => EventKind::MasterSeedExported,
+            Events::MasterAccountCreated { .. } => EventKind::MasterAccountCreated,
+            Events::MasterAccountRotated { .. } => EventKind::MasterAccountRotated,
+            Events::MasterAccountRevoked { .. } => EventKind::MasterAccountRevoked,
+            Events::StealthAttachedToMaster { .. } => EventKind::StealthAttachedToMaster,
+            Events::StealthDetachedFromMaster { .. } => EventKind::StealthDetachedFromMaster,
             Events::AccountActivation { .. } => EventKind::AccountActivation,
             Events::AccountDeactivation { .. } => EventKind::AccountDeactivation,
             Events::AccountSelection { .. } => EventKind::AccountSelection,
@@ -385,6 +422,11 @@ impl FromStr for EventKind {
             "prv-key-data-create" => Ok(EventKind::PrvKeyDataCreate),
             "master-anchor-created" => Ok(EventKind::MasterAnchorCreated),
             "master-seed-exported" => Ok(EventKind::MasterSeedExported),
+            "master-account-created" => Ok(EventKind::MasterAccountCreated),
+            "master-account-rotated" => Ok(EventKind::MasterAccountRotated),
+            "master-account-revoked" => Ok(EventKind::MasterAccountRevoked),
+            "stealth-attached-to-master" => Ok(EventKind::StealthAttachedToMaster),
+            "stealth-detached-from-master" => Ok(EventKind::StealthDetachedFromMaster),
             "account-activation" => Ok(EventKind::AccountActivation),
             "account-deactivation" => Ok(EventKind::AccountDeactivation),
             "account-selection" => Ok(EventKind::AccountSelection),

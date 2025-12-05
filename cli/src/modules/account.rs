@@ -1,7 +1,9 @@
 use kaspa_wallet_core::account::BIP32_ACCOUNT_KIND;
 use kaspa_wallet_core::account::LEGACY_ACCOUNT_KIND;
+use kaspa_wallet_core::account::MLDSA_MASTER_ACCOUNT_KIND;
 use kaspa_wallet_core::account::MULTISIG_ACCOUNT_KIND;
 use kaspa_wallet_core::account::STEALTH_ACCOUNT_KIND;
+use kaspa_wallet_core::deterministic::AccountId;
 
 use crate::imports::*;
 use crate::wizards;
@@ -64,9 +66,36 @@ impl Account {
                 let account_name = account_name.as_deref();
                 if account_kind == STEALTH_ACCOUNT_KIND {
                     wizards::account::create_stealth(&ctx, prv_key_data_info, account_name).await?;
+                } else if account_kind == MLDSA_MASTER_ACCOUNT_KIND {
+                    wizards::account::create_mldsa_master(&ctx, prv_key_data_info, account_name).await?;
                 } else {
                     wizards::account::create(&ctx, prv_key_data_info, account_kind, account_name).await?;
                 }
+            }
+            "attach-stealth" => {
+                if argv.len() != 2 {
+                    tprintln!(ctx, "usage: account attach-stealth <stealth-id> <master-id>");
+                    return Ok(());
+                }
+                let stealth_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                let master_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                let guard = ctx.wallet().guard();
+                let guard = guard.lock().await;
+                ctx.wallet().attach_stealth_to_master(&wallet_secret, &stealth_id, &master_id, &guard).await?;
+                tprintln!(ctx, "Stealth account {} attached to master {}", stealth_id, master_id);
+            }
+            "detach-stealth" => {
+                if argv.len() != 1 {
+                    tprintln!(ctx, "usage: account detach-stealth <stealth-id>");
+                    return Ok(());
+                }
+                let stealth_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                let guard = ctx.wallet().guard();
+                let guard = guard.lock().await;
+                ctx.wallet().detach_stealth_from_master(&wallet_secret, &stealth_id, &guard).await?;
+                tprintln!(ctx, "Stealth account {} detached from master", stealth_id);
             }
             "import" => {
                 if argv.is_empty() {

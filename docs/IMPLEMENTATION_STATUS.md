@@ -6,18 +6,24 @@
 
 The ML-DSA (CRYSTALS-Dilithium) post-quantum signature implementation for QUBIC blockchain is **production-ready**. All planned phases have been completed with comprehensive testing, documentation, and performance optimization.
 
-**Ongoing:** 🔄 *Phase 2 / Iteration 1 (MLDSA master root)*
+**Completed:** ✅ *Phase 2 / Iteration 1 (MLDSA master root)*
 - Дет. master seed (HKDF-SHA3) добавлен в `kaspa-mldsa`.
 - FFI экспортирует `kaspa_mldsa_master_seed_len` и `kaspa_mldsa_derive_keypair`.
 - `kaspa-wallet-keys` умеет получать `(MlDsaKeypair, MasterAnchor)` из BIP39 seed.
 - Подробности: `docs/api/MLDSA_MASTER.md`.
 
-**Ongoing:** 🔄 *Phase 2 / Iteration 2 (Storage & UX enablement)*
+**Completed:** ✅ *Phase 2 / Iteration 2 (Storage & UX enablement)*
 - Новый формат `PrvKeyDataVariant::MlDsaMaster { level, anchor, seed_cipher }` + автоматическая деривация при `wallet open`.
 - Флаг `WalletSettings::EnableMldsaMaster` (CLI команды `wallet master enable/disable`) и события `MasterAnchorCreated` / `MasterSeedExported`.
 - API/CLI: `masterAnchorList`, `masterSeedExport`, `wallet master list|export|verify-anchor (--format plain|json|qr)` с подтверждением `EXPORT`.
 - Native crate `wallet/native` теперь содержит `kaspa_wallet_master_anchor_list` и C-friendly `KaspaMasterAnchorInfo`.
 - Тесты: `wallet/core` покрывает сериализацию/дешифровку MLDSA payload; `cargo check -p kaspa-wallet` используется как sanity gate.
+
+**Completed:** ✅ *Phase 2 / Iteration 3 (Master account + metadata)*
+- MLDSA master оформлен как отдельный `AccountKind` с payload v1, проверками длины pubkey и domain-separated подписью.
+- Wallet API: `create_account_mldsa_master`, `list_master_accounts`, `get_master_by_anchor`, `attach/detach` stealth, `rotate_master_account`.
+- CLI/WASM: создание master‑аккаунта и привязка/отвязка stealth; события `MasterAccountCreated/Rotated` доступны через notify.
+- Storage: stealth payload мигрирован на v1 (`master_anchor`, `delegation_id`), backward‑compatible чтение v0.
 
 **Date:** 2025-11-23
 **Branch:** `claude/kaspa-rust-quantum-01GbScjmf7uqkVZddjhQaGhr`

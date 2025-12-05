@@ -9,6 +9,7 @@ use crate::wasm::api::keydata::PrvKeyDataVariantKind;
 use crate::wasm::tx::fees::IFees;
 use crate::wasm::tx::GeneratorSummary;
 use js_sys::Array;
+use kaspa_mldsa::MlDsaLevel;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use serde_wasm_bindgen::from_value;
 use workflow_wasm::serde::to_value;
@@ -1243,8 +1244,18 @@ try_from! (args: IAccountsCreateRequest, AccountsCreateRequest, {
                 account_index: args.get_u64("accountIndex").ok(),
             }
         }
+        crate::account::MLDSA_MASTER_ACCOUNT_KIND => {
+            let prv_key_data_id = args.try_get_prv_key_data_id("prvKeyDataId")?.ok_or(Error::custom("prvKeyDataId is required"))?;
+            let level_raw = args.get_u8("level").unwrap_or(2);
+            let level = MlDsaLevel::from_u8(level_raw).ok_or(Error::custom("invalid MLDSA level"))?;
+            AccountCreateArgs::MldsaMaster {
+                prv_key_data_id,
+                level,
+                account_name: args.try_get_string("accountName")?,
+            }
+        }
         _ => {
-            return Err(Error::custom("only BIP32/kaspa-keypair-standard/kaspa-stealth accounts are supported"));
+            return Err(Error::custom("only BIP32/kaspa-keypair-standard/kaspa-stealth/kaspa-mldsa-master accounts are supported"));
         }
     };
 
@@ -1265,9 +1276,115 @@ declare! {
     "#,
 }
 
+declare! {
+    IMasterAccountInfo,
+    r#"
+    /**
+     * Master account descriptor.
+     * @category Wallet API
+     */
+    export interface IMasterAccountInfo {
+        accountId: HexString;
+        anchor: HexString;
+        level: number;
+        status: string;
+    }
+    "#,
+}
+
+declare! {
+    IMasterAccountsListResponse,
+    r#"
+    /**
+     * Master accounts list response.
+     * @category Wallet API
+     */
+    export interface IMasterAccountsListResponse {
+        accounts: IMasterAccountInfo[];
+    }
+    "#,
+}
+
+declare! {
+    ICreateMasterAccountRequest,
+    r#"
+    /**
+     * Create MLDSA master account.
+     * @category Wallet API
+     */
+    export interface ICreateMasterAccountRequest {
+        walletSecret: string;
+        prvKeyDataId: HexString;
+        level: number;
+        accountName?: string;
+    }
+    "#,
+}
+
+declare! {
+    ICreateMasterAccountResponse,
+    r#"
+    /**
+     * Create MLDSA master account response.
+     * @category Wallet API
+     */
+    export interface ICreateMasterAccountResponse {
+        accountDescriptor: IAccountDescriptor;
+    }
+    "#,
+}
+
+declare! {
+    IAttachStealthToMasterRequest,
+    r#"
+    /**
+     * Attach stealth account to master.
+     * @category Wallet API
+     */
+    export interface IAttachStealthToMasterRequest {
+        walletSecret: string;
+        stealthId: HexString;
+        masterId: HexString;
+    }
+    "#,
+}
+
+declare! {
+    IDetachStealthFromMasterRequest,
+    r#"
+    /**
+     * Detach stealth account from master.
+     * @category Wallet API
+     */
+    export interface IDetachStealthFromMasterRequest {
+        walletSecret: string;
+        stealthId: HexString;
+    }
+    "#,
+}
+
 try_from!(args: AccountsCreateResponse, IAccountsCreateResponse, {
     let response = IAccountsCreateResponse::default();
     response.set("accountDescriptor", &IAccountDescriptor::try_from(args.account_descriptor)?.into())?;
+    Ok(response)
+});
+
+try_from!(args: crate::wallet::MasterAccountInfo, IMasterAccountInfo, {
+    let response = IMasterAccountInfo::default();
+    response.set("accountId", &args.account_id.into())?;
+    response.set("anchor", &JsValue::from(hex::encode(args.anchor)))?;
+    response.set("level", &JsValue::from(args.level))?;
+    response.set("status", &JsValue::from(serde_json::to_string(&args.status)?))?;
+    Ok(response)
+});
+
+try_from!(args: Vec<crate::wallet::MasterAccountInfo>, IMasterAccountsListResponse, {
+    let response = IMasterAccountsListResponse::default();
+    let accounts = Array::new();
+    for info in args.into_iter() {
+        accounts.push(&IMasterAccountInfo::try_from(info)?.into());
+    }
+    response.set("accounts", &accounts)?;
     Ok(response)
 });
 
