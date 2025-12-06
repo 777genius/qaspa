@@ -266,6 +266,15 @@ impl MldsaMasterAccount {
 
         Ok(mldsa_sign(&message, &keypair.inner().secret_key))
     }
+
+    /// Signs a delegation hash exactly as produced by `delegation_message_hash`
+    /// (no additional domain/tag/anchor prefix). This is the canonical
+    /// signature format for delegation records.
+    pub async fn sign_delegation_hash(&self, payload: &[u8]) -> Result<MlDsaSignature> {
+        let guard = self.unlocked_keypair.read().await;
+        let keypair = guard.as_ref().ok_or(Error::AccountLocked)?;
+        Ok(mldsa_sign(payload, &keypair.inner().secret_key))
+    }
 }
 
 #[async_trait]

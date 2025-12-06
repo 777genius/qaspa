@@ -28,3 +28,6 @@ pub mod rpc_tests;
 
 #[cfg(test)]
 pub mod stealth_flow;
+
+#[cfg(test)]
+pub mod mldsa_master;

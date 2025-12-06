@@ -66,16 +66,17 @@ use kaspa_rpc_core::{
     Notification, RpcError, RpcResult,
 };
 use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, pay_to_address_script, STEALTH_SCRIPT_VERSION};
-use kaspa_utils::expiring_cache::ExpiringCache;
 use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
+use kaspa_utils::{expiring_cache::ExpiringCache, hex::ToHex};
 use kaspa_utils_tower::counters::TowerConnectionCounters;
 use kaspa_utxoindex::api::UtxoIndexProxy;
+use log::info;
 use std::time::Duration;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     iter::once,
-    sync::{atomic::Ordering, Arc},
+    sync::{atomic::Ordering, Arc, Mutex},
     vec,
 };
 use tokio::join;
@@ -98,6 +99,17 @@ use workflow_rpc::server::WebSocketCounters as WrpcServerCounters;
 /// from this instance to registered services and backwards should occur
 /// by adding respectively to the registered service a Collector and a
 /// Subscriber.
+struct AnchorInfo {
+    metadata: Option<String>,
+    _registered_at: u64,
+}
+
+#[async_trait]
+pub trait DelegationProvider: Send + Sync {
+    async fn list_by_anchor(&self, anchor: [u8; 32]) -> RpcResult<Vec<RpcDelegationRecord>>;
+    async fn has_masters(&self) -> RpcResult<bool>;
+}
+
 pub struct RpcCoreService {
     consensus_manager: Arc<ConsensusManager>,
     notifier: Arc<Notifier<Notification, ChannelConnection>>,
@@ -121,6 +133,8 @@ pub struct RpcCoreService {
     fee_estimate_cache: ExpiringCache<RpcFeeEstimate>,
     fee_estimate_verbose_cache: ExpiringCache<kaspa_mining::errors::MiningManagerResult<GetFeeEstimateExperimentalResponse>>,
     mining_rule_engine: Arc<MiningRuleEngine>,
+    mldsa_anchors: Mutex<HashMap<[u8; 32], AnchorInfo>>,
+    delegation_provider: Mutex<Option<Arc<dyn DelegationProvider>>>,
 }
 
 const RPC_CORE: &str = "rpc-core";
@@ -229,7 +243,14 @@ impl RpcCoreService {
             fee_estimate_cache: ExpiringCache::new(Duration::from_millis(500), Duration::from_millis(1000)),
             fee_estimate_verbose_cache: ExpiringCache::new(Duration::from_millis(500), Duration::from_millis(1000)),
             mining_rule_engine,
+            mldsa_anchors: Mutex::new(HashMap::new()),
+            delegation_provider: Mutex::new(None),
         }
+    }
+
+    pub fn set_delegation_provider(&self, provider: Arc<dyn DelegationProvider>) {
+        let mut guard = self.delegation_provider.lock().unwrap();
+        *guard = Some(provider);
     }
 
     pub fn start_impl(&self) {
@@ -1285,6 +1306,13 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         let sink_daa_score_timestamp = session.async_get_sink_daa_score_timestamp().await;
         let is_synced = self.mining_rule_engine.is_sink_recent_and_connected(sink_daa_score_timestamp);
         let virtual_daa_score = session.get_virtual_daa_score();
+        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        let has_mldsa_master = if let Some(provider) = provider {
+            // If provider errors, fall back to anchor memory set
+            provider.has_masters().await.unwrap_or_else(|_| !self.mldsa_anchors.lock().unwrap().is_empty())
+        } else {
+            !self.mldsa_anchors.lock().unwrap().is_empty()
+        };
 
         Ok(GetServerInfoResponse {
             rpc_api_version: RPC_API_VERSION,
@@ -1295,7 +1323,58 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
             is_synced,
             virtual_daa_score,
             has_stealth_support: true,
+            has_mldsa_master,
         })
+    }
+
+    async fn register_mldsa_anchor_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: RegisterMldsaAnchorRequest,
+    ) -> RpcResult<RegisterMldsaAnchorResponse> {
+        // Basic input validation: anchor must be exactly 32 bytes (Guaranteed by type)
+        // Idempotent insert into in-memory set.
+        let RegisterMldsaAnchorRequest { anchor, metadata } = request;
+        let anchor_hex = anchor.as_slice().to_hex();
+        let mut anchors = self.mldsa_anchors.lock().unwrap();
+        let accepted = match (anchors.entry(anchor), metadata) {
+            (Entry::Vacant(entry), meta) => {
+                entry.insert(AnchorInfo { metadata: meta, _registered_at: unix_now() });
+                true
+            }
+            (Entry::Occupied(mut entry), meta) => {
+                if entry.get().metadata.is_none() {
+                    entry.get_mut().metadata = meta;
+                }
+                false
+            }
+        };
+        if accepted {
+            info!("mldsa_anchor registered: {}", anchor_hex);
+        } else {
+            info!("mldsa_anchor already registered: {}", anchor_hex);
+        }
+        Ok(RegisterMldsaAnchorResponse { accepted })
+    }
+
+    async fn list_mldsa_delegations_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: ListMldsaDelegationsRequest,
+    ) -> RpcResult<ListMldsaDelegationsResponse> {
+        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        if let Some(provider) = provider {
+            let delegations = provider.list_by_anchor(request.anchor).await?;
+            return Ok(ListMldsaDelegationsResponse { delegations });
+        }
+
+        let anchors = self.mldsa_anchors.lock().unwrap();
+        if !anchors.contains_key(&request.anchor) {
+            warn!("list_mldsa_delegations called for unknown anchor {}", request.anchor.as_slice().to_hex());
+            return Ok(ListMldsaDelegationsResponse { delegations: vec![] });
+        }
+        // Iteration 4 scope: no delegation indexing in RPC, return empty list for known anchors.
+        Ok(ListMldsaDelegationsResponse { delegations: vec![] })
     }
 
     async fn get_sync_status_call(

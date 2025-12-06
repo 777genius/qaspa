@@ -1031,11 +1031,76 @@ mod mockery {
                 is_synced: false,
                 virtual_daa_score: mock(),
                 has_stealth_support: true,
+                has_mldsa_master: true,
             }
         }
     }
 
     test!(GetServerInfoResponse);
+
+    impl Mock for RegisterMldsaAnchorRequest {
+        fn mock() -> Self {
+            let mut anchor = [0u8; 32];
+            rand::thread_rng().fill(&mut anchor);
+            RegisterMldsaAnchorRequest { anchor, metadata: Some("meta".to_string()) }
+        }
+    }
+
+    test!(RegisterMldsaAnchorRequest);
+
+    impl Mock for RegisterMldsaAnchorResponse {
+        fn mock() -> Self {
+            RegisterMldsaAnchorResponse { accepted: true }
+        }
+    }
+
+    test!(RegisterMldsaAnchorResponse);
+
+    impl Mock for ListMldsaDelegationsRequest {
+        fn mock() -> Self {
+            let mut anchor = [0u8; 32];
+            rand::thread_rng().fill(&mut anchor);
+            ListMldsaDelegationsRequest { anchor }
+        }
+    }
+
+    test!(ListMldsaDelegationsRequest);
+
+    impl Mock for RpcDelegationRecord {
+        fn mock() -> Self {
+            let mut anchor = [0u8; 32];
+            rand::thread_rng().fill(&mut anchor);
+            RpcDelegationRecord {
+                anchor,
+                account_id: vec![1, 2, 3],
+                spend_pubkey: {
+                    let mut bytes = [0u8; 32];
+                    rand::thread_rng().fill(&mut bytes);
+                    bytes
+                },
+                scan_pubkey: {
+                    let mut bytes = [0u8; 32];
+                    rand::thread_rng().fill(&mut bytes);
+                    bytes
+                },
+                valid_from_daa: mock(),
+                valid_until_daa: Some(mock()),
+                nonce: mock(),
+                status: "active".to_string(),
+                signature: vec![0xaa, 0xbb],
+            }
+        }
+    }
+
+    test!(RpcDelegationRecord);
+
+    impl Mock for ListMldsaDelegationsResponse {
+        fn mock() -> Self {
+            ListMldsaDelegationsResponse { delegations: vec![RpcDelegationRecord::mock()] }
+        }
+    }
+
+    test!(ListMldsaDelegationsResponse);
 
     impl Mock for GetSyncStatusRequest {
         fn mock() -> Self {

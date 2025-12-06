@@ -92,6 +92,25 @@ pub trait RpcApi: Sync + Send + AnySync {
         request: GetServerInfoRequest,
     ) -> RpcResult<GetServerInfoResponse>;
 
+    // MLDSA master / delegation (Iteration 4)
+    async fn register_mldsa_anchor(&self, anchor: [u8; 32]) -> RpcResult<bool> {
+        Ok(self.register_mldsa_anchor_call(None, RegisterMldsaAnchorRequest { anchor, metadata: None }).await?.accepted)
+    }
+    async fn register_mldsa_anchor_call(
+        &self,
+        connection: Option<&DynRpcConnection>,
+        request: RegisterMldsaAnchorRequest,
+    ) -> RpcResult<RegisterMldsaAnchorResponse>;
+
+    async fn list_mldsa_delegations(&self, anchor: [u8; 32]) -> RpcResult<Vec<RpcDelegationRecord>> {
+        Ok(self.list_mldsa_delegations_call(None, ListMldsaDelegationsRequest { anchor }).await?.delegations)
+    }
+    async fn list_mldsa_delegations_call(
+        &self,
+        connection: Option<&DynRpcConnection>,
+        request: ListMldsaDelegationsRequest,
+    ) -> RpcResult<ListMldsaDelegationsResponse>;
+
     // Get current sync status of the node (should be converted to a notification subscription)
     async fn get_sync_status(&self) -> RpcResult<bool> {
         Ok(self.get_sync_status_call(None, GetSyncStatusRequest {}).await?.is_synced)

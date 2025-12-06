@@ -46,6 +46,8 @@ pub struct GeneratorSettings {
     pub stealth_change_creator: Option<DynStealthChangeCreator>,
     /// Optional randomization for final priority fee.
     pub random_fee_settings: RandomFeeSettings,
+    /// Include delegation id TLV in stealth signatures (Iteration 4).
+    pub include_delegation_id: bool,
 }
 
 // impl std::fmt::Debug for GeneratorSettings {
@@ -102,6 +104,7 @@ impl GeneratorSettings {
             destination_utxo_context: None,
             stealth_change_creator: None,
             random_fee_settings,
+            include_delegation_id: true,
         };
 
         Ok(settings)
@@ -142,6 +145,7 @@ impl GeneratorSettings {
             destination_utxo_context: None,
             stealth_change_creator: None,
             random_fee_settings,
+            include_delegation_id: true,
         };
 
         Ok(settings)
@@ -182,6 +186,7 @@ impl GeneratorSettings {
             destination_utxo_context: None,
             stealth_change_creator: None,
             random_fee_settings,
+            include_delegation_id: true,
         };
 
         Ok(settings)
@@ -194,6 +199,11 @@ impl GeneratorSettings {
     /// the blockchain to find our own change output.
     pub fn with_stealth_change_creator(mut self, creator: DynStealthChangeCreator) -> Self {
         self.stealth_change_creator = Some(creator);
+        self
+    }
+
+    pub fn with_include_delegation_id(mut self, include: bool) -> Self {
+        self.include_delegation_id = include;
         self
     }
 

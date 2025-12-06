@@ -113,6 +113,39 @@ message RpcTransactionOutputVerboseData{
   string scriptPublicKeyAddress = 6;
 }
 
+// MLDSA delegation (Iteration 4)
+message RegisterMldsaAnchorRequestMessage{
+  bytes anchor = 1;
+  string metadata = 2;
+}
+
+message RegisterMldsaAnchorResponseMessage{
+  bool accepted = 1;
+  RPCError error = 1000;
+}
+
+message RpcDelegationRecord{
+  bytes anchor = 1;
+  bytes accountId = 2;
+  bytes spendPubkey = 3;
+  bytes scanPubkey = 4;
+  uint64 validFromDaa = 5;
+  uint64 validUntilDaa = 6;
+  bool hasValidUntilDaa = 7;
+  uint64 nonce = 8;
+  string status = 9;
+  bytes signature = 10;
+}
+
+message ListMldsaDelegationsRequestMessage{
+  bytes anchor = 1;
+}
+
+message ListMldsaDelegationsResponseMessage{
+  repeated RpcDelegationRecord delegations = 1;
+  RPCError error = 1000;
+}
+
 enum RpcNotifyCommand {
   NOTIFY_START = 0;
   NOTIFY_STOP = 1;
@@ -895,6 +928,7 @@ message GetServerInfoResponseMessage{
   bool isSynced = 6;
   uint64 virtualDaaScore = 7;
   bool hasStealthSupport = 8;
+  bool hasMldsaMaster = 9;
   RPCError error = 1000;
 }
 

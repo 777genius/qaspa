@@ -92,6 +92,20 @@ impl Mempool {
                 return Err(NonStandardError::RejectScriptPublicKeyVersion(transaction_id, i));
             }
 
+            if self.config.stealth_only_outputs {
+                match ScriptClass::from_script(&output.script_public_key) {
+                    ScriptClass::Stealth => {}
+                    _ => return Err(NonStandardError::RejectNonStealthOutput(transaction_id, i)),
+                }
+            }
+
+            if self.config.stealth_only_outputs {
+                match ScriptClass::from_script(&output.script_public_key) {
+                    ScriptClass::Stealth => {}
+                    _ => return Err(NonStandardError::RejectNonStealthOutput(transaction_id, i)),
+                }
+            }
+
             if ScriptClass::from_script(&output.script_public_key) == ScriptClass::NonStandard {
                 return Err(NonStandardError::RejectOutputScriptClass(transaction_id, i));
             }
@@ -186,6 +200,14 @@ impl Mempool {
             // they have already been checked prior to calling this
             // function.
             let entry = transaction.entries[i].as_ref().unwrap();
+
+            if self.config.stealth_only_inputs {
+                match ScriptClass::from_script(&entry.script_public_key) {
+                    ScriptClass::Stealth => {}
+                    _ => return Err(NonStandardError::RejectNonStealthInput(transaction_id, i)),
+                }
+            }
+
             match ScriptClass::from_script(&entry.script_public_key) {
                 ScriptClass::NonStandard => {
                     return Err(NonStandardError::RejectInputScriptClass(transaction_id, i));
@@ -253,10 +275,11 @@ mod tests {
         mass::NonContextualMasses,
         network::NetworkType,
         subnets::SUBNETWORK_ID_NATIVE,
-        tx::{ScriptPublicKey, ScriptVec, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput},
+        tx::{ScriptPublicKey, ScriptVec, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry},
     };
     use kaspa_txscript::{
         opcodes::codes::{OpReturn, OpTrue},
+        pay_to_address_script,
         script_builder::ScriptBuilder,
     };
     use smallvec::smallvec;
@@ -303,6 +326,8 @@ mod tests {
             for net in NetworkType::iter() {
                 let params: Params = net.into();
                 let mut config = Config::build_default(params.target_time_per_block(), false, params.max_block_mass);
+                config.stealth_only_inputs = false;
+                config.stealth_only_outputs = false;
                 config.minimum_relay_transaction_fee = test.minimum_relay_transaction_fee;
                 let counters = Arc::new(MiningCounters::default());
                 let mempool = Mempool::new(Arc::new(config), counters);
@@ -388,6 +413,8 @@ mod tests {
             for net in NetworkType::iter() {
                 let params: Params = net.into();
                 let mut config = Config::build_default(params.target_time_per_block(), false, params.max_block_mass);
+                config.stealth_only_inputs = false;
+                config.stealth_only_outputs = false;
                 config.minimum_relay_transaction_fee = test.minimum_relay_transaction_fee;
                 let counters = Arc::new(MiningCounters::default());
                 let mempool = Mempool::new(Arc::new(config), counters);
@@ -567,7 +594,9 @@ mod tests {
         for test in tests {
             for net in NetworkType::iter() {
                 let params: Params = net.into();
-                let config = Config::build_default(params.target_time_per_block(), false, params.max_block_mass);
+                let mut config = Config::build_default(params.target_time_per_block(), false, params.max_block_mass);
+                config.stealth_only_inputs = false;
+                config.stealth_only_outputs = false;
                 let counters = Arc::new(MiningCounters::default());
                 let mempool = Mempool::new(Arc::new(config), counters);
 
@@ -591,5 +620,68 @@ mod tests {
                 assert_eq!(res.is_ok(), test.is_standard, "ensuring transaction standard-ness is as expected");
             }
         }
+    }
+
+    #[test]
+    fn test_stealth_only_outputs_policy_rejects_non_stealth() {
+        let dummy_prev_out = TransactionOutpoint::new(kaspa_hashes::Hash::from_u64_word(1), 1);
+        let dummy_sig_script = vec![0u8; 65];
+        let dummy_tx_input = TransactionInput::new(dummy_prev_out, dummy_sig_script, MAX_TX_IN_SEQUENCE_NUM, 1);
+        let addr_hash = vec![1u8; 32];
+        let addr = Address::new(Prefix::Testnet, Version::PubKey, &addr_hash);
+        let dummy_script_public_key = pay_to_address_script(&addr);
+        let dummy_tx_out = TransactionOutput::new(SOMPI_PER_KASPA, dummy_script_public_key);
+
+        let mut mtx = MutableTransaction::from_tx(Transaction::new(
+            TX_VERSION,
+            vec![dummy_tx_input],
+            vec![dummy_tx_out],
+            0,
+            SUBNETWORK_ID_NATIVE,
+            0,
+            vec![],
+        ));
+        mtx.calculated_non_contextual_masses = Some(NonContextualMasses::new(1000, 1000));
+
+        let params: Params = NetworkType::Testnet.into();
+        let mut config = Config::build_default(params.target_time_per_block(), false, params.max_block_mass);
+        config.stealth_only_inputs = true;
+        config.stealth_only_outputs = true;
+        let counters = Arc::new(MiningCounters::default());
+        let mempool = Mempool::new(Arc::new(config), counters);
+
+        let res = mempool.check_transaction_standard_in_isolation(&mtx);
+        assert!(
+            matches!(res, Err(NonStandardError::RejectNonStealthOutput(_, _))),
+            "expected non-stealth output to be rejected under stealth-only policy"
+        );
+    }
+
+    #[test]
+    fn test_stealth_only_inputs_policy_rejects_non_stealth() {
+        let dummy_prev_out = TransactionOutpoint::new(kaspa_hashes::Hash::from_u64_word(2), 0);
+        let dummy_sig_script = vec![0u8; 65];
+        let dummy_tx_input = TransactionInput::new(dummy_prev_out, dummy_sig_script, MAX_TX_IN_SEQUENCE_NUM, 1);
+
+        // Legacy script in UTXO entry (version 0)
+        let legacy_spk = ScriptPublicKey::new(0, ScriptVec::from_vec(vec![0u8; 35]));
+        let legacy_utxo = TransactionOutput::new(1000, legacy_spk.clone());
+
+        let tx = Arc::new(Transaction::new(TX_VERSION, vec![dummy_tx_input], vec![legacy_utxo], 0, SUBNETWORK_ID_NATIVE, 0, vec![]));
+        let mut mtx = MutableTransaction::with_entries(tx, vec![UtxoEntry::new(1000, legacy_spk, 0, false)]);
+        mtx.calculated_non_contextual_masses = Some(NonContextualMasses::new(1000, 1000));
+
+        let params: Params = NetworkType::Testnet.into();
+        let mut config = Config::build_default(params.target_time_per_block(), false, params.max_block_mass);
+        config.stealth_only_inputs = true;
+        config.stealth_only_outputs = true;
+        let counters = Arc::new(MiningCounters::default());
+        let mempool = Mempool::new(Arc::new(config), counters);
+
+        let res = mempool.check_transaction_standard_in_context(&mtx);
+        assert!(
+            matches!(res, Err(NonStandardError::RejectNonStealthInput(_, _))),
+            "expected non-stealth input to be rejected under stealth-only policy"
+        );
     }
 }

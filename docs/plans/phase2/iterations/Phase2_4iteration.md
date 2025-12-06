@@ -29,8 +29,18 @@
 **Вывод:** итерация 4 должна:
 - ввести явную модель делегаций и их хранение в кошельке;
 - расширить ephemeral‑ключи и сайнер так, чтобы они умели «нести» информацию о делегации;
-- расширить `signature_script` стелс‑входов до формата `[TLV*][64B sig][1B sighash]` и научить консенсус принимать этот формат;
+- расширить `signature_script` стелс‑входов до формата `[TLV*][64B sig][1B sighash]` и научить консенсус принимать этот формат **под управляемым флагом активации**;
 - добавить минимальный RPC‑слой вокруг anchor/delegation, не связывая его жёстко с консенсусом (миграция остаётся мягкой).
+
+#### Δ Итоговые исправления/доделки, которые нужно выполнить
+- Протокол делегаций: выровнять подпись/проверку — использовать единый `delegation_message_hash` без дополнительных префиксов (ни `tag`, ни `anchor`), доменное разделение реализовать через keyed BLAKE2b; привести кошелёк к этой схеме.
+- Консенсус: приём `signature_script` длиной `>=65` для stealth-входов должен быть gated (используем существующий флаг `kip10_enabled` как переключатель Phase 2); при отключённом флаге оставлять строго `len == 65`.
+- Кошелёк: флаг `EnableMldsaMaster` должен реально запрещать создание новых делегаций, если пользователь его выключил.
+- TLV в консенсусе: в Iteration 4 TLV-префикс **полностью игнорируется**, разбор/использование откладываются; обновить описание.
+- `has_mldsa_master` в `GetServerInfoResponse`: сейчас поле возвращается `false` — нужно либо вычислять по реальной поддержке, либо явно пометить как «заглушка».
+- RPC `register_mldsa_anchor` / `list_mldsa_delegations`: сейчас `NotImplemented`; либо реализовать минимально (in-memory/пустой список), либо явно оставить статус «заглушка».
+- Тесты: добавить отсутствующий интеграционный тест на end-to-end поток (master → delegation → TLV spend → восстановление).
+- CLI/UX: скорректировать описание команд под фактические (`account delegation <link|list|revoke>`), либо переименовать код — в плане фиксируем текущий фактический API.
 
 ### 0.1. Область изменений и файлы (привязка к реальному коду)
 
@@ -94,23 +104,18 @@
 
 ### 1.2. Хеширование и подпись мастером
 
-- В `crypto/mldsa/src/params.rs` (или аналогичном модуле параметров) задать домены:
+- Доменные строки:
   - `DOMAIN_MLDSA_DELEGATION = "kaspa.mldsa.delegation.v1"`;
   - `DOMAIN_MLDSA_DELEGATION_REVOKE = "kaspa.mldsa.delegation.revoke.v1"`.
-- В `delegation.rs` реализовать:
-  - `fn delegation_message_hash(record: &DelegationRecordV1) -> [u8; 32]`:
-    - сериализация всех полей, кроме `signature`;
-    - `blake2b-256(DOMAIN || borsh(record_without_signature))`.
-  - `fn sign_with_master(master_key: &MlDsaKeypair, record: &mut DelegationRecordV1)`:
-    - считает вышеуказанный хеш и подписывает MLDSA level2 (на практике вызывается через `MldsaMasterAccount::sign_message(MasterSignDomain::Delegation, ...)`, чтобы все домены подписи мастера были централизованы);
-    - валидирует длину подписи, пишет в `signature`.
-  - `fn verify_against_anchor(anchor: &MasterAnchor, record: &DelegationRecordV1) -> Result<bool>`:
-    - восстанавливает master‑pk из `anchor` не требуется; достаточно, что:
-      - `record.anchor == *anchor`;
-      - MLDSA‑подпись корректна для публичного ключа мастера, который кошелёк восстановил из `MlDsaMasterPayload` (`PrvKeyDataVariant::MlDsaMaster`) с тем же `level`.
+- `fn delegation_message_hash(record: &DelegationRecordV1) -> [u8; 32]`:
+  - сериализация всех полей, кроме `signature`;
+  - `blake2b-256` **с ключом** `DOMAIN_MLDSA_DELEGATION` (keyed режим вместо конкатенации домена).
+- Подпись мастером (канон для Iteration 4):
+  - сообщение для подписи = `delegation_message_hash(record)` без дополнительных префиксов `tag || anchor` (домены уже учтены ключом хеша);
+  - `sign_with_master(master_key, record)` валидирует длину подписи и записывает её в `signature`;
+  - `verify_against_anchor(anchor, master_pubkey, record)` проверяет совпадение `record.anchor` и валидирует подпись тем же сообщением.
 - Для CRDT:
-  - определяем `DelegationClock`:
-    - сравнение по `(nonce, valid_from_daa, valid_until_daa)` с приоритетом `nonce`.
+  - сравнение по `(nonce, valid_from_daa, valid_until_daa)` с приоритетом `nonce`;
   - helper `fn select_active(records: &[DelegationRecordV1]) -> Option<&DelegationRecordV1>` — возвращает последнюю не `Revoked/Expired` по `nonce`.
 
 ### 1.3. Инварианты делегаций
@@ -169,15 +174,15 @@
   - либо как разновидность `transaction::record`, но с другим `kind`.
 - Формат на диске:
   - префикс `STORAGE_MAGIC = "DLGT"` + `STORAGE_VERSION = 0`;
-  - коллекция `Vec<DelegationRecordV1>` журналом;
+  - коллекция `(DelegationId, DelegationRecordV1)` журналом;
   - индекс по `(anchor, account_id)` в памяти (DashMap).
 - Операции:
   - `fn upsert(record: DelegationRecordV1) -> DelegationId`:
     - находит максимальный `nonce` для `(anchor, account_id)`, проверяет `record.nonce == prev_nonce+1`;
     - присваивает/перезаписывает локальный `DelegationId` (u64);
   - `fn by_id(id: DelegationId) -> Option<DelegationRecordV1>`;
-  - `fn by_anchor(anchor: &[u8; 32]) -> Vec<DelegationRecordV1>`;
-  - `fn active_for_account(anchor, account_id) -> Option<DelegationRecordV1>`.
+  - `fn by_anchor(anchor: &[u8; 32]) -> Vec<(DelegationId, DelegationRecordV1)>`;
+  - `fn active_for_account(anchor, account_id) -> Option<(DelegationId, DelegationRecordV1)>`.
 
 ### 2.3. API кошелька вокруг делегаций
 
@@ -212,7 +217,7 @@
   - удаление master‑аккаунта или временное отключение `EnableMldsaMaster` в настройках кошелька:
     - не меняет ончейн‑формат UTXO;
     - кошелёк может продолжать тратить старые UTXO без TLV (или с TLV, если делегации ещё валидны);
-    - любые новые делегации в этом состоянии создавать нельзя (UI/CLI должен блокировать сценарий).
+    - любые новые делегации в этом состоянии создавать нельзя (UI/CLI должен блокировать сценарий; нужно добавить явную проверку в кошелёк).
 
 ### 2.5. Связь с `MldsaMasterAccount` (Iter.3)
 
@@ -313,9 +318,9 @@
 
 ### 4.1. Новый формат signature_script
 
-- Разрешить следующие варианты:
-  - **старый**: `len == 65` → только `sig || sighash_type`;
-  - **новый**: `len >= 65` и `len <= MAX_SCRIPT_ELEMENT_SIZE`:
+- Разрешить следующие варианты **только после активации фазы** (используем уже имеющийся флаг `kip10_enabled` как переключатель Phase 2):
+  - **старый** (до активации): `len == 65` → только `sig || sighash_type`;
+  - **новый** (после активации): `len >= 65` и `len <= MAX_SCRIPT_ELEMENT_SIZE`:
     - хвостовые 65 байт трактуются как сейчас (сигнатура + sighash);
     - префикс `[0 .. len-65)` рассматривается как TLV‑поток.
 - Для совместимости: если префикс не содержит TLV, консенсус **не обязан** его интерпретировать, но должен принять транзакцию.
@@ -330,13 +335,7 @@
    - `let tlv_bytes = &sig_script[..sig_offset];`
    - `let sig_bytes = &sig_script[sig_offset..sig_offset+64];`
    - `let hash_type_byte = sig_script[sig_offset+64];`.
-3. Тривиальный TLV‑парсер:
-   - при наличии данных:
-     - если `tlv_bytes[0] == 0xA1` и `tlv_bytes.len() >= 1+8`:
-       - считать `delegation_id = u64::from_le_bytes(..)`;
-       - остальное (если есть) можно игнорировать/резервировать под будущее;
-     - любые другие теги/структуры **игнорировать** (до появления новых доменов).
-   - на этом этапе консенсус ничего не делает с `delegation_id`, просто допускает наличие префикса.
+3. TLV-префикс в Iteration 4 **полностью игнорируется** (кроме учёта длины): консенсус не парсит и не использует содержимое; разбор можно добавить в будущих итерациях.
 4. Остальной код (парс `SigHashType`, `Signature`, проверка через `calc_schnorr_signature_hash`) оставить без изменений.
 5. Тесты:
    - дополнить `crypto/txscript/tests/stealth_transactions.rs` кейсами:
@@ -347,9 +346,7 @@
 
 Важно: `get_sig_op_count` и `get_sig_op_count_upper_bound` уже шорткатят stealth‑входы по `script_public_key.version() == STEALTH_SCRIPT_VERSION`, поэтому увеличение `signature_script.len()` за счёт TLV **не влияет** на лимиты sigops и не требует отдельной миграции по KIP‑10.
 
-Дополнительно: новая логика приёмки `signature_script.len() >= 65` должна быть привязана к флагу консенсуса Phase 2 (`enable_mldsa_master`/`mldsa_master_enabled`, см. общий план в `Phase2_MLDSA_master_key.md`):
-- для devnet/testnet флаг включён, и узлы принимают TLV‑подписи;
-- для mainnet до активации флага узлы продолжают требовать `len == 65` (старое поведение), так что rollout можно контролировать через обновление параметров/сети.
+Активация: новая логика `len >= 65` действует только при `kip10_enabled = true`. При `kip10_enabled = false` сохраняется строгое правило `len == 65`.
 
 ## 5. RPC и сервисы: anchor/delegation API
 
@@ -377,11 +374,9 @@
 ### 5.2. Реализация в `rpc/service/src/service.rs`
 
 - В `RpcCoreService`:
-  - для `register_mldsa_anchor_call`:
-    - пока без консенсусной логики, просто хранить anchor в in‑memory `HashSet<[u8;32]>` + логировать;
-    - опционально писать в отдельный indexer позже (итерации 5/8).
-  - для `list_mldsa_delegations_call`:
-    - по умолчанию возвращать пустой список или проксировать в wallet‑daemon (если он поднят) через отдельный канал (этот шаг можно отложить).
+  - для `register_mldsa_anchor_call` / `list_mldsa_delegations_call`:
+    - текущий статус: `RpcError::NotImplemented`;
+    - минимальная цель Iteration 4: либо вернуть заглушки (in‑memory anchor-set / пустой список) без консенсусной логики, либо явно задокументировать `NotImplemented` для мягкой миграции.
 - Обновить mock‑реализацию `wallet/core/src/tests/rpc_core_mock.rs`:
   - возвращать `Err(RpcError::NotImplemented)` для новых методов → тесты кошелька не падают.
 
@@ -417,10 +412,11 @@
 
 ### 6.2. CLI / SDK UX
 
-- В `cli/src/modules/wallet.rs`:
-  - `wallet account link-stealth-to-master --stealth <id> --master-anchor <hex> --valid-until-daa <n>`;
-  - `wallet account list-delegations --master-anchor <hex>`;
-  - `wallet account revoke-delegation --delegation-id <id>`.
+- Фактические команды (Rust CLI):
+  - `account delegation link <stealth-id> <master-anchor-hex> [valid-for-daa]`;
+  - `account delegation list <master-anchor-hex>`;
+  - `account delegation revoke <delegation-id>`;
+  - отдельные `attach-stealth`, `detach-stealth` для привязки стелс к мастеру без создания делегации.
 - В `wallet/core/src/wasm/api`:
   - JS‑фасады `wallet.delegationCreate(...)`, `wallet.delegationList(...)`, `wallet.delegationRevoke(...)`.
 - UX‑ограничения:
@@ -446,7 +442,7 @@
 
 ### 7.2. Интеграционные тесты
 
-- Новый тест `testing/integration/mldsa_master.rs` (общий эпик для Phase 2, часть которого покрывает Итерацию 4):
+- Новый тест `testing/integration/mldsa_master.rs` (пока отсутствует — нужно добавить):
   1. Создать кошелёк, master, стелс‑аккаунт.
   2. Создать делегацию, отправить стелс‑tx с включённым TLV.
   3. Восстановить кошелёк по сид‑фразе, перечитать делегации и убедиться, что:
@@ -457,14 +453,14 @@
 
 ## 8. Чеклист Итерации 4
 
-- [ ] **Модель делегаций**: `DelegationRecordV1`, домены хеширования, CRDT‑логика выбора активной записи.
-- [ ] **Storage**: `DelegationStore` + версионирование `EphemeralKeyEntry` (V0/V1) с полями `master_anchor`/`delegation_id`.
-- [ ] **StealthAccount**: поля `master_anchor`, `active_delegation_id`, валидация делегаций при загрузке/линке.
-- [ ] **EphemeralKeyData**: обогащение делегацией при claim UTXO и при stealth‑change.
-- [ ] **StealthSigner + Generator**: флаг `include_delegation_id`, формирование TLV `0xA1 || delegation_id (u64 LE)` перед сигнатурой.
-- [ ] **TxScript**: `execute_stealth_spend` с поддержкой переменной длины `signature_script` и безопасным игнором TLV.
-- [ ] **RPC/Wallet API**: базовые методы `register_mldsa_anchor`, `list_mldsa_delegations` + wallet‑уровневые `delegation_*`.
-- [ ] **CLI / WASM**: команды создания/списка/ревокации делегаций, JS‑биндинги.
-- [ ] **Тесты**: unit + integration по матрице из `Phase2_MLDSA_master_key.md` (секция «Итерация 4») с учётом TLV и миграций.
+- [x] **Модель делегаций**: `DelegationRecordV1`, домены хеширования, CRDT‑логика выбора активной записи.
+- [x] **Storage**: `DelegationStore` + версионирование `EphemeralKeyEntry` (V0/V1) с полями `master_anchor`/`delegation_id`.
+- [x] **StealthAccount**: поля `master_anchor`, `active_delegation_id`, валидация делегаций при загрузке/линке.
+- [x] **EphemeralKeyData**: обогащение делегацией при claim UTXO и при stealth‑change.
+- [x] **StealthSigner + Generator**: флаг `include_delegation_id`, формирование TLV `0xA1 || delegation_id (u64 LE)` перед сигнатурой.
+- [ ] **TxScript**: `execute_stealth_spend` с поддержкой переменной длины `signature_script` **и** привязкой к флагу активации (`kip10_enabled`), игнор TLV без парсинга.
+- [ ] **RPC/Wallet API**: либо заглушки, либо минимальная реализация `register_mldsa_anchor`/`list_mldsa_delegations`; флаг `has_mldsa_master` должен отражать фактическую поддержку.
+- [ ] **CLI / WASM**: команды создания/списка/ревокации делегаций — описание синхронизировано с фактическими командами; проверка `EnableMldsaMaster` при создании делегаций.
+- [ ] **Тесты**: unit + integration по матрице из `Phase2_MLDSA_master_key.md`, включая отсутствующий `testing/integration/mldsa_master.rs`.
 
 

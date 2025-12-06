@@ -700,6 +700,46 @@ async fn sanity_test() {
                 })
             }
 
+            KaspadPayloadOps::RegisterMldsaAnchor => {
+                let rpc_client = client.clone();
+                tst!(op, {
+                    let mut anchor = [0u8; 32];
+                    anchor[0] = 1;
+                    let first = rpc_client
+                        .register_mldsa_anchor_call(
+                            None,
+                            RegisterMldsaAnchorRequest { anchor, metadata: Some("integration-smoke".into()) },
+                        )
+                        .await
+                        .unwrap();
+                    assert!(first.accepted, "first registration should be accepted");
+
+                    let second = rpc_client
+                        .register_mldsa_anchor_call(None, RegisterMldsaAnchorRequest { anchor, metadata: None })
+                        .await
+                        .unwrap();
+                    assert!(!second.accepted, "duplicate registration must be rejected");
+                })
+            }
+
+            KaspadPayloadOps::ListMldsaDelegations => {
+                let rpc_client = client.clone();
+                tst!(op, {
+                    let mut anchor = [0u8; 32];
+                    anchor[1] = 2;
+
+                    // Unknown anchor should return empty set
+                    let response = rpc_client.list_mldsa_delegations_call(None, ListMldsaDelegationsRequest { anchor }).await.unwrap();
+                    assert!(response.delegations.is_empty());
+
+                    // After registering an anchor, the RPC still returns empty because delegations
+                    // are not indexed at service level yet.
+                    rpc_client.register_mldsa_anchor_call(None, RegisterMldsaAnchorRequest { anchor, metadata: None }).await.unwrap();
+                    let response = rpc_client.list_mldsa_delegations_call(None, ListMldsaDelegationsRequest { anchor }).await.unwrap();
+                    assert!(response.delegations.is_empty());
+                })
+            }
+
             KaspadPayloadOps::GetBlockViewTags => {
                 let rpc_client = client.clone();
                 tst!(op, {

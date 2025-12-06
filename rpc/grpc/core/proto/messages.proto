@@ -68,6 +68,8 @@ message KaspadRequest {
     GetUtxoReturnAddressRequestMessage GetUtxoReturnAddressRequest = 1112;
     GetUtxosByScriptVersionRequestMessage getUtxosByScriptVersionRequest = 1114;
     GetBlockViewTagsRequestMessage getBlockViewTagsRequest = 1116;
+    RegisterMldsaAnchorRequestMessage registerMldsaAnchorRequest = 1118;
+    ListMldsaDelegationsRequestMessage listMldsaDelegationsRequest = 1120;
   }
 }
 
@@ -136,6 +138,8 @@ message KaspadResponse {
     GetUtxoReturnAddressResponseMessage GetUtxoReturnAddressResponse = 1113;
     GetUtxosByScriptVersionResponseMessage getUtxosByScriptVersionResponse = 1115;
     GetBlockViewTagsResponseMessage getBlockViewTagsResponse = 1117;
+    RegisterMldsaAnchorResponseMessage registerMldsaAnchorResponse = 1119;
+    ListMldsaDelegationsResponseMessage listMldsaDelegationsResponse = 1121;
   }
 }
 

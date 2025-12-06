@@ -91,6 +91,7 @@ pub struct Daemon {
     pub core: Arc<Core>,
     grpc_server_started: Listener,
     shutdown_requested: Listener,
+    rpc_core_service: Arc<RpcCoreService>,
     workers: Option<Vec<std::thread::JoinHandle<()>>>,
 
     _appdir_tempdir: TempDir,
@@ -143,7 +144,15 @@ impl Daemon {
         let shutdown_requested = rpc_core_service.core_shutdown_request_listener();
         let grpc_server = &Arc::downcast::<GrpcService>(async_service.find(GrpcService::IDENT).unwrap().arc_any()).unwrap();
         let grpc_server_started = grpc_server.started();
-        Daemon { client_manager, core, grpc_server_started, shutdown_requested, workers: None, _appdir_tempdir: appdir_tempdir }
+        Daemon {
+            client_manager,
+            core,
+            grpc_server_started,
+            shutdown_requested,
+            rpc_core_service: rpc_core_service.clone(),
+            workers: None,
+            _appdir_tempdir: appdir_tempdir,
+        }
     }
 
     pub fn client_manager(&self) -> Arc<ClientManager> {
@@ -156,6 +165,10 @@ impl Daemon {
 
     pub fn shutdown_requested(&self) -> Listener {
         self.shutdown_requested.clone()
+    }
+
+    pub fn rpc_core_service(&self) -> Arc<RpcCoreService> {
+        self.rpc_core_service.clone()
     }
 
     pub fn run(&mut self) {

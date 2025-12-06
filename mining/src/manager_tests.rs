@@ -43,6 +43,15 @@ mod tests {
     const TARGET_TIME_PER_BLOCK: u64 = 1_000;
     const MAX_BLOCK_MASS: u64 = 500_000;
 
+    fn disable_stealth_policy() {
+        std::env::set_var("KASPA_DISABLE_STEALTH_POLICY", "1");
+    }
+
+    fn new_manager(counters: Arc<MiningCounters>) -> MiningManager {
+        disable_stealth_policy();
+        MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters)
+    }
+
     // test_validate_and_insert_transaction verifies that valid transactions were successfully inserted into the mempool.
     #[test]
     fn test_validate_and_insert_transaction() {
@@ -51,7 +60,7 @@ mod tests {
         for (priority, orphan, rbf_policy) in all_priority_orphan_rbf_policy_combinations() {
             let consensus = Arc::new(ConsensusMock::new());
             let counters = Arc::new(MiningCounters::default());
-            let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+            let mining_manager = new_manager(counters.clone());
             let transactions_to_insert = (0..TX_COUNT).map(|i| create_transaction_with_utxo_entry(i, 0)).collect::<Vec<_>>();
             for transaction in transactions_to_insert.iter() {
                 let result = into_mempool_result(mining_manager.validate_and_insert_mutable_transaction(
@@ -157,7 +166,7 @@ mod tests {
         for (priority, orphan, rbf_policy) in all_priority_orphan_rbf_policy_combinations() {
             let consensus = Arc::new(ConsensusMock::new());
             let counters = Arc::new(MiningCounters::default());
-            let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+            let mining_manager = new_manager(counters.clone());
 
             // Build an invalid transaction with some gas and inform the consensus mock about the result it should return
             // when the mempool will submit this transaction for validation.
@@ -198,7 +207,7 @@ mod tests {
         for (priority, orphan, rbf_policy) in all_priority_orphan_rbf_policy_combinations() {
             let consensus = Arc::new(ConsensusMock::new());
             let counters = Arc::new(MiningCounters::default());
-            let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+            let mining_manager = new_manager(counters.clone());
 
             let transaction = create_transaction_with_utxo_entry(0, 0);
 
@@ -253,7 +262,7 @@ mod tests {
         for (priority, orphan, rbf_policy) in all_priority_orphan_rbf_policy_combinations() {
             let consensus = Arc::new(ConsensusMock::new());
             let counters = Arc::new(MiningCounters::default());
-            let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+            let mining_manager = new_manager(counters.clone());
 
             let transaction = create_child_and_parent_txs_and_add_parent_to_consensus(&consensus);
             assert!(
@@ -346,7 +355,7 @@ mod tests {
             fn run_rbf(&self, rbf_policy: RbfPolicy, expected: bool) {
                 let consensus = Arc::new(ConsensusMock::new());
                 let counters = Arc::new(MiningCounters::default());
-                let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+                let mining_manager = new_manager(counters.clone());
                 let funding_transactions = create_and_add_funding_transactions(&consensus, 10);
 
                 // RPC submit the initial transactions
@@ -549,7 +558,7 @@ mod tests {
     fn test_handle_new_block_transactions() {
         let consensus = Arc::new(ConsensusMock::new());
         let counters = Arc::new(MiningCounters::default());
-        let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+        let mining_manager = new_manager(counters.clone());
 
         const TX_COUNT: u32 = 10;
         let transactions_to_insert = (0..TX_COUNT).map(|i| create_transaction_with_utxo_entry(i, 0)).collect::<Vec<_>>();
@@ -610,7 +619,7 @@ mod tests {
     fn test_double_spend_with_block() {
         let consensus = Arc::new(ConsensusMock::new());
         let counters = Arc::new(MiningCounters::default());
-        let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+        let mining_manager = new_manager(counters.clone());
 
         let transaction_in_the_mempool = create_transaction_with_utxo_entry(0, 0);
         let result = mining_manager.validate_and_insert_transaction(
@@ -642,7 +651,7 @@ mod tests {
     fn test_orphan_transactions() {
         let consensus = Arc::new(ConsensusMock::new());
         let counters = Arc::new(MiningCounters::default());
-        let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+        let mining_manager = new_manager(counters.clone());
 
         // Before each parent transaction we add a transaction that funds it and insert the funding transaction in the consensus.
         const TX_PAIRS_COUNT: usize = 5;
@@ -903,6 +912,8 @@ mod tests {
 
         let consensus = Arc::new(ConsensusMock::new());
         let mut config = Config::build_default(ForkedParam::new_const(TARGET_TIME_PER_BLOCK), false, MAX_BLOCK_MASS);
+        config.stealth_only_inputs = false;
+        config.stealth_only_outputs = false;
         // Limit the orphan pool to 2 transactions
         config.maximum_orphan_transaction_count = 2;
         let counters = Arc::new(MiningCounters::default());
@@ -1002,7 +1013,7 @@ mod tests {
     fn test_revalidate_high_priority_transactions() {
         let consensus = Arc::new(ConsensusMock::new());
         let counters = Arc::new(MiningCounters::default());
-        let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+        let mining_manager = new_manager(counters.clone());
 
         // Create two valid transactions that double-spend each other (child_tx_1, child_tx_2)
         let (parent_tx, child_tx_1) = create_parent_and_children_transactions(&consensus, vec![3000 * SOMPI_PER_KASPA]);
@@ -1071,7 +1082,7 @@ mod tests {
     fn test_modify_block_template() {
         let consensus = Arc::new(ConsensusMock::new());
         let counters = Arc::new(MiningCounters::default());
-        let mining_manager = MiningManager::new(TARGET_TIME_PER_BLOCK, false, MAX_BLOCK_MASS, None, counters);
+        let mining_manager = new_manager(counters.clone());
 
         // Before each parent transaction we add a transaction that funds it and insert the funding transaction in the consensus.
         const TX_PAIRS_COUNT: usize = 12;
@@ -1131,6 +1142,8 @@ mod tests {
         let consensus = Arc::new(ConsensusMock::new());
         let counters = Arc::new(MiningCounters::default());
         let mut config = Config::build_default(ForkedParam::new_const(TARGET_TIME_PER_BLOCK), false, MAX_BLOCK_MASS);
+        config.stealth_only_inputs = false;
+        config.stealth_only_outputs = false;
         let tx_size = txs[0].mempool_estimated_bytes();
         let size_limit = TX_COUNT * tx_size;
         config.mempool_size_limit = size_limit;
@@ -1337,6 +1350,7 @@ mod tests {
     }
 
     fn create_transaction_with_utxo_entry(i: u32, block_daa_score: u64) -> MutableTransaction {
+        disable_stealth_policy();
         let previous_outpoint = TransactionOutpoint::new(Hash::default(), i);
         let (script_public_key, redeem_script) = op_true_script();
         let signature_script = pay_to_script_hash_signature_script(redeem_script, vec![]).expect("the redeem script is canonical");
@@ -1451,6 +1465,7 @@ mod tests {
     }
 
     fn create_transaction_without_input(output_values: Vec<u64>) -> Transaction {
+        disable_stealth_policy();
         let (script_public_key, _) = op_true_script();
         let outputs = output_values.iter().map(|value| TransactionOutput::new(*value, script_public_key.clone())).collect();
         Transaction::new(TX_VERSION, vec![], outputs, 0, SUBNETWORK_ID_NATIVE, 0, vec![])

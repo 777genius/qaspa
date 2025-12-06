@@ -61,4 +61,7 @@ declare_wasm_handlers!([
     FeeRatePollerDisable,
     AccountsCommitReveal,
     AccountsCommitRevealManual,
+    DelegationCreate,
+    DelegationList,
+    DelegationRevoke,
 ]);

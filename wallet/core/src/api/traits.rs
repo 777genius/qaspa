@@ -7,6 +7,7 @@
 //! is implemented by the [`Wallet`] struct.
 //!
 
+use crate::account::delegation::DelegationRecordV1;
 use crate::api::message::*;
 use crate::imports::*;
 use crate::storage::{PrvKeyData, PrvKeyDataId, PrvKeyDataInfo, WalletDescriptor};
@@ -232,6 +233,30 @@ pub trait WalletApi: Send + Sync + AnySync {
     /// See [`wallet_change_secret`](Self::wallet_change_secret) for a convenience wrapper around
     /// this call.
     async fn wallet_change_secret_call(self: Arc<Self>, request: WalletChangeSecretRequest) -> Result<WalletChangeSecretResponse>;
+
+    // Delegations (Iteration 4)
+    async fn delegation_create(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        master_anchor: String,
+        stealth_account_id: AccountId,
+        valid_for_daa: Option<u64>,
+    ) -> Result<u64> {
+        let req = DelegationCreateRequest { wallet_secret, master_anchor, stealth_account_id, valid_for_daa };
+        Ok(self.delegation_create_call(req).await?.delegation_id)
+    }
+    async fn delegation_create_call(self: Arc<Self>, request: DelegationCreateRequest) -> Result<DelegationCreateResponse>;
+
+    async fn delegation_list(self: Arc<Self>, master_anchor: String) -> Result<Vec<DelegationRecordV1>> {
+        Ok(self.delegation_list_call(DelegationListRequest { master_anchor }).await?.delegations)
+    }
+    async fn delegation_list_call(self: Arc<Self>, request: DelegationListRequest) -> Result<DelegationListResponse>;
+
+    async fn delegation_revoke(self: Arc<Self>, wallet_secret: Secret, delegation_id: u64) -> Result<()> {
+        self.delegation_revoke_call(DelegationRevokeRequest { wallet_secret, delegation_id }).await?;
+        Ok(())
+    }
+    async fn delegation_revoke_call(self: Arc<Self>, request: DelegationRevokeRequest) -> Result<DelegationRevokeResponse>;
 
     /// Wrapper around [`prv_key_data_enumerate_call()`](Self::prv_key_data_enumerate_call)
     async fn prv_key_data_enumerate(self: Arc<Self>) -> Result<Vec<Arc<PrvKeyDataInfo>>> {

@@ -127,6 +127,12 @@ pub enum NonStandardError {
     #[error("transaction input {1}: non-standard script form")]
     RejectInputScriptClass(TransactionId, usize),
 
+    #[error("transaction input #{1}: non-stealth inputs are not allowed under current policy")]
+    RejectNonStealthInput(TransactionId, usize),
+
+    #[error("transaction output #{1}: non-stealth outputs are not allowed under current policy")]
+    RejectNonStealthOutput(TransactionId, usize),
+
     #[error("transaction has {1} fees which is under the required amount of {2}")]
     RejectInsufficientFee(TransactionId, u64, u64),
 
@@ -146,6 +152,8 @@ impl NonStandardError {
             NonStandardError::RejectOutputScriptClass(id, _) => id,
             NonStandardError::RejectDust(id, _, _) => id,
             NonStandardError::RejectInputScriptClass(id, _) => id,
+            NonStandardError::RejectNonStealthInput(id, _) => id,
+            NonStandardError::RejectNonStealthOutput(id, _) => id,
             NonStandardError::RejectInsufficientFee(id, _, _) => id,
             NonStandardError::RejectSignatureCount(id, _, _, _) => id,
         }

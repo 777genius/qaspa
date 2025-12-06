@@ -27,6 +27,7 @@ kaspa-hashes.workspace = true
 kaspa-index-processor.workspace = true
 kaspa-math.workspace = true
 kaspa-merkle.workspace = true
+kaspa-mldsa.workspace = true
 kaspa-muhash.workspace = true
 kaspa-notify.workspace = true
 kaspa-pow.workspace = true

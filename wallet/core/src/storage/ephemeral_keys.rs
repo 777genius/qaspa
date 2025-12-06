@@ -118,11 +118,15 @@ impl std::fmt::Debug for EphemeralKeyData {
 }
 
 /// Entry stored on disk (encrypted)
-#[derive(Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, BorshSerialize, Serialize, Deserialize)]
 pub struct EphemeralKeyEntry {
     pub outpoint: TransactionOutpoint,
     pub data: EphemeralKeyData,
     pub status: EphemeralKeyStatus,
+    /// Optional master anchor associated with this UTXO (Iteration 4)
+    pub master_anchor: Option<[u8; 32]>,
+    /// Optional delegation id associated with this UTXO (Iteration 4)
+    pub delegation_id: Option<u64>,
 }
 
 impl Zeroize for EphemeralKeyEntry {
@@ -137,7 +141,38 @@ impl std::fmt::Debug for EphemeralKeyEntry {
             .field("outpoint", &self.outpoint)
             .field("data", &self.data)
             .field("status", &self.status)
+            .field("master_anchor", &self.master_anchor.as_ref().map(|a| a.to_vec().to_hex()))
+            .field("delegation_id", &self.delegation_id)
             .finish()
+    }
+}
+
+impl borsh::BorshDeserialize for EphemeralKeyEntry {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        use std::io::ErrorKind;
+
+        fn is_optional_field_missing(err: &std::io::Error) -> bool {
+            matches!(err.kind(), ErrorKind::UnexpectedEof)
+                || (err.kind() == ErrorKind::InvalidData && err.to_string().contains("Unexpected length of input"))
+        }
+
+        let outpoint = TransactionOutpoint::deserialize_reader(reader)?;
+        let data = EphemeralKeyData::deserialize_reader(reader)?;
+        let status = EphemeralKeyStatus::deserialize_reader(reader)?;
+
+        let master_anchor = match Option::<[u8; 32]>::deserialize_reader(reader) {
+            Ok(anchor) => anchor,
+            Err(err) if is_optional_field_missing(&err) => None,
+            Err(err) => return Err(err),
+        };
+
+        let delegation_id = match Option::<u64>::deserialize_reader(reader) {
+            Ok(id) => id,
+            Err(err) if is_optional_field_missing(&err) => None,
+            Err(err) => return Err(err),
+        };
+
+        Ok(Self { outpoint, data, status, master_anchor, delegation_id })
     }
 }
 
@@ -155,13 +190,22 @@ pub struct EphemeralKeyStore {
     /// Status tracking
     statuses: DashMap<TransactionOutpoint, EphemeralKeyStatus>,
 
+    /// Delegation metadata (Iteration 4)
+    delegations: DashMap<TransactionOutpoint, (Option<[u8; 32]>, Option<u64>)>,
+
     /// Dirty flag for persistence
     modified: AtomicBool,
 }
 
 impl EphemeralKeyStore {
     pub fn new(account_id: AccountId) -> Self {
-        Self { account_id, keys: DashMap::new(), statuses: DashMap::new(), modified: AtomicBool::new(false) }
+        Self {
+            account_id,
+            keys: DashMap::new(),
+            statuses: DashMap::new(),
+            delegations: DashMap::new(),
+            modified: AtomicBool::new(false),
+        }
     }
 
     /// Returns the account ID this store belongs to
@@ -174,9 +218,17 @@ impl EphemeralKeyStore {
     // ========================================================================
 
     /// Stores an ephemeral key in memory
-    pub async fn store(&self, outpoint: TransactionOutpoint, data: EphemeralKeyData, daa_score: u64) -> Result<()> {
+    pub async fn store(
+        &self,
+        outpoint: TransactionOutpoint,
+        data: EphemeralKeyData,
+        daa_score: u64,
+        master_anchor: Option<[u8; 32]>,
+        delegation_id: Option<u64>,
+    ) -> Result<()> {
         self.keys.insert(outpoint, data);
         self.statuses.insert(outpoint, EphemeralKeyStatus::Pending { added_daa_score: daa_score });
+        self.delegations.insert(outpoint, (master_anchor, delegation_id));
         self.modified.store(true, Ordering::SeqCst);
         Ok(())
     }
@@ -191,10 +243,16 @@ impl EphemeralKeyStore {
         self.keys.contains_key(outpoint)
     }
 
+    /// Returns delegation metadata for an outpoint, if present.
+    pub fn delegation_metadata(&self, outpoint: &TransactionOutpoint) -> Option<(Option<[u8; 32]>, Option<u64>)> {
+        self.delegations.get(outpoint).map(|v| v.value().clone())
+    }
+
     /// Removes an ephemeral key
     pub async fn remove(&self, outpoint: &TransactionOutpoint) -> Result<()> {
         self.keys.remove(outpoint);
         self.statuses.remove(outpoint);
+        self.delegations.remove(outpoint);
         self.modified.store(true, Ordering::SeqCst);
         Ok(())
     }
@@ -235,7 +293,9 @@ impl EphemeralKeyStore {
                 let outpoint = *r.key();
                 let data = r.value().clone();
                 let status = self.statuses.get(&outpoint).map(|s| s.clone()).unwrap_or_default();
-                EphemeralKeyEntry { outpoint, data, status }
+                let (master_anchor, delegation_id) =
+                    self.delegations.get(&outpoint).map(|v| v.value().clone()).unwrap_or((None, None));
+                EphemeralKeyEntry { outpoint, data, status, master_anchor, delegation_id }
             })
             .collect()
     }
@@ -245,6 +305,7 @@ impl EphemeralKeyStore {
         for entry in entries {
             self.keys.insert(entry.outpoint, entry.data);
             self.statuses.insert(entry.outpoint, entry.status);
+            self.delegations.insert(entry.outpoint, (entry.master_anchor, entry.delegation_id));
         }
         self.modified.store(false, Ordering::SeqCst);
     }
@@ -261,6 +322,7 @@ impl EphemeralKeyStore {
         }
         self.keys.clear();
         self.statuses.clear();
+        self.delegations.clear();
     }
 
     // ========================================================================
@@ -377,12 +439,19 @@ impl EphemeralKeyProvider for EphemeralKeyStore {
     async fn get_ephemeral_key(&self, outpoint: &TransactionOutpoint) -> Option<EphemeralKeyData> {
         self.get(outpoint).await
     }
+
+    async fn get_ephemeral_entry(&self, outpoint: &TransactionOutpoint) -> Option<(EphemeralKeyData, Option<u64>)> {
+        let key = self.get(outpoint).await?;
+        let delegation = self.delegation_metadata(outpoint).map(|(_, id)| id).flatten();
+        Some((key, delegation))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::deterministic::AccountId;
+    use borsh::{BorshDeserialize, BorshSerialize};
     use kaspa_hashes::Hash;
     use kaspa_utils::hex::FromHex;
 
@@ -390,6 +459,60 @@ mod tests {
         // Create a valid 64-char hex string for AccountId
         let hex = format!("cafe0000000000000000000000000000000000000000000000000000{}", suffix);
         AccountId::from_hex(&hex).unwrap()
+    }
+
+    #[test]
+    fn legacy_entries_deserialize_with_empty_delegation_metadata() {
+        let outpoint = TransactionOutpoint::new(Hash::from_bytes([9u8; 32]), 1);
+        let data = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
+        let status = EphemeralKeyStatus::Pending { added_daa_score: 777 };
+
+        let mut bytes = Vec::new();
+        BorshSerialize::serialize(&outpoint, &mut bytes).expect("serialize outpoint");
+        BorshSerialize::serialize(&data, &mut bytes).expect("serialize data");
+        BorshSerialize::serialize(&status, &mut bytes).expect("serialize status");
+
+        let entry = EphemeralKeyEntry::try_from_slice(&bytes).expect("deserialize");
+        assert_eq!(entry.outpoint, outpoint);
+        assert_eq!(entry.data.spending_secret, data.spending_secret);
+        assert_eq!(entry.status, status);
+        assert_eq!(entry.master_anchor, None);
+        assert_eq!(entry.delegation_id, None);
+    }
+
+    #[tokio::test]
+    async fn store_and_load_preserve_delegation_metadata() {
+        let account_id = test_account_id("00000005");
+        let store = EphemeralKeyStore::new(account_id);
+
+        let tx_id = Hash::from_bytes([8u8; 32]);
+        let outpoint = TransactionOutpoint::new(tx_id, 2);
+        let key_data = EphemeralKeyData::new([11u8; 32], [22u8; 32], [33u8; 33]);
+        let anchor = [99u8; 32];
+        let delegation_id = Some(123_u64);
+
+        store.store(outpoint, key_data.clone(), 555, Some(anchor), delegation_id).await.unwrap();
+
+        let metadata = store.delegation_metadata(&outpoint).unwrap();
+        assert_eq!(metadata.0, Some(anchor));
+        assert_eq!(metadata.1, delegation_id);
+
+        let entries = store.entries();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].master_anchor, Some(anchor));
+        assert_eq!(entries[0].delegation_id, delegation_id);
+
+        let clone_store = EphemeralKeyStore::new(account_id);
+        clone_store.load_entries(entries);
+        let cloned_metadata = clone_store.delegation_metadata(&outpoint).unwrap();
+        assert_eq!(cloned_metadata.0, Some(anchor));
+        assert_eq!(cloned_metadata.1, delegation_id);
+
+        // Ensure provider API exposes delegation id as well
+        use crate::tx::generator::stealth_signer::EphemeralKeyProvider;
+        let (retrieved, retrieved_delegation) = clone_store.get_ephemeral_entry(&outpoint).await.unwrap();
+        assert_eq!(retrieved.spending_secret, key_data.spending_secret);
+        assert_eq!(retrieved_delegation, delegation_id);
     }
 
     #[tokio::test]
@@ -402,7 +525,7 @@ mod tests {
         let key_data = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
 
         // Test store
-        store.store(outpoint, key_data.clone(), 100).await.unwrap();
+        store.store(outpoint, key_data.clone(), 100, None, None).await.unwrap();
         assert!(store.contains(&outpoint));
         assert_eq!(store.len(), 1);
         assert!(store.is_modified());
@@ -433,7 +556,7 @@ mod tests {
             let tx_id = Hash::from_bytes([i; 32]);
             let outpoint = TransactionOutpoint::new(tx_id, i as u32);
             let key_data = EphemeralKeyData::new([i; 32], [i + 1; 32], [i + 2; 33]);
-            store.store(outpoint, key_data, 100 + i as u64).await.unwrap();
+            store.store(outpoint, key_data, 100 + i as u64, None, None).await.unwrap();
         }
 
         // Get entries
@@ -472,7 +595,7 @@ mod tests {
         let key_data = EphemeralKeyData::new([10u8; 32], [20u8; 32], [30u8; 33]);
 
         // Store a key
-        store.store(outpoint, key_data.clone(), 100).await.unwrap();
+        store.store(outpoint, key_data.clone(), 100, None, None).await.unwrap();
 
         // Retrieve via EphemeralKeyProvider trait
         let provider: &dyn EphemeralKeyProvider = &store;
@@ -510,7 +633,7 @@ mod tests {
             let tx_id = Hash::from_bytes([i + 10; 32]);
             let outpoint = TransactionOutpoint::new(tx_id, i as u32);
             let key_data = EphemeralKeyData::new([i; 32], [i + 1; 32], [i + 2; 33]);
-            store1.store(outpoint, key_data, 100 + i as u64).await.unwrap();
+            store1.store(outpoint, key_data, 100 + i as u64, None, None).await.unwrap();
         }
 
         // Confirm one entry

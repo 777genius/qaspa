@@ -16,12 +16,18 @@ use kaspa_consensus_core::{
     },
 };
 use kaspa_stealth::{create_stealth_output, derive_spending_key, scan_output, StealthSecretKey};
-use kaspa_txscript::{caches::Cache, pay_to_stealth, TxScriptEngine, STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION};
+use kaspa_txscript::{
+    caches::Cache, pay_to_stealth, TxScriptEngine, MAX_SCRIPT_ELEMENT_SIZE, STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION,
+};
 use rand::rngs::OsRng;
 use secp256k1::{Message, SecretKey, SECP256K1};
 
 /// Creates a mock transaction with a stealth input for testing
-fn create_stealth_test_transaction(spending_key: &SecretKey, stealth_spk: &ScriptPublicKey) -> (Transaction, UtxoEntry) {
+fn create_stealth_test_transaction(
+    spending_key: &SecretKey,
+    stealth_spk: &ScriptPublicKey,
+    tlv_prefix: Option<Vec<u8>>,
+) -> (Transaction, UtxoEntry) {
     // Create a simple transaction spending from a stealth output
     let prev_outpoint = TransactionOutpoint::new([0u8; 32].into(), 0);
 
@@ -47,8 +53,11 @@ fn create_stealth_test_transaction(spending_key: &SecretKey, stealth_spk: &Scrip
     let keypair = secp256k1::Keypair::from_secret_key(SECP256K1, spending_key);
     let sig = SECP256K1.sign_schnorr(&msg, &keypair);
 
-    // Create signature script: [64 bytes sig][1 byte sighash_type]
-    let mut sig_script = Vec::with_capacity(65);
+    // Create signature script: optional TLV || [64 bytes sig][1 byte sighash_type]
+    let mut sig_script = Vec::with_capacity(74);
+    if let Some(prefix) = tlv_prefix {
+        sig_script.extend_from_slice(&prefix);
+    }
     sig_script.extend_from_slice(&sig.serialize());
     sig_script.push(SIG_HASH_ALL.to_u8());
 
@@ -95,7 +104,7 @@ fn test_stealth_transaction_valid_signature() {
     let spending_key = derive_spending_key(&receiver_keys.spend_secret(), &scan_result.blinding_factor).unwrap();
 
     // Create and sign a transaction spending the stealth output
-    let (tx, utxo) = create_stealth_test_transaction(&spending_key, &stealth_spk);
+    let (tx, utxo) = create_stealth_test_transaction(&spending_key, &stealth_spk, None);
 
     // Verify the transaction using the VM
     let entries = vec![utxo];
@@ -134,7 +143,7 @@ fn test_stealth_transaction_invalid_signature() {
     let wrong_key = SecretKey::new(&mut OsRng);
 
     // Create and sign a transaction with the wrong key
-    let (tx, utxo) = create_stealth_test_transaction(&wrong_key, &stealth_spk);
+    let (tx, utxo) = create_stealth_test_transaction(&wrong_key, &stealth_spk, None);
 
     // Verify the transaction using the VM
     let entries = vec![utxo];
@@ -170,6 +179,175 @@ fn test_stealth_sig_op_count() {
     // Stealth always counts as 1 sig op
     let count = kaspa_txscript::get_sig_op_count_upper_bound::<PopulatedTransaction, SigHashReusedValuesUnsync>(&[], &stealth_spk);
     assert_eq!(count, 1, "Stealth should always have exactly 1 sig op");
+}
+
+#[test]
+fn test_stealth_signature_with_delegation_tlv() {
+    // Generate receiver's stealth keys
+    let receiver_keys = StealthSecretKey::generate();
+    let receiver_address = receiver_keys.to_address();
+
+    // Sender creates a stealth output
+    let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
+    let stealth_spk = pay_to_stealth(&ephemeral_output);
+
+    // Receiver scans and derives spending key
+    let scan_result = scan_output(&ephemeral_output, &receiver_keys.scan_secret(), &receiver_address.spend_pubkey).unwrap();
+    let spending_key = derive_spending_key(&receiver_keys.spend_secret(), &scan_result.blinding_factor).unwrap();
+
+    // TLV: tag 0xA1 + u64 delegation id
+    let mut tlv = vec![0xA1];
+    tlv.extend_from_slice(&123u64.to_le_bytes());
+    let (tx, utxo) = create_stealth_test_transaction(&spending_key, &stealth_spk, Some(tlv));
+
+    let entries = vec![utxo];
+    let verifiable_tx = PopulatedTransaction::new(&tx, entries);
+    let sig_cache = Cache::new(10);
+    let reused_values = SigHashReusedValuesUnsync::new();
+    let mut vm = TxScriptEngine::from_transaction_input(
+        &verifiable_tx,
+        &tx.inputs[0],
+        0,
+        verifiable_tx.utxo(0).unwrap(),
+        &reused_values,
+        &sig_cache,
+        true,
+        false,
+    );
+    assert!(vm.execute().is_ok(), "Stealth with TLV should pass");
+}
+
+#[test]
+fn test_stealth_signature_with_unknown_tlv() {
+    let receiver_keys = StealthSecretKey::generate();
+    let receiver_address = receiver_keys.to_address();
+    let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
+    let stealth_spk = pay_to_stealth(&ephemeral_output);
+    let scan_result = scan_output(&ephemeral_output, &receiver_keys.scan_secret(), &receiver_address.spend_pubkey).unwrap();
+    let spending_key = derive_spending_key(&receiver_keys.spend_secret(), &scan_result.blinding_factor).unwrap();
+
+    let tlv = vec![0xA2, 0xFF, 0xEE]; // unknown tag, arbitrary payload
+    let (tx, utxo) = create_stealth_test_transaction(&spending_key, &stealth_spk, Some(tlv));
+    let entries = vec![utxo];
+    let verifiable_tx = PopulatedTransaction::new(&tx, entries);
+    let sig_cache = Cache::new(10);
+    let reused_values = SigHashReusedValuesUnsync::new();
+    let mut vm = TxScriptEngine::from_transaction_input(
+        &verifiable_tx,
+        &tx.inputs[0],
+        0,
+        verifiable_tx.utxo(0).unwrap(),
+        &reused_values,
+        &sig_cache,
+        true,
+        false,
+    );
+    assert!(vm.execute().is_ok(), "Stealth with unknown TLV should pass");
+}
+
+#[test]
+fn test_stealth_signature_requires_activation_flag_for_tlv() {
+    let receiver_keys = StealthSecretKey::generate();
+    let receiver_address = receiver_keys.to_address();
+    let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
+    let stealth_spk = pay_to_stealth(&ephemeral_output);
+    let scan_result = scan_output(&ephemeral_output, &receiver_keys.scan_secret(), &receiver_address.spend_pubkey).unwrap();
+    let spending_key = derive_spending_key(&receiver_keys.spend_secret(), &scan_result.blinding_factor).unwrap();
+
+    let mut tlv = vec![0xA1];
+    tlv.extend_from_slice(&123u64.to_le_bytes());
+    let (tx, utxo) = create_stealth_test_transaction(&spending_key, &stealth_spk, Some(tlv));
+    let entries = vec![utxo];
+    let verifiable_tx = PopulatedTransaction::new(&tx, entries);
+    let sig_cache = Cache::new(10);
+    let reused_values = SigHashReusedValuesUnsync::new();
+
+    // kip10_enabled = true -> should accept
+    let mut vm_enabled = TxScriptEngine::from_transaction_input(
+        &verifiable_tx,
+        &tx.inputs[0],
+        0,
+        verifiable_tx.utxo(0).unwrap(),
+        &reused_values,
+        &sig_cache,
+        true,
+        false,
+    );
+    assert!(vm_enabled.execute().is_ok(), "TLV sig should pass when kip10_enabled");
+
+    // kip10_enabled = false -> should reject due to len != 65
+    let mut vm_disabled = TxScriptEngine::from_transaction_input(
+        &verifiable_tx,
+        &tx.inputs[0],
+        0,
+        verifiable_tx.utxo(0).unwrap(),
+        &reused_values,
+        &sig_cache,
+        false,
+        false,
+    );
+    assert!(vm_disabled.execute().is_err(), "TLV sig should fail when kip10 disabled");
+}
+
+#[test]
+fn test_stealth_signature_with_truncated_tlv_prefix() {
+    let receiver_keys = StealthSecretKey::generate();
+    let receiver_address = receiver_keys.to_address();
+    let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
+    let stealth_spk = pay_to_stealth(&ephemeral_output);
+    let scan_result = scan_output(&ephemeral_output, &receiver_keys.scan_secret(), &receiver_address.spend_pubkey).unwrap();
+    let spending_key = derive_spending_key(&receiver_keys.spend_secret(), &scan_result.blinding_factor).unwrap();
+
+    // TLV tag without full payload
+    let tlv = vec![0xA1, 0x55];
+    let (tx, utxo) = create_stealth_test_transaction(&spending_key, &stealth_spk, Some(tlv));
+
+    let entries = vec![utxo];
+    let verifiable_tx = PopulatedTransaction::new(&tx, entries);
+    let sig_cache = Cache::new(10);
+    let reused_values = SigHashReusedValuesUnsync::new();
+    let mut vm = TxScriptEngine::from_transaction_input(
+        &verifiable_tx,
+        &tx.inputs[0],
+        0,
+        verifiable_tx.utxo(0).unwrap(),
+        &reused_values,
+        &sig_cache,
+        true,
+        false,
+    );
+    assert!(vm.execute().is_ok(), "Stealth with truncated TLV should still pass");
+}
+
+#[test]
+fn test_stealth_signature_rejects_oversized_script() {
+    let receiver_keys = StealthSecretKey::generate();
+    let receiver_address = receiver_keys.to_address();
+    let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
+    let stealth_spk = pay_to_stealth(&ephemeral_output);
+    let scan_result = scan_output(&ephemeral_output, &receiver_keys.scan_secret(), &receiver_address.spend_pubkey).unwrap();
+    let spending_key = derive_spending_key(&receiver_keys.spend_secret(), &scan_result.blinding_factor).unwrap();
+
+    // Make TLV large enough so signature_script > MAX_SCRIPT_ELEMENT_SIZE
+    let oversized_prefix = vec![0x42; MAX_SCRIPT_ELEMENT_SIZE - 64];
+    let (tx, utxo) = create_stealth_test_transaction(&spending_key, &stealth_spk, Some(oversized_prefix));
+
+    let entries = vec![utxo];
+    let verifiable_tx = PopulatedTransaction::new(&tx, entries);
+    let sig_cache = Cache::new(10);
+    let reused_values = SigHashReusedValuesUnsync::new();
+    let mut vm = TxScriptEngine::from_transaction_input(
+        &verifiable_tx,
+        &tx.inputs[0],
+        0,
+        verifiable_tx.utxo(0).unwrap(),
+        &reused_values,
+        &sig_cache,
+        true,
+        false,
+    );
+    let result = vm.execute();
+    assert!(result.is_err(), "Oversized signature script must be rejected");
 }
 
 #[test]

@@ -5,6 +5,7 @@
 //! `XxxRequest` and `XxxResponse` message.
 //!
 
+use crate::account::delegation::DelegationRecordV1;
 use crate::imports::*;
 use crate::tx::{Fees, GeneratorSummary, PaymentDestination, RandomFeeSettings};
 use kaspa_addresses::Address;
@@ -240,6 +241,48 @@ pub struct WalletChangeSecretRequest {
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WalletChangeSecretResponse {}
+
+// ----------------------------------------------------------------
+// Delegations (Iteration 4)
+// ----------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationCreateRequest {
+    pub wallet_secret: Secret,
+    pub master_anchor: String,
+    pub stealth_account_id: AccountId,
+    pub valid_for_daa: Option<u64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationCreateResponse {
+    pub delegation_id: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationListRequest {
+    pub master_anchor: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationListResponse {
+    pub delegations: Vec<DelegationRecordV1>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationRevokeRequest {
+    pub wallet_secret: Secret,
+    pub delegation_id: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DelegationRevokeResponse {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]

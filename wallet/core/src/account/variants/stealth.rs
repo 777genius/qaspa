@@ -6,6 +6,7 @@
 //! can identify and spend.
 //!
 
+use crate::account::delegation::{DelegationId, DelegationRecordV1, DelegationStatus};
 use crate::account::{Account, AccountKind, GenerationNotifier, Inner};
 use crate::deterministic::{make_account_hashes, AccountId};
 use crate::events::Events;
@@ -34,7 +35,7 @@ use kaspa_rpc_core::{RpcBlock, RpcHash, RpcTransactionId, RpcUtxoEntry, RpcUtxos
 use kaspa_stealth::EPHEMERAL_OUTPUT_SIZE;
 use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAddress};
 use kaspa_txscript::{extract_stealth_output, STEALTH_SCRIPT_VERSION};
-use kaspa_utils::hex;
+use kaspa_utils::hex::ToHex;
 use secp256k1::{PublicKey, SecretKey, XOnlyPublicKey, SECP256K1};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
@@ -378,10 +379,32 @@ pub struct StealthAccount {
     master_anchor: Mutex<Option<[u8; 32]>>,
 
     /// Reserved for delegation id (Iteration 4)
-    delegation_id: Mutex<Option<u64>>,
+    delegation_id: Mutex<Option<DelegationId>>,
+}
+
+fn delegation_window_ok(record: &DelegationRecordV1, current_daa: u64) -> bool {
+    if current_daa == 0 {
+        return true;
+    }
+    if record.valid_from_daa > current_daa {
+        return false;
+    }
+    match record.valid_until_daa {
+        Some(until) => current_daa <= until,
+        None => true,
+    }
 }
 
 impl StealthAccount {
+    /// Returns the spend pubkey (XOnly) for this stealth account.
+    pub fn spend_pubkey(&self) -> Result<XOnlyPublicKey> {
+        Ok(self.spend_pubkey)
+    }
+
+    /// Returns the scan pubkey (XOnly) for this stealth account.
+    pub fn scan_pubkey(&self) -> Result<XOnlyPublicKey> {
+        Ok(self.scan_pubkey)
+    }
     // ========================================================================
     // CONSTRUCTION
     // ========================================================================
@@ -452,7 +475,7 @@ impl StealthAccount {
         // Use storage.id directly since Inner.id is private
         let ephemeral_keys = Arc::new(EphemeralKeyStore::new(storage.id));
 
-        Ok(Self {
+        let account = Self {
             inner,
             prv_key_data_id,
             account_index: payload.account_index,
@@ -465,8 +488,22 @@ impl StealthAccount {
             pending_ephemeral_persist: Arc::new(AsyncMutex::new(PendingEphemeralPersist::new())),
             creation_daa_score: payload.creation_daa_score,
             master_anchor: Mutex::new(payload.master_anchor),
-            delegation_id: Mutex::new(payload.delegation_id),
-        })
+            delegation_id: Mutex::new(payload.delegation_id.map(DelegationId)),
+        };
+
+        if let Some(id) = account.delegation_id() {
+            let anchor =
+                account.master_anchor().ok_or_else(|| Error::Custom("delegation_id present without master_anchor".to_string()))?;
+            let store = wallet.delegation_store();
+            let record = store.by_id(id).ok_or_else(|| Error::Custom("delegation not found in store".to_string()))?;
+            account.validate_delegation_record(&record, Some(anchor))?;
+            let current_daa = account.wallet().utxo_processor().current_daa_score().unwrap_or(0);
+            if !matches!(record.status, DelegationStatus::Active) || !account.delegation_window_ok(&record, current_daa) {
+                return Err(Error::Custom("delegation inactive or outside validity window".to_string()));
+            }
+        }
+
+        Ok(account)
     }
 
     // ========================================================================
@@ -539,8 +576,59 @@ impl StealthAccount {
         *self.master_anchor.lock().unwrap()
     }
 
-    pub fn delegation_id(&self) -> Option<u64> {
+    pub fn delegation_id(&self) -> Option<DelegationId> {
         *self.delegation_id.lock().unwrap()
+    }
+
+    fn validate_delegation_record(&self, record: &DelegationRecordV1, expected_anchor: Option<[u8; 32]>) -> Result<()> {
+        let anchor = expected_anchor.ok_or_else(|| Error::Custom("delegation_id set but master_anchor is missing".to_string()))?;
+        if record.anchor != anchor {
+            return Err(Error::Custom("delegation anchor mismatch".to_string()));
+        }
+        if record.account_id != *self.id() {
+            return Err(Error::Custom("delegation account mismatch".to_string()));
+        }
+        if record.scan_pubkey != self.scan_pubkey.serialize() || record.spend_pubkey != self.spend_pubkey.serialize() {
+            return Err(Error::Custom("delegation pubkeys mismatch".to_string()));
+        }
+        Ok(())
+    }
+
+    fn delegation_window_ok(&self, record: &DelegationRecordV1, current_daa: u64) -> bool {
+        delegation_window_ok(record, current_daa)
+    }
+
+    async fn delegation_metadata(&self) -> Result<(Option<[u8; 32]>, Option<DelegationId>)> {
+        let anchor = match self.master_anchor() {
+            Some(a) => a,
+            None => return Ok((None, None)),
+        };
+
+        let store = self.wallet().delegation_store().clone();
+        let current_daa = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
+
+        // Try explicit delegation id first
+        if let Some(id) = self.delegation_id() {
+            if let Some(record) = store.by_id(id) {
+                if matches!(record.status, crate::account::delegation::DelegationStatus::Active)
+                    && self.delegation_window_ok(&record, current_daa)
+                    && self.validate_delegation_record(&record, Some(anchor)).is_ok()
+                {
+                    return Ok((Some(anchor), Some(id)));
+                }
+            }
+        }
+
+        // Fallback to active record from store
+        if let Some((id, record)) = store.active_for_account(&anchor, self.id()) {
+            if self.delegation_window_ok(&record, current_daa) && self.validate_delegation_record(&record, Some(anchor)).is_ok() {
+                let mut slot = self.delegation_id.lock().unwrap();
+                *slot = Some(id);
+                return Ok((Some(anchor), Some(id)));
+            }
+        }
+
+        Ok((Some(anchor), None))
     }
 
     pub fn attach_to_master(&self, anchor: [u8; 32]) {
@@ -555,6 +643,13 @@ impl StealthAccount {
         *anchor_slot = None;
         let mut delegation_slot = self.delegation_id.lock().unwrap();
         *delegation_slot = None;
+    }
+
+    pub fn set_delegation(&self, anchor: [u8; 32], delegation_id: Option<DelegationId>) {
+        let mut anchor_slot = self.master_anchor.lock().unwrap();
+        *anchor_slot = Some(anchor);
+        let mut delegation_slot = self.delegation_id.lock().unwrap();
+        *delegation_slot = delegation_id;
     }
 
     // ========================================================================
@@ -973,8 +1068,9 @@ impl StealthAccount {
         );
 
         let daa_score = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
+        let (anchor, delegation_id) = self.delegation_metadata().await?;
 
-        self.ephemeral_keys.store(outpoint, key_data, daa_score).await?;
+        self.ephemeral_keys.store(outpoint, key_data, daa_score, anchor, delegation_id.map(|d| d.0)).await?;
 
         // Register in UtxoProcessor's outpoint index
         self.wallet().utxo_processor().register_stealth_outpoint(outpoint, *self.id());
@@ -1035,7 +1131,7 @@ impl Account for StealthAccount {
     fn to_storage(&self) -> Result<AccountStorage> {
         let settings = self.context().settings.clone();
         let master_anchor = *self.master_anchor.lock().unwrap();
-        let delegation_id = *self.delegation_id.lock().unwrap();
+        let delegation_id = self.delegation_id.lock().unwrap().map(|id| id.0);
         let storable = Payload::new(
             self.account_index,
             self.scan_pubkey,
@@ -1074,12 +1170,13 @@ impl Account for StealthAccount {
         .with_property(AccountDescriptorProperty::AccountIndex, self.account_index.into());
 
         if let Some(anchor) = *self.master_anchor.lock().unwrap() {
-            descriptor =
-                descriptor.with_property(AccountDescriptorProperty::Other("master_anchor".to_string()), hex::encode(anchor).into());
+            descriptor = descriptor
+                .with_property(AccountDescriptorProperty::Other("master_anchor".to_string()), anchor.to_vec().to_hex().into());
         }
 
         if let Some(delegation_id) = *self.delegation_id.lock().unwrap() {
-            descriptor = descriptor.with_property(AccountDescriptorProperty::Other("delegation_id".to_string()), delegation_id.into());
+            descriptor =
+                descriptor.with_property(AccountDescriptorProperty::Other("delegation_id".to_string()), delegation_id.0.into());
         }
 
         Ok(descriptor)
@@ -1252,9 +1349,10 @@ impl StealthUtxoHandler for StealthAccount {
                 let outpoint = TransactionOutpoint::new(utxo.outpoint.transaction_id, utxo.outpoint.index);
 
                 let daa_score = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
+                let (anchor, delegation_id) = self.delegation_metadata().await.ok()?;
 
                 // Store ephemeral key
-                if let Err(e) = self.ephemeral_keys.store(outpoint, key_data, daa_score).await {
+                if let Err(e) = self.ephemeral_keys.store(outpoint, key_data, daa_score, anchor, delegation_id.map(|d| d.0)).await {
                     log_error!("Failed to store ephemeral key: {}", e);
                     return None;
                 }
@@ -1344,6 +1442,7 @@ mod tests {
     use kaspa_consensus_core::network::{NetworkId, NetworkType};
     use kaspa_consensus_core::subnets;
     use kaspa_hashes::Hash;
+    use kaspa_mldsa::MlDsaLevel;
     use kaspa_rpc_core::{RpcBlock, RpcHeader, RpcTransaction, RpcTransactionInput, RpcTransactionOutput, RpcTransactionVerboseData};
     use kaspa_stealth::create_stealth_output;
     use kaspa_txscript::pay_to_stealth;
@@ -1351,6 +1450,52 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
     #[cfg(not(target_arch = "wasm32"))]
     use tempfile::tempdir;
+
+    fn make_record(valid_from: u64, valid_until: Option<u64>) -> DelegationRecordV1 {
+        DelegationRecordV1 {
+            version: 1,
+            level: MlDsaLevel::Level2 as u8,
+            anchor: [0u8; 32],
+            account_id: AccountId(Hash::from_u64_word(1)),
+            spend_pubkey: [0u8; 32],
+            scan_pubkey: [0u8; 32],
+            valid_from_daa: valid_from,
+            valid_until_daa: valid_until,
+            nonce: 0,
+            status: DelegationStatus::Active,
+            signature: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn delegation_window_allows_when_no_daa() {
+        let record = make_record(10, Some(20));
+        assert!(delegation_window_ok(&record, 0));
+    }
+
+    #[test]
+    fn delegation_window_blocks_before_start() {
+        let record = make_record(10, Some(20));
+        assert!(!delegation_window_ok(&record, 5));
+    }
+
+    #[test]
+    fn delegation_window_blocks_after_end() {
+        let record = make_record(10, Some(20));
+        assert!(!delegation_window_ok(&record, 25));
+    }
+
+    #[test]
+    fn delegation_window_allows_within_bounds() {
+        let record = make_record(10, Some(20));
+        assert!(delegation_window_ok(&record, 15));
+    }
+
+    #[test]
+    fn delegation_window_open_ended() {
+        let record = make_record(10, None);
+        assert!(delegation_window_ok(&record, 50));
+    }
 
     fn sample_header(hash_byte: u8, daa_score: u64) -> RpcHeader {
         RpcHeader {
@@ -1557,7 +1702,7 @@ mod tests {
         let tx_id = Hash::from_bytes([9u8; 32]);
         let outpoint = TransactionOutpoint::new(tx_id, 0);
         let key_data = EphemeralKeyData::new_xonly([1u8; 32], [2u8; 32], [3u8; 32]);
-        store.store(outpoint, key_data, 123).await.unwrap();
+        store.store(outpoint, key_data, 123, None, None).await.unwrap();
 
         pending.mark_dirty(outpoint);
 

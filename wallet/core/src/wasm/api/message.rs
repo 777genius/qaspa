@@ -10,6 +10,8 @@ use crate::wasm::tx::fees::IFees;
 use crate::wasm::tx::GeneratorSummary;
 use js_sys::Array;
 use kaspa_mldsa::MlDsaLevel;
+use kaspa_utils::hex::ToHex;
+use kaspa_wallet_core::deterministic::AccountId;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use serde_wasm_bindgen::from_value;
 use workflow_wasm::serde::to_value;
@@ -721,6 +723,130 @@ try_from! ( _args: WalletImportResponse, IWalletImportResponse, {
 
 // ---
 
+// Delegations (Iteration 4)
+declare! {
+    IDelegationCreateRequest,
+    r#"
+    /**
+     * Create delegation linking stealth account to master anchor.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationCreateRequest {
+        walletSecret: string;
+        masterAnchor: string;
+        stealthAccountId: string;
+        validForDaa?: number;
+    }
+    "#,
+}
+
+try_from! ( args: IDelegationCreateRequest, DelegationCreateRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let master_anchor = args.get_string("masterAnchor")?;
+    let stealth_account_id = AccountId::from_hex(args.get_string("stealthAccountId")?.as_str())?;
+    let valid_for_daa = js_value_to_optional_u64(args.try_get_value("validForDaa")?.unwrap_or(JsValue::UNDEFINED), "validForDaa")?;
+    Ok(DelegationCreateRequest { wallet_secret, master_anchor, stealth_account_id, valid_for_daa })
+});
+
+declare! {
+    IDelegationCreateResponse,
+    r#"
+    /**
+     * Delegation id created.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationCreateResponse {
+        delegationId: number;
+    }
+    "#,
+}
+
+try_from! ( args: DelegationCreateResponse, IDelegationCreateResponse, {
+    let response = IDelegationCreateResponse::default();
+    response.set("delegationId", &JsValue::from_f64(args.delegation_id as f64))?;
+    Ok(response)
+});
+
+declare! {
+    IDelegationListRequest,
+    r#"
+    /**
+     * List delegations for master anchor.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationListRequest {
+        masterAnchor: string;
+    }
+    "#,
+}
+
+try_from! ( args: IDelegationListRequest, DelegationListRequest, {
+    let master_anchor = args.get_string("masterAnchor")?;
+    Ok(DelegationListRequest { master_anchor })
+});
+
+declare! {
+    IDelegationListResponse,
+    r#"
+    /**
+     * Delegations list.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationListResponse {
+        delegations: any[];
+    }
+    "#,
+}
+
+try_from! ( args: DelegationListResponse, IDelegationListResponse, {
+    let response = IDelegationListResponse::default();
+    response.set("delegations", &to_value(&args.delegations)?)?;
+    Ok(response)
+});
+
+declare! {
+    IDelegationRevokeRequest,
+    r#"
+    /**
+     * Revoke delegation by id.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationRevokeRequest {
+        walletSecret: string;
+        delegationId: number;
+    }
+    "#,
+}
+
+try_from! ( args: IDelegationRevokeRequest, DelegationRevokeRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let delegation_id = js_value_to_optional_u64(args.get_value("delegationId")?, "delegationId")?.ok_or(Error::InvalidArgument("delegationId required".into()))?;
+    Ok(DelegationRevokeRequest { wallet_secret, delegation_id })
+});
+
+declare! {
+    IDelegationRevokeResponse,
+    r#"
+    /**
+     * Delegation revoked.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationRevokeResponse { }
+    "#,
+}
+
+try_from! ( _args: DelegationRevokeResponse, IDelegationRevokeResponse, {
+    Ok(IDelegationRevokeResponse::default())
+});
+
+// ---
+
 declare! {
     IPrvKeyDataEnumerateRequest,
     r#"
@@ -1372,7 +1498,7 @@ try_from!(args: AccountsCreateResponse, IAccountsCreateResponse, {
 try_from!(args: crate::wallet::MasterAccountInfo, IMasterAccountInfo, {
     let response = IMasterAccountInfo::default();
     response.set("accountId", &args.account_id.into())?;
-    response.set("anchor", &JsValue::from(hex::encode(args.anchor)))?;
+    response.set("anchor", &JsValue::from(args.anchor.to_vec().to_hex()))?;
     response.set("level", &JsValue::from(args.level))?;
     response.set("status", &JsValue::from(serde_json::to_string(&args.status)?))?;
     Ok(response)

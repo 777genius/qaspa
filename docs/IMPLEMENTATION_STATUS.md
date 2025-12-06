@@ -25,6 +25,12 @@ The ML-DSA (CRYSTALS-Dilithium) post-quantum signature implementation for QUBIC 
 - CLI/WASM: создание master‑аккаунта и привязка/отвязка stealth; события `MasterAccountCreated/Rotated` доступны через notify.
 - Storage: stealth payload мигрирован на v1 (`master_anchor`, `delegation_id`), backward‑compatible чтение v0.
 
+**In Progress:** 🚧 *Phase 2 / Iteration 4 (Delegations, TLV, RPC smoke)*
+- Wallet core хранит `DelegationRecordV1` и проверяет подписи мастером (`wallet/core/src/account/delegation.rs` unit suite).
+- `EphemeralKeyEntry` и `StealthSigner` поддерживают TLV `0xA1 || delegation_id`, есть property-тесты генератора.
+- RPC-service expose `register_mldsa_anchor` и `list_mldsa_delegations`; `rpc_tests::sanity_test` теперь гоняет новые методы.
+- Интеграционный тест `testing/integration/mldsa_master.rs` покрывает master → delegation → stealth spend (требует `KASPA_DISABLE_STEALTH_POLICY=1`).
+
 **Date:** 2025-11-23
 **Branch:** `claude/kaspa-rust-quantum-01GbScjmf7uqkVZddjhQaGhr`
 
@@ -176,6 +182,21 @@ let address = keypair.to_address(Prefix::Mainnet);
 - ✅ 100% all security levels (Level 2, 3, 5)
 
 **Commit:** `5dd22b3` - test(mldsa): Expand unit test coverage to >85%
+
+---
+
+### 🚧 Phase 2.4: Делегации, TLV и RPC (IN PROGRESS)
+
+**Implementation:** `wallet/core/src/account/delegation.rs`, `wallet/core/src/tx/generator/stealth_signer.rs`, `rpc/{core,service}`, `testing/integration`.
+
+**Current scope (Dec 2025):**
+- ✅ `DelegationRecordV1` хранится в кошельке, unit-сюита покрывает сериализацию, CRDT `select_active`, стабильноe `delegation_message_hash` и проверку подписи мастером.
+- ✅ `EphemeralKeyEntry` и `StealthSigner` включают TLV `0xA1 || delegation_id` (unit-тесты + e2e `test_generator_include_delegation_id_toggle`).
+- ✅ RPC-service считает `has_mldsa_master` по зарегистрированным anchor`ам и реализует `register_mldsa_anchor` / `list_mldsa_delegations` (gRPC + wRPC маршруты).
+- ✅ `rpc_tests::sanity_test` получил новые ветки, чтобы регрессии в RPC API отслеживались автоматически.
+- ✅ Интеграционный тест `mldsa_master::test_mldsa_master_delegation_flow` закрывает полный master → delegation → stealth spend pipeline (env `KASPA_DISABLE_STEALTH_POLICY=1` снимает строгий mempool-policies на тестах).
+
+**Next:** CLI UX (`account delegation link/list`), Kasplex PoC и документирование TLV формата.
 
 ---
 

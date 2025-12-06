@@ -331,7 +331,13 @@
   2. Внедрить TLV `delegation_id` в `StealthSigner` и `EphemeralKeyData`.  
   3. Расширить RPC (wrpc/grpc) методами регистрации/запроса anchor.  
   4. Обновить CLI/SDK поток `link-stealth-to-master`.  
-- **Проверки:** интеграционный тест `testing/integration/mldsa_master.rs`, проверка RPC совместимости, Kasplex PoC.  
+- **Проверки:**  
+  - `cargo test -p kaspa-wallet-core delegation::tests` — Borsh/serde, CRDT и подписи мастером.  
+  - `cargo test -p kaspa-wallet-core ephemeral_key` — миграции `EphemeralKeyEntry` + сохранение делегаций.  
+  - `cargo test -p kaspa-wallet-core stealth_signer::` и `cargo test -p kaspa-wallet-core test_generator_include_delegation_id_toggle` — TLV-префикс и смешанные входы.  
+  - `cargo test -p kaspa-txscript stealth_transactions` — переменная длина `signature_script` и TLV-парсер (Phase 2 gate `kip10_enabled`).  
+  - `cargo test -p kaspa-testing-integration mldsa_master::test_mldsa_master_delegation_flow -- --test-threads=1` — полный master → delegation → spend сценарий (перед запуском выставляем `KASPA_DISABLE_STEALTH_POLICY=1`, чтобы mempool разрешил легаси UTXO).  
+  - `cargo test -p kaspa-testing-integration rpc_tests::sanity_test -- --test-threads=1` — smoke RPC на новых методах.  
 - **Выходы:** синхронные PR в rusty-kaspa (L1) и Kasplex (L2), обновлённые protobuf/IDL.
 - **Тезис:** формализовать делегации от master к stealth и провести их через RPC/CLI.
 

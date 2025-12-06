@@ -8,7 +8,17 @@ use crate::storage::{Hint, PrvKeyDataId};
 use crate::wallet::keydata::PrvKeyDataVariantKind;
 use borsh::{BorshDeserialize, BorshSerialize};
 use kaspa_mldsa::MlDsaLevel;
+use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use zeroize::Zeroize;
+
+fn serialize_mldsa_level<W: std::io::Write>(level: &MlDsaLevel, writer: &mut W) -> std::io::Result<()> {
+    borsh::BorshSerialize::serialize(&(*level as u8), writer)
+}
+
+fn deserialize_mldsa_level<R: std::io::Read>(reader: &mut R) -> std::io::Result<MlDsaLevel> {
+    let value = u8::deserialize_reader(reader)?;
+    MlDsaLevel::from_u8(value).ok_or_else(|| IoError::new(IoErrorKind::InvalidData, format!("invalid MlDsaLevel value {value}")))
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]
@@ -172,6 +182,7 @@ pub enum AccountCreateArgs {
     },
     MldsaMaster {
         prv_key_data_id: PrvKeyDataId,
+        #[borsh(serialize_with = "serialize_mldsa_level", deserialize_with = "deserialize_mldsa_level")]
         level: MlDsaLevel,
         account_name: Option<String>,
     },

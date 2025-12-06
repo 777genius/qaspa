@@ -447,6 +447,7 @@ where
         final_transaction_payload,
         stealth_change_creator: None,
         random_fee_settings: RandomFeeSettings::default(),
+        include_delegation_id: true,
     };
 
     Generator::try_new(settings, None, None)
@@ -477,9 +478,50 @@ fn make_generator_with_randomization(random_fee_settings: RandomFeeSettings, pri
         final_transaction_payload: None,
         stealth_change_creator: None,
         random_fee_settings,
+        include_delegation_id: true,
     };
 
     Generator::try_new(settings, None, None)
+}
+
+#[test]
+fn test_generator_include_delegation_id_toggle() -> Result<()> {
+    fn base_settings(include: bool) -> GeneratorSettings {
+        let network_id = test_network_id();
+        let network_type = NetworkType::from(network_id);
+        let change_address = change_address(network_type);
+        let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(5.0))];
+        let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
+        let payment_address = output_address(network_type);
+        let outputs = PaymentOutputs::from([(payment_address, kaspa_to_sompi(2.0))].as_slice());
+
+        GeneratorSettings {
+            network_id,
+            multiplexer: None,
+            sig_op_count: 1,
+            minimum_signatures: 1,
+            change_address,
+            utxo_iterator,
+            source_utxo_context: None,
+            priority_utxo_entries: None,
+            destination_utxo_context: None,
+            fee_rate: None,
+            final_transaction_priority_fee: Fees::SenderPays(0),
+            final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+            final_transaction_payload: None,
+            stealth_change_creator: None,
+            random_fee_settings: RandomFeeSettings::default(),
+            include_delegation_id: include,
+        }
+    }
+
+    let generator = Generator::try_new(base_settings(true), None, None)?;
+    assert!(generator.include_delegation_id());
+
+    let toggled = Generator::try_new(base_settings(true).with_include_delegation_id(false), None, None)?;
+    assert!(!toggled.include_delegation_id());
+
+    Ok(())
 }
 
 pub(crate) fn change_address(network_type: NetworkType) -> Address {
@@ -865,6 +907,7 @@ fn test_generator_requires_stealth_change_creator() {
         final_transaction_payload: None,
         stealth_change_creator: None,
         random_fee_settings: RandomFeeSettings::default(),
+        include_delegation_id: true,
     };
 
     match Generator::try_new(settings, None, None) {
@@ -902,6 +945,7 @@ fn test_generator_produces_stealth_change_metadata() -> Result<()> {
         final_transaction_payload: None,
         stealth_change_creator: Some(creator),
         random_fee_settings: RandomFeeSettings::default(),
+        include_delegation_id: true,
     };
 
     let generator = Generator::try_new(settings, None, None)?;

@@ -2673,11 +2673,14 @@ pub struct GetServerInfoResponse {
     /// Whether the server supports stealth transactions (script version 16)
     #[serde(default)]
     pub has_stealth_support: bool,
+    /// Whether the server advertises MLDSA master/delegation support
+    #[serde(default)]
+    pub has_mldsa_master: bool,
 }
 
 impl Serializer for GetServerInfoResponse {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &2, writer)?; // Version 2: added has_stealth_support
+        store!(u16, &3, writer)?; // Version 3: added has_mldsa_master
 
         store!(u16, &self.rpc_api_version, writer)?;
         store!(u16, &self.rpc_api_revision, writer)?;
@@ -2688,6 +2691,7 @@ impl Serializer for GetServerInfoResponse {
         store!(bool, &self.is_synced, writer)?;
         store!(u64, &self.virtual_daa_score, writer)?;
         store!(bool, &self.has_stealth_support, writer)?; // v2
+        store!(bool, &self.has_mldsa_master, writer)?; // v3
 
         Ok(())
     }
@@ -2708,6 +2712,7 @@ impl Deserializer for GetServerInfoResponse {
 
         // Backward compatible: default to false for old versions
         let has_stealth_support = if version >= 2 { load!(bool, reader)? } else { false };
+        let has_mldsa_master = if version >= 3 { load!(bool, reader)? } else { false };
 
         Ok(Self {
             rpc_api_version,
@@ -2718,7 +2723,149 @@ impl Deserializer for GetServerInfoResponse {
             is_synced,
             virtual_daa_score,
             has_stealth_support,
+            has_mldsa_master,
         })
+    }
+}
+
+// ---------------------------------------------------------------------
+// MLDSA master / delegation (Iteration 4)
+// ---------------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterMldsaAnchorRequest {
+    pub anchor: [u8; 32],
+    pub metadata: Option<String>,
+}
+
+impl Serializer for RegisterMldsaAnchorRequest {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?; // version
+        store!([u8; 32], &self.anchor, writer)?;
+        store!(Option<String>, &self.metadata, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for RegisterMldsaAnchorRequest {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let version = load!(u16, reader)?;
+        let anchor = load!([u8; 32], reader)?;
+        let metadata = if version >= 1 { load!(Option<String>, reader)? } else { None };
+        Ok(Self { anchor, metadata })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterMldsaAnchorResponse {
+    pub accepted: bool,
+}
+
+impl Serializer for RegisterMldsaAnchorResponse {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?; // version
+        store!(bool, &self.accepted, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for RegisterMldsaAnchorResponse {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let accepted = load!(bool, reader)?;
+        Ok(Self { accepted })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListMldsaDelegationsRequest {
+    pub anchor: [u8; 32],
+}
+
+impl Serializer for ListMldsaDelegationsRequest {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?; // version
+        store!([u8; 32], &self.anchor, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for ListMldsaDelegationsRequest {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let anchor = load!([u8; 32], reader)?;
+        Ok(Self { anchor })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcDelegationRecord {
+    pub anchor: [u8; 32],
+    pub account_id: Vec<u8>,
+    pub spend_pubkey: [u8; 32],
+    pub scan_pubkey: [u8; 32],
+    pub valid_from_daa: u64,
+    pub valid_until_daa: Option<u64>,
+    pub nonce: u64,
+    pub status: String,
+    pub signature: Vec<u8>,
+}
+
+impl Serializer for RpcDelegationRecord {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?; // version
+        store!([u8; 32], &self.anchor, writer)?;
+        store!(Vec<u8>, &self.account_id, writer)?;
+        store!([u8; 32], &self.spend_pubkey, writer)?;
+        store!([u8; 32], &self.scan_pubkey, writer)?;
+        store!(u64, &self.valid_from_daa, writer)?;
+        store!(Option<u64>, &self.valid_until_daa, writer)?;
+        store!(u64, &self.nonce, writer)?;
+        store!(String, &self.status, writer)?;
+        store!(Vec<u8>, &self.signature, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for RpcDelegationRecord {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let anchor = load!([u8; 32], reader)?;
+        let account_id = load!(Vec<u8>, reader)?;
+        let spend_pubkey = load!([u8; 32], reader)?;
+        let scan_pubkey = load!([u8; 32], reader)?;
+        let valid_from_daa = load!(u64, reader)?;
+        let valid_until_daa = load!(Option<u64>, reader)?;
+        let nonce = load!(u64, reader)?;
+        let status = load!(String, reader)?;
+        let signature = load!(Vec<u8>, reader)?;
+        Ok(Self { anchor, account_id, spend_pubkey, scan_pubkey, valid_from_daa, valid_until_daa, nonce, status, signature })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListMldsaDelegationsResponse {
+    pub delegations: Vec<RpcDelegationRecord>,
+}
+
+impl Serializer for ListMldsaDelegationsResponse {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?; // version
+        store!(Vec<RpcDelegationRecord>, &self.delegations, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for ListMldsaDelegationsResponse {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let delegations = load!(Vec<RpcDelegationRecord>, reader)?;
+        Ok(Self { delegations })
     }
 }
 

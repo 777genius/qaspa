@@ -14,12 +14,13 @@ pub mod args;
 pub mod maps;
 pub use args::*;
 
+use crate::account::delegation::{delegation_message_hash, DelegationId, DelegationRecordV1, DelegationStatus};
 use crate::account::variants::mldsa_master::{MasterStatus, MldsaMasterAccount, MldsaMasterAccountPayloadV1};
-use crate::account::ScanNotifier;
+use crate::account::{AccountKind, ScanNotifier};
 use crate::api::message::MasterAnchorInfo;
 use crate::api::traits::WalletApi;
 use crate::compat::gen1::decrypt_mnemonic;
-use crate::encryption::encrypt_xchacha20poly1305;
+use crate::encryption::{encrypt_xchacha20poly1305, Decrypted};
 use crate::error::Error::Custom;
 use crate::factory::try_load_account;
 use crate::imports::*;
@@ -28,7 +29,7 @@ use crate::storage::interface::{OpenArgs, StorageDescriptor};
 use crate::storage::keydata::MlDsaMasterPayload;
 use crate::storage::local::interface::LocalStore;
 use crate::storage::local::Storage;
-use crate::storage::{self, PrvKeyDataId, PrvKeyDataInfo};
+use crate::storage::{self, AccountStorage, PrvKeyDataId, PrvKeyDataInfo};
 use crate::wallet::keydata::PrvKeyDataVariantKind;
 use crate::wallet::maps::ActiveAccountMap;
 use futures::TryStreamExt;
@@ -122,6 +123,7 @@ struct Inner {
     wallet_bus: Channel<WalletBusMessage>,
     estimation_abortables: Mutex<HashMap<AccountId, Abortable>>,
     retained_contexts: Mutex<HashMap<String, Arc<Vec<u8>>>>,
+    delegations: Arc<DelegationStore>,
     // Mutex used to protect concurrent access to accounts at the wallet api level
     guard: Arc<AsyncMutex<()>>,
     account_guard: Arc<AsyncMutex<()>>,
@@ -189,6 +191,7 @@ impl Wallet {
                 wallet_bus,
                 estimation_abortables: Mutex::new(HashMap::new()),
                 retained_contexts: Mutex::new(HashMap::new()),
+                delegations: Arc::new(DelegationStore::new()),
                 guard: Arc::new(AsyncMutex::new(())),
                 account_guard: Arc::new(AsyncMutex::new(())),
             }),
@@ -245,6 +248,19 @@ impl Wallet {
 
     pub fn store(&self) -> &Arc<dyn Interface> {
         &self.inner.store
+    }
+
+    pub fn delegation_store(&self) -> &Arc<DelegationStore> {
+        &self.inner.delegations
+    }
+
+    async fn save_delegations(&self, wallet_secret: &Secret) -> Result<()> {
+        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
+            if let Ok(network_id) = self.network_id() {
+                self.delegation_store().save_to_storage(&wallet_folder, network_id, wallet_secret).await?;
+            }
+        }
+        Ok(())
     }
 
     pub fn active_accounts(&self) -> &ActiveAccountMap {
@@ -352,6 +368,33 @@ impl Wallet {
 
 
         }
+        else {
+            fn default_active_account(&self) -> Option<Arc<dyn Account>> {
+                self.active_accounts().first()
+            }
+
+            pub async fn autoselect_default_account_if_single(self: &Arc<Wallet>) -> Result<()> {
+                if self.active_accounts().len() == 1 {
+                    self.select(self.default_active_account().as_ref()).await?;
+                }
+                Ok(())
+            }
+
+            pub async fn select(self: &Arc<Self>, account: Option<&Arc<dyn Account>>) -> Result<()> {
+                *self.inner.selected_account.lock().unwrap() = account.cloned();
+                if let Some(account) = account {
+                    account.clone().start().await?;
+                    self.notify(Events::AccountSelection { id: Some(*account.id()) }).await?;
+                } else {
+                    self.notify(Events::AccountSelection { id: None }).await?;
+                }
+                Ok(())
+            }
+
+            pub fn account(&self) -> Result<Arc<dyn Account>> {
+                self.inner.selected_account.lock().unwrap().clone().ok_or_else(|| Error::AccountSelection)
+            }
+        }
     }
 
     /// Loads a wallet from storage. Accounts are not activated by this call.
@@ -373,6 +416,14 @@ impl Wallet {
         if masters_created {
             self.inner.store.commit(wallet_secret).await?;
         }
+
+        // Load delegations storage (best-effort; ignore if storage is non-internal)
+        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
+            if let Ok(network_id) = self.network_id() {
+                let _ = self.delegation_store().load_from_storage(&wallet_folder, network_id, wallet_secret).await;
+            }
+        }
+
         let wallet_name = self.store().descriptor();
 
         if was_open {
@@ -1126,6 +1177,13 @@ impl Wallet {
         Ok(masters.into_iter().find(|info| info.anchor == *anchor.as_bytes()))
     }
 
+    fn find_active_master_by_anchor(&self, anchor: &MasterAnchor) -> Option<Arc<MldsaMasterAccount>> {
+        self.active_accounts()
+            .collect()
+            .into_iter()
+            .find_map(|acc| acc.clone().downcast_arc::<MldsaMasterAccount>().ok().filter(|m| m.anchor() == anchor))
+    }
+
     pub async fn rotate_master_account(
         self: &Arc<Wallet>,
         wallet_secret: &Secret,
@@ -1134,7 +1192,7 @@ impl Wallet {
         new_master_seed: Option<MasterSeed>,
     ) -> Result<()> {
         use crate::encryption::encrypt_xchacha20poly1305;
-        use crate::storage::keydata::data::{MlDsaMasterPayload, PrvKeyDataPayload, PrvKeyDataVariant};
+        use crate::storage::keydata::data::{MlDsaMasterPayload, PrvKeyDataPayload};
         use crate::storage::keydata::PrvKeyData;
 
         let account_store = self.inner.store.clone().as_account_store()?;
@@ -1157,7 +1215,7 @@ impl Wallet {
             .ok_or_else(|| Error::Custom("Specified key is not an MLDSA master record".to_string()))?;
 
         let master_seed = match new_master_seed {
-            Some(seed) => seed,
+            Some(ref seed) => seed.clone(),
             None => {
                 MasterSeed::from_slice(&master_payload.decrypt_seed(wallet_secret)?).map_err(|err| Error::Custom(format!("{err}")))?
             }
@@ -1172,14 +1230,13 @@ impl Wallet {
         };
 
         let updated_master_payload = MlDsaMasterPayload::new(level, new_anchor, seed_cipher);
-        let updated_prv_payload = PrvKeyDataPayload { prv_key_variant: PrvKeyDataVariant::from_mldsa_master(updated_master_payload) };
+        let updated_prv_payload = PrvKeyDataPayload::try_new_with_mldsa_master(updated_master_payload)?;
 
-        prv_key_data.payload = match prv_key_data.payload {
+        prv_key_data.payload = match &prv_key_data.payload {
             crate::encryption::Encryptable::Plain(_) => crate::encryption::Encryptable::Plain(updated_prv_payload),
             crate::encryption::Encryptable::XChaCha20Poly1305(enc) => {
                 let kind = enc.kind();
-                let encrypted =
-                    crate::encryption::Encryptable::Plain(updated_prv_payload.clone()).into_encrypted(wallet_secret, kind)?;
+                let encrypted = Decrypted::new(updated_prv_payload.clone()).encrypt(wallet_secret, kind)?;
                 crate::encryption::Encryptable::XChaCha20Poly1305(encrypted)
             }
         };
@@ -1211,6 +1268,119 @@ impl Wallet {
     // ========================================================================
     // STEALTH ACCOUNT OPERATIONS
     // ========================================================================
+
+    pub async fn link_stealth_to_master(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        stealth_id: AccountId,
+        master_anchor: [u8; 32],
+        window_daa: u64,
+        valid_for_daa: Option<u64>,
+    ) -> Result<DelegationId> {
+        if !self.is_mldsa_master_enabled() {
+            return Err(Error::Custom("MLDSA master mode is disabled in settings".to_string()));
+        }
+
+        let guard = self.guard();
+        let guard = guard.lock().await;
+
+        let anchor = MasterAnchor::new(master_anchor);
+        let stealth_account = self.get_account_by_id(&stealth_id, &guard).await?.ok_or(Error::AccountNotFound(stealth_id))?;
+        let stealth = stealth_account.as_stealth_account()?;
+
+        if let Some(existing_anchor) = stealth.master_anchor() {
+            if existing_anchor != master_anchor {
+                return Err(Error::Custom("stealth already attached to another master anchor".to_string()));
+            }
+        }
+
+        let master = self.find_active_master_by_anchor(&anchor).ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
+        let level = master.level();
+
+        let current_daa = self.current_daa_score().unwrap_or(0);
+        let valid_from = current_daa.saturating_sub(window_daa);
+        let valid_until = valid_for_daa.map(|v| current_daa.saturating_add(v));
+
+        let next_nonce = self
+            .delegation_store()
+            .by_anchor(anchor.as_bytes())
+            .into_iter()
+            .filter(|(_, rec)| rec.account_id == stealth_id)
+            .map(|(_, rec)| rec.nonce)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
+
+        let mut record = DelegationRecordV1::new(
+            level,
+            master_anchor,
+            *stealth.id(),
+            stealth.spend_pubkey()?.serialize(),
+            stealth.scan_pubkey()?.serialize(),
+            valid_from,
+            valid_until,
+            next_nonce,
+            DelegationStatus::Active,
+        );
+
+        let hash = delegation_message_hash(&record)?;
+        let signature = master.sign_delegation_hash(&hash).await?;
+        record.signature = signature.as_bytes().to_vec();
+
+        let id = self.delegation_store().upsert(record)?;
+        self.save_delegations(wallet_secret).await?;
+
+        // Update stealth payload
+        stealth.set_delegation(master_anchor, Some(id));
+
+        // Persist stealth account
+        let account_store = self.inner.store.clone().as_account_store()?;
+        account_store.store_single(&stealth.to_storage()?, None).await?;
+
+        // Update master payload delegations list (best-effort)
+        let master_storage = master.to_storage()?;
+        let mut master_payload = MldsaMasterAccountPayloadV1::try_from_slice(master_storage.serialized())?;
+        if !master_payload.delegations.contains(&id.0) {
+            master_payload.delegations.push(id.0);
+            let updated = AccountStorage::try_new(
+                master_storage.kind,
+                master_storage.id(),
+                master_storage.storage_key(),
+                master_storage.prv_key_data_ids.clone(),
+                master_storage.settings.clone(),
+                master_payload,
+            )?;
+            account_store.store_single(&updated, None).await?;
+        }
+
+        self.inner.store.commit(wallet_secret).await?;
+
+        Ok(id)
+    }
+
+    pub async fn list_delegations_for_master(&self, anchor: [u8; 32]) -> Result<Vec<(DelegationId, DelegationRecordV1)>> {
+        Ok(self.delegation_store().by_anchor(&anchor))
+    }
+
+    pub async fn revoke_delegation(&self, wallet_secret: &Secret, delegation_id: DelegationId) -> Result<()> {
+        let record = self.delegation_store().by_id(delegation_id).ok_or(Error::Custom("delegation not found".to_string()))?;
+        let anchor = MasterAnchor::new(record.anchor);
+        let master = self.find_active_master_by_anchor(&anchor).ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
+
+        let current_daa = self.current_daa_score().unwrap_or(0);
+        let mut new_record = record.clone();
+        new_record.nonce = record.nonce + 1;
+        new_record.status = DelegationStatus::Revoked { revoked_daa: current_daa };
+        new_record.signature.clear();
+
+        let hash = delegation_message_hash(&new_record)?;
+        let signature = master.sign_delegation_hash(&hash).await?;
+        new_record.signature = signature.as_bytes().to_vec();
+
+        self.delegation_store().upsert(new_record)?;
+        self.save_delegations(wallet_secret).await?;
+        Ok(())
+    }
 
     /// Unlocks a stealth account by decrypting and caching the stealth keys.
     /// Returns the stealth address on success.
@@ -1247,7 +1417,7 @@ impl Wallet {
     ) -> Result<()> {
         let master_account =
             self.get_account_by_id(master_account_id, guard).await?.ok_or(Error::AccountNotFound(*master_account_id))?;
-        if master_account.account_kind() != MLDSA_MASTER_ACCOUNT_KIND.into() {
+        if master_account.account_kind() != AccountKind::from(MLDSA_MASTER_ACCOUNT_KIND) {
             return Err(Error::InvalidAccountKind);
         }
 

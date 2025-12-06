@@ -90,6 +90,8 @@ pub enum KaspadPayloadOps {
     GetUtxoReturnAddress,
     GetUtxosByScriptVersion,
     GetBlockViewTags,
+    RegisterMldsaAnchor,
+    ListMldsaDelegations,
 
     // Subscription commands for starting/stopping notifications
     NotifyBlockAdded,

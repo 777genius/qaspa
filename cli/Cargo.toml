@@ -46,6 +46,7 @@ kaspa-wallet-core.workspace = true
 kaspa-wallet-keys.workspace = true
 kaspa-wallet-pskt.workspace = true
 kaspa-wrpc-client.workspace = true
+kaspa-mldsa.workspace = true
 nw-sys.workspace = true
 pad.workspace = true
 qrcode = "0.12"

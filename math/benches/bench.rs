@@ -40,28 +40,37 @@ fn bench_uint128(c: &mut Criterion) {
 
     let mut u128_c = c.benchmark_group("u128");
 
-    bench_op(&mut u128_c, &u128_one, &u128_two, |a, b| a + b, "add");
-    bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a + (b as u128), "addition u64");
-    bench_op(&mut u128_c, &u128_one, &u128_two, |a, b| a * b, "multiplication");
-    bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a * (b as u128), "multiplication u64");
-    bench_op(&mut u128_c, &u128_one, &u128_two, |a, b| a / b, "division");
-    bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a / (b as u128), "u64 division");
-    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a << b, "left shift");
-    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a >> b, "right shift");
+    bench_op(&mut u128_c, &u128_one, &u128_two, |a, b| a.wrapping_add(b), "add");
+    bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a.wrapping_add(b as u128), "addition u64");
+    bench_op(&mut u128_c, &u128_one, &u128_two, |a, b| a.wrapping_mul(b), "multiplication");
+    bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a.wrapping_mul(b as u128), "multiplication u64");
+    bench_op(&mut u128_c, &u128_one, &u128_two, |a, b| a / (b | 1), "division");
+    bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a / ((b as u128) | 1), "u64 division");
+    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a.wrapping_shl((b & 127) as u32), "left shift");
+    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a.wrapping_shr((b & 127) as u32), "right shift");
     u128_c.finish();
 
     let mut uint128_c = c.benchmark_group("Uint128");
 
     let uint128_one: Vec<_> = u128_one.into_iter().map(Uint128::from_u128).collect();
     let uint128_two: Vec<_> = u128_two.into_iter().map(Uint128::from_u128).collect();
-    bench_op(&mut uint128_c, &uint128_one, &uint128_two, |a, b| a + b, "add");
-    bench_op(&mut uint128_c, &uint128_one, &u64s, |a, b| a + b, "addition u64");
-    bench_op(&mut uint128_c, &uint128_one, &uint128_two, |a, b| a * b, "multiplication");
-    bench_op(&mut uint128_c, &uint128_one, &u64s, |a, b| a * b, "multiplication u64");
-    bench_op(&mut uint128_c, &uint128_one, &uint128_two, |a, b| a / b, "division");
-    bench_op(&mut uint128_c, &uint128_one, &u64s, |a, b| a / b, "u64 division");
-    bench_op(&mut uint128_c, &uint128_one, &shifts, |a, b| a << b, "left shift");
-    bench_op(&mut uint128_c, &uint128_one, &shifts, |a, b| a >> b, "right shift");
+    bench_op(&mut uint128_c, &uint128_one, &uint128_two, |a, b| a.overflowing_add(b).0, "add");
+    bench_op(&mut uint128_c, &uint128_one, &u64s, |a, b| a.overflowing_add(Uint128::from_u64(b)).0, "addition u64");
+    bench_op(&mut uint128_c, &uint128_one, &uint128_two, |a, b| a.overflowing_mul(b).0, "multiplication");
+    bench_op(&mut uint128_c, &uint128_one, &u64s, |a, b| a.overflowing_mul(Uint128::from_u64(b)).0, "multiplication u64");
+    bench_op(
+        &mut uint128_c,
+        &uint128_one,
+        &uint128_two,
+        |a, b| {
+            let denom = if b.is_zero() { Uint128::from_u64(1) } else { b };
+            a / denom
+        },
+        "division",
+    );
+    bench_op(&mut uint128_c, &uint128_one, &u64s, |a, b| a / Uint128::from_u64(b | 1), "u64 division");
+    bench_op(&mut uint128_c, &uint128_one, &shifts, |a, b| a << (b & 127), "left shift");
+    bench_op(&mut uint128_c, &uint128_one, &shifts, |a, b| a >> (b & 127), "right shift");
     uint128_c.finish();
 }
 
@@ -84,14 +93,23 @@ fn bench_uint256(c: &mut Criterion) {
     let u64s: Vec<_> = (0..ITERS_256).map(|_| rng.next_u64()).collect();
 
     let mut uint256_c = c.benchmark_group("Uint256");
-    bench_op(&mut uint256_c, &uint256_one, &uint256_two, |a, b| a + b, "add");
-    bench_op(&mut uint256_c, &uint256_one, &u64s, |a, b| a + b, "addition u64");
-    bench_op(&mut uint256_c, &uint256_one, &uint256_two, |a, b| a * b, "multiplication");
-    bench_op(&mut uint256_c, &uint256_one, &u64s, |a, b| a * b, "multiplication u64");
-    bench_op(&mut uint256_c, &uint256_one, &uint256_two, |a, b| a / b, "division");
-    bench_op(&mut uint256_c, &uint256_one, &u64s, |a, b| a / b, "u64 division");
-    bench_op(&mut uint256_c, &uint256_one, &shifts, |a, b| a << b, "left shift");
-    bench_op(&mut uint256_c, &uint256_one, &shifts, |a, b| a >> b, "right shift");
+    bench_op(&mut uint256_c, &uint256_one, &uint256_two, |a, b| a.overflowing_add(b).0, "add");
+    bench_op(&mut uint256_c, &uint256_one, &u64s, |a, b| a.overflowing_add(Uint256::from_u64(b)).0, "addition u64");
+    bench_op(&mut uint256_c, &uint256_one, &uint256_two, |a, b| a.overflowing_mul(b).0, "multiplication");
+    bench_op(&mut uint256_c, &uint256_one, &u64s, |a, b| a.overflowing_mul(Uint256::from_u64(b)).0, "multiplication u64");
+    bench_op(
+        &mut uint256_c,
+        &uint256_one,
+        &uint256_two,
+        |a, b| {
+            let denom = if b.is_zero() { Uint256::from_u64(1) } else { b };
+            a / denom
+        },
+        "division",
+    );
+    bench_op(&mut uint256_c, &uint256_one, &u64s, |a, b| a / Uint256::from_u64(b | 1), "u64 division");
+    bench_op(&mut uint256_c, &uint256_one, &shifts, |a, b| a << (b & 255), "left shift");
+    bench_op(&mut uint256_c, &uint256_one, &shifts, |a, b| a >> (b & 255), "right shift");
     uint256_c.finish();
 }
 
@@ -119,14 +137,23 @@ fn bench_uint3072(c: &mut Criterion) {
     };
 
     let mut uint3072_c = c.benchmark_group("Uint3072");
-    bench_op(&mut uint3072_c, &uint3072_one, &uint3072_two, |a, b| a + b, "add");
-    bench_op(&mut uint3072_c, &uint3072_one, &u64s, |a, b| a + b, "addition u64");
-    bench_op(&mut uint3072_c, &uint3072_one, &uint3072_two, |a, b| a * b, "multiplication");
-    bench_op(&mut uint3072_c, &uint3072_one, &u64s, |a, b| a * b, "multiplication u64");
-    bench_op(&mut uint3072_c, &uint3072_one, &uint3072_two, |a, b| a / b, "division");
-    bench_op(&mut uint3072_c, &uint3072_one, &u64s, |a, b| a / b, "u64 division");
-    bench_op(&mut uint3072_c, &uint3072_one, &shifts, |a, b| a << b, "left shift");
-    bench_op(&mut uint3072_c, &uint3072_one, &shifts, |a, b| a >> b, "right shift");
+    bench_op(&mut uint3072_c, &uint3072_one, &uint3072_two, |a, b| a.overflowing_add(b).0, "add");
+    bench_op(&mut uint3072_c, &uint3072_one, &u64s, |a, b| a.overflowing_add(Uint3072::from(b)).0, "addition u64");
+    bench_op(&mut uint3072_c, &uint3072_one, &uint3072_two, |a, b| a.overflowing_mul(b).0, "multiplication");
+    bench_op(&mut uint3072_c, &uint3072_one, &u64s, |a, b| a.overflowing_mul(Uint3072::from(b)).0, "multiplication u64");
+    bench_op(
+        &mut uint3072_c,
+        &uint3072_one,
+        &uint3072_two,
+        |a, b| {
+            let denom = if b.is_zero() { Uint3072::from(1u64) } else { b };
+            a / denom
+        },
+        "division",
+    );
+    bench_op(&mut uint3072_c, &uint3072_one, &u64s, |a, b| a / Uint3072::from(b | 1), "u64 division");
+    bench_op(&mut uint3072_c, &uint3072_one, &shifts, |a, b| a << (b & 3071), "left shift");
+    bench_op(&mut uint3072_c, &uint3072_one, &shifts, |a, b| a >> (b & 3071), "right shift");
     uint3072_c.bench_function("mod_inv Muhash prime", |b| {
         b.iter(|| {
             for &a in &uint3072_one[..uint3072_one.len() / 4] {

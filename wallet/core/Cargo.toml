@@ -104,6 +104,7 @@ workflow-wasm.workspace = true
 xxhash-rust.workspace = true
 zeroize.workspace = true
 indexed_db_futures.workspace = true
+blake2b_simd.workspace = true
 
 [dependencies.web-sys]
 workspace = true

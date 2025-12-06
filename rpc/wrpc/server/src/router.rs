@@ -71,6 +71,8 @@ impl Router {
                 GetUtxosByAddresses,
                 GetUtxosByScriptVersion,
                 GetVirtualChainFromBlock,
+                RegisterMldsaAnchor,
+                ListMldsaDelegations,
                 ResolveFinalityConflict,
                 Shutdown,
                 SubmitBlock,

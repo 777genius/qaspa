@@ -3,6 +3,7 @@
 //! by different types of accounts.
 //!
 
+pub mod delegation;
 pub mod descriptor;
 pub mod kind;
 pub mod pskb;

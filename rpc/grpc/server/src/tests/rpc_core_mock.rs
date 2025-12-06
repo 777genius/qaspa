@@ -386,6 +386,22 @@ impl RpcApi for RpcCoreMock {
         Err(RpcError::NotImplemented)
     }
 
+    async fn register_mldsa_anchor_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: RegisterMldsaAnchorRequest,
+    ) -> RpcResult<RegisterMldsaAnchorResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
+    async fn list_mldsa_delegations_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: ListMldsaDelegationsRequest,
+    ) -> RpcResult<ListMldsaDelegationsResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Notification API
 

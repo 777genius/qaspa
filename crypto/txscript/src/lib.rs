@@ -503,14 +503,22 @@ impl<'a, T: VerifiableTransaction, Reused: SigHashReusedValues> TxScriptEngine<'
         let pubkey = secp256k1::XOnlyPublicKey::from_slice(p_dest_bytes).map_err(|_| TxScriptError::PubKeyFormat)?;
 
         // Step 3: Parse signature from signature_script
-        // Format: [64 bytes Schnorr sig][1 byte sighash_type]
+        // Format: optional TLV prefix || [64 bytes Schnorr sig][1 byte sighash_type]
         let sig_script = &input.signature_script;
-        if sig_script.len() != 65 {
+        if !self.kip10_enabled && sig_script.len() != 65 {
             return Err(TxScriptError::SigLength(sig_script.len()));
         }
+        if self.kip10_enabled && sig_script.len() < 65 {
+            return Err(TxScriptError::SigLength(sig_script.len()));
+        }
+        if sig_script.len() > MAX_SCRIPT_ELEMENT_SIZE {
+            return Err(TxScriptError::ElementTooBig(sig_script.len(), MAX_SCRIPT_ELEMENT_SIZE));
+        }
 
-        let sig_bytes = &sig_script[..64];
-        let hash_type_byte = sig_script[64];
+        let sig_offset = sig_script.len() - 65;
+        let _tlv_bytes = &sig_script[..sig_offset];
+        let sig_bytes = &sig_script[sig_offset..sig_offset + 64];
+        let hash_type_byte = sig_script[sig_offset + 64];
         let hash_type = SigHashType::from_u8(hash_type_byte).map_err(|_| TxScriptError::InvalidSigHashType(hash_type_byte))?;
 
         // Step 4: Parse signature

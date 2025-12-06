@@ -1,3 +1,4 @@
+use crate::account::descriptor::IAccountDescriptor;
 use crate::api::message::{MasterAnchorListResponse, MasterSeedExportRequest, MasterSeedExportResponse};
 use crate::api::traits::WalletApi;
 use crate::imports::*;
@@ -11,6 +12,7 @@ use crate::wasm::api::message::{
 };
 use crate::wasm::notify::{WalletEventTarget, WalletNotificationCallback, WalletNotificationTypeOrCallback};
 use kaspa_consensus_core::network::NetworkIdT;
+use kaspa_mldsa::MlDsaLevel;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use kaspa_wasm_core::events::{get_event_targets, Sink};
 use kaspa_wrpc_wasm::{IConnectOptions, Resolver, RpcClient, RpcConfig, WrpcEncoding};

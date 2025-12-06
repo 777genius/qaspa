@@ -131,6 +131,8 @@ async fn daemon_utxos_propagation_test() {
     kaspa_core::log::try_init_logger(
         "INFO,kaspa_testing_integration=trace,kaspa_notify=debug,kaspa_rpc_core=debug,kaspa_grpc_client=debug",
     );
+    // Disable stealth-only mempool policy for legacy UTXO propagation test
+    std::env::set_var("KASPA_DISABLE_STEALTH_POLICY", "1");
 
     let args = Args {
         simnet: true,

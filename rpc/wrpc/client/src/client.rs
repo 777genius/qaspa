@@ -650,6 +650,8 @@ impl RpcApi for KaspaRpcClient {
             GetUtxosByScriptVersion,
             GetVirtualChainFromBlock,
             ResolveFinalityConflict,
+            RegisterMldsaAnchor,
+            ListMldsaDelegations,
             Shutdown,
             SubmitBlock,
             SubmitTransaction,

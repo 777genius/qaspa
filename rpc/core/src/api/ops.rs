@@ -144,6 +144,10 @@ pub enum RpcApiOps {
     GetUtxosByScriptVersion = 151,
     /// Get stealth outputs (view tags) from a specific block
     GetBlockViewTags = 152,
+    /// Register MLDSA anchor (Iteration 4)
+    RegisterMldsaAnchor = 153,
+    /// List MLDSA delegations for anchor (Iteration 4)
+    ListMldsaDelegations = 154,
 }
 
 impl RpcApiOps {

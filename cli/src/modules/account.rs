@@ -1,3 +1,5 @@
+use kaspa_utils::hex::FromHex;
+use kaspa_wallet_core::account::delegation::DelegationId;
 use kaspa_wallet_core::account::BIP32_ACCOUNT_KIND;
 use kaspa_wallet_core::account::LEGACY_ACCOUNT_KIND;
 use kaspa_wallet_core::account::MLDSA_MASTER_ACCOUNT_KIND;
@@ -96,6 +98,72 @@ impl Account {
                 let guard = guard.lock().await;
                 ctx.wallet().detach_stealth_from_master(&wallet_secret, &stealth_id, &guard).await?;
                 tprintln!(ctx, "Stealth account {} detached from master", stealth_id);
+            }
+            "delegation" => {
+                if argv.is_empty() {
+                    tprintln!(ctx, "usage: account delegation <link|list|revoke> ...");
+                    return Ok(());
+                }
+                let sub = argv.remove(0);
+                match sub.as_str() {
+                    "link" => {
+                        if argv.len() < 2 {
+                            tprintln!(ctx, "usage: account delegation link <stealth-id> <master-anchor-hex> [valid-for-daa]");
+                            return Ok(());
+                        }
+                        let stealth_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                        let anchor_hex = argv.remove(0);
+                        let anchor_bytes =
+                            Vec::from_hex(&anchor_hex).map_err(|e| Error::custom(format!("invalid anchor hex: {e}")))?;
+                        let anchor: [u8; 32] = anchor_bytes.try_into().map_err(|_| Error::custom("anchor must be 32 bytes"))?;
+                        let valid_for_daa = if !argv.is_empty() { Some(argv.remove(0).parse::<u64>()?) } else { None };
+                        let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                        let delegation_id =
+                            ctx.wallet().link_stealth_to_master(&wallet_secret, stealth_id, anchor, 0, valid_for_daa).await?;
+                        tprintln!(ctx, "Delegation created: id={}", delegation_id.0);
+                    }
+                    "list" => {
+                        if argv.len() != 1 {
+                            tprintln!(ctx, "usage: account delegation list <master-anchor-hex>");
+                            return Ok(());
+                        }
+                        let anchor_hex = argv.remove(0);
+                        let anchor_bytes =
+                            Vec::from_hex(&anchor_hex).map_err(|e| Error::custom(format!("invalid anchor hex: {e}")))?;
+                        let anchor: [u8; 32] = anchor_bytes.try_into().map_err(|_| Error::custom("anchor must be 32 bytes"))?;
+                        let delegations = ctx.wallet().list_delegations_for_master(anchor).await?;
+                        if delegations.is_empty() {
+                            tprintln!(ctx, "No delegations for anchor {}", anchor_hex);
+                        } else {
+                            tprintln!(ctx, "Delegations for anchor {}:", anchor_hex);
+                            for (id, rec) in delegations {
+                                tprintln!(
+                                    ctx,
+                                    "- id={} nonce={} account={} status={:?} valid_from={} valid_until={:?}",
+                                    id.0,
+                                    rec.nonce,
+                                    rec.account_id,
+                                    rec.status,
+                                    rec.valid_from_daa,
+                                    rec.valid_until_daa
+                                );
+                            }
+                        }
+                    }
+                    "revoke" => {
+                        if argv.len() != 1 {
+                            tprintln!(ctx, "usage: account delegation revoke <delegation-id>");
+                            return Ok(());
+                        }
+                        let delegation_id: u64 = argv.remove(0).parse()?;
+                        let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                        ctx.wallet().revoke_delegation(&wallet_secret, DelegationId(delegation_id)).await?;
+                        tprintln!(ctx, "Delegation {} revoked", delegation_id);
+                    }
+                    _ => {
+                        tprintln!(ctx, "unknown delegation subcommand");
+                    }
+                }
             }
             "import" => {
                 if argv.is_empty() {

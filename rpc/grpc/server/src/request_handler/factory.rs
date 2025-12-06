@@ -84,6 +84,8 @@ impl Factory {
                 GetUtxoReturnAddress,
                 GetUtxosByScriptVersion,
                 GetBlockViewTags,
+                RegisterMldsaAnchor,
+                ListMldsaDelegations,
                 NotifyBlockAdded,
                 NotifyNewBlockTemplate,
                 NotifyFinalityConflict,

@@ -2,6 +2,7 @@
 //! [`WalletApi`] trait implementation for the [`Wallet`] struct.
 //!
 
+use crate::account::delegation::DelegationId;
 use crate::api::{message::*, traits::WalletApi};
 use crate::events::Events;
 use crate::imports::*;
@@ -203,6 +204,34 @@ impl WalletApi for super::Wallet {
         let WalletChangeSecretRequest { old_wallet_secret, new_wallet_secret } = request;
         self.store().change_secret(&old_wallet_secret, &new_wallet_secret).await?;
         Ok(WalletChangeSecretResponse {})
+    }
+
+    // ---------------------------------------------------------------------
+    // Delegations (Iteration 4)
+    // ---------------------------------------------------------------------
+
+    async fn delegation_create_call(self: Arc<Self>, request: DelegationCreateRequest) -> Result<DelegationCreateResponse> {
+        let DelegationCreateRequest { wallet_secret, master_anchor, stealth_account_id, valid_for_daa } = request;
+        let bytes = Vec::from_hex(&master_anchor).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
+        let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
+
+        let delegation_id = self.link_stealth_to_master(&wallet_secret, stealth_account_id, anchor, 0, valid_for_daa).await?;
+        Ok(DelegationCreateResponse { delegation_id: delegation_id.0 })
+    }
+
+    async fn delegation_list_call(self: Arc<Self>, request: DelegationListRequest) -> Result<DelegationListResponse> {
+        let DelegationListRequest { master_anchor } = request;
+        let bytes = Vec::from_hex(&master_anchor).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
+        let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
+
+        let delegations = self.list_delegations_for_master(anchor).await?.into_iter().map(|(_, rec)| rec).collect();
+        Ok(DelegationListResponse { delegations })
+    }
+
+    async fn delegation_revoke_call(self: Arc<Self>, request: DelegationRevokeRequest) -> Result<DelegationRevokeResponse> {
+        let DelegationRevokeRequest { wallet_secret, delegation_id } = request;
+        self.revoke_delegation(&wallet_secret, DelegationId(delegation_id)).await?;
+        Ok(DelegationRevokeResponse {})
     }
 
     async fn wallet_export_call(self: Arc<Self>, request: WalletExportRequest) -> Result<WalletExportResponse> {

@@ -28,7 +28,7 @@
 ### 0.1. Архитектурный TL;DR (быстрый конспект для ревью и реализации)
 
 1. **EphemeralKeyStore как источник правды.**  
-   `EphemeralKeyEntry` расширен полями `created_daa_score`, `delegation_id`, `master_anchor`, `valid_until_daa` и статусами `Orphaned { OrphanReason }` / `Expired` (через `#[borsh(default)]`, без отдельного v1‑типа). Старые файлы читаются как «created_daa_score = 0, delegation_id/master_anchor/valid_until_daa = None`.
+   В Iteration 4 `EphemeralKeyEntry` уже получил поля `master_anchor` и `delegation_id` + ручной `BorshDeserialize`; в Iteration 5 мы добавляем `created_daa_score`, `valid_until_daa` и новые статусы `Orphaned { OrphanReason }` / `Expired`, по‑прежнему без отдельного v1‑типа: старые файлы читаются как `created_daa_score = 0`, `valid_until_daa = None`, `master_anchor/delegation_id = None`.
 2. **Жёсткая связь стелс‑UTXO ↔ делегация.**  
    При успешном `try_claim_utxo_internal` каждый стелс‑UTXO либо однозначно покрыт окном `DelegationRecord` по `(account_id, anchor, valid_from/valid_until, nonce)`, либо считается orphaned (см. §2.1–2.4). Для orphaned‑случаев мы всё равно сохраняем `EphemeralKeyData`.
 3. **Overlay вместо правки общего UTXO‑пайплайна.**  
@@ -47,7 +47,7 @@
 | Подсистема | Файлы | Изменения |
 |-----------|-------|-----------|
 | Stealth UTXO handler | `wallet/core/src/utxo/stealth_handler.rs`, `wallet/core/src/utxo/processor.rs`, `wallet/core/src/account/variants/stealth.rs` | Расширение `StealthUtxoHandler` данными о делегации и хендлерами DAA‑изменений; реализация в `StealthAccount`, привязка к `DelegationRecord` и master‑anchor. |
-| Хранилище эфемерных ключей | `wallet/core/src/storage/ephemeral_keys.rs` | Добавление полей делегации (`delegation_id`, `anchor`, `valid_from_daa`, `valid_until_daa`), новых статусов (`Orphaned`, `Expired`), методов очистки по DAA, инвариантов по реоргам. |
+| Хранилище эфемерных ключей | `wallet/core/src/storage/ephemeral_keys.rs` | Расширение `EphemeralKeyEntry` полями DAA (`created_daa_score`, `valid_until_daa`) поверх уже существующих `master_anchor`/`delegation_id`, добавление статусов (`Orphaned`, `Expired`), методов очистки по DAA и инвариантов по reorg’ам. |
 | Модель аккаунта / делегаций | `wallet/core/src/account/variants/stealth.rs`, `wallet/core/src/account/delegation.rs` (из Iteration 4) | Использование делегаций для маркировки UTXO, вычисление `valid_until_daa` на основе окна делегации, пометка orphaned при mismatch. |
 | Wallet events / notify | `wallet/core/src/events.rs`, `wallet/core/src/wasm/events.rs` (если есть), JS/TS биндинги | Новые события `MasterDelegationExpired`, `MasterDelegationRevoked`, `MasterAnchorMismatch` + обновление `EventKind`, сериализация/JS‑интерфейсы. |
 | RPC модель | `rpc/core/src/model/message.rs`, `rpc/core/src/wasm/message.rs`, `rpc/grpc/core/proto/rpc.proto`, `rpc/grpc/core/src/convert/message.rs` | Добавление `anchor_hint` в `RpcStealthOutputInfo`, bump версии сериализации, прокидка поля через gRPC/wRPC/WASM. |
@@ -79,54 +79,63 @@
 
 ### 2.2. Расширение `EphemeralKeyEntry` (с учётом текущего Borsh‑формата)
 
-Сейчас `EphemeralKeyEntry` объявлен так (`wallet/core/src/storage/ephemeral_keys.rs`):
+К началу Iteration 5 `EphemeralKeyEntry` в коде (`wallet/core/src/storage/ephemeral_keys.rs`) уже выглядит так:
 
 ```rust
-#[derive(Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, BorshSerialize, Serialize, Deserialize)]
 pub struct EphemeralKeyEntry {
     pub outpoint: TransactionOutpoint,
     pub data: EphemeralKeyData,
     pub status: EphemeralKeyStatus,
+    /// Optional master anchor associated with this UTXO (Iteration 4)
+    pub master_anchor: Option<[u8; 32]>,
+    /// Optional delegation id associated with this UTXO (Iteration 4)
+    pub delegation_id: Option<u64>,
 }
 ```
 
-И сериализуется/десериализуется **через derive Borsh без собственного `StorageHeader`/версии**; `EphemeralKeyStore::save_to_storage` просто кладёт `Vec<EphemeralKeyEntry>` в зашифрованный контейнер. Это накладывает ограничения:
+Контейнер хранения остаётся тем же: `EphemeralKeyStore::save_to_storage` сериализует `Encrypted<Vec<EphemeralKeyEntry>>` **без собственного `StorageHeader`/версии**, а десериализация реализована ручным `impl BorshDeserialize for EphemeralKeyEntry`, который:
 
-- Нельзя бездумно вводить `EphemeralKeyEntryV1` с ручной версией — мы сломаем старые файлы.
-- Без явного `StorageHeader` совместимость достигается через добавление полей с `#[borsh(default)]`/`Option<…>`, чтобы старые записи корректно десериализовались в новый struct.
+- читает первые три поля `outpoint/data/status` так же, как в Phase 1;
+- затем пробует дочитать `master_anchor` и `delegation_id` как `Option<…>`;
+- при `UnexpectedEof`/несовпадении длины трактует их как `None` (миграция со старого формата).
 
-Поэтому **добавляем поля прямо в существующий `EphemeralKeyEntry`** с атрибутами по умолчанию:
+Это накладывает ограничения, которые важны для Iteration 5:
+
+- нельзя вводить отдельный `EphemeralKeyEntryV1` с заголовком — все изменения делаем только через добавление полей в существующий struct;
+- порядок уже существующих полей менять нельзя; новые поля добавляем **в конец** и поддерживаем их в ручной десериализации как «хвост» с дефолтами.
+
+В Iteration 5 нам нужны дополнительные DAA‑метаданные. Обновлённая структура:
 
 ```rust
-#[derive(Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, BorshSerialize, Serialize, Deserialize)]
 pub struct EphemeralKeyEntry {
     pub outpoint: TransactionOutpoint,
     pub data: EphemeralKeyData,
     pub status: EphemeralKeyStatus,
 
-    /// DAA‑высота, на которой UTXO впервые был зафиксирован кошельком
-    #[borsh(default)]
-    pub created_daa_score: u64,
-
-    /// ID делегации, по которой был получен UTXO (если была)
-    #[borsh(default)]
-    pub delegation_id: Option<u64>,
-
-    /// Anchor мастера, под который делегирован UTXO (если известен)
-    #[borsh(default)]
+    /// Anchor мастера, под который делегирован UTXO (если известен, Iteration 4)
     pub master_anchor: Option<[u8; 32]>,
 
+    /// ID делегации, по которой был получен UTXO (если была, Iteration 4)
+    pub delegation_id: Option<u64>,
+
+    /// DAA‑высота, на которой UTXO впервые был зафиксирован кошельком
+    /// (обычно `utxo.block_daa_score`)
+    pub created_daa_score: u64,
+
     /// DAA, после которого делегация гарантированно истекла для этого UTXO
-    /// (как минимум delegation.valid_until_daa, но может быть с буфером)
-    #[borsh(default)]
+    /// (как минимум `delegation.valid_until_daa`, возможно с буфером)
     pub valid_until_daa: Option<u64>,
 }
 ```
 
-При таком подходе:
+Миграция:
 
-- Старые файлы, в которых сериализованы только первые три поля, будут десериализованы Borsh в новый struct с `created_daa_score = 0` и `delegation_id/master_anchor/valid_until_daa = None`.
-- Новый код может использовать новые поля, не меняя формат зашифрованного контейнера (`Decrypted<Vec<EphemeralKeyEntry>>`).
+- ручной `BorshDeserialize` расширяем так же, как это уже сделано для `master_anchor`/`delegation_id`:
+  - после чтения `delegation_id` пробуем прочесть `created_daa_score` и `valid_until_daa`;
+  - при `UnexpectedEof`/`InvalidData` с «Unexpected length…» заполняем `created_daa_score = 0`, `valid_until_daa = None`;
+- старые файлы, где сериализованы только первые 3 или 5 полей, по‑прежнему читаются корректно — новые поля принимают дефолтные значения.
 
 `EphemeralKeyStatus` расширяем:
 
@@ -149,10 +158,10 @@ pub enum OrphanReason {
 }
 ```
 
-Инварианты:
+ Инварианты:
 
 - Записи с `status == Expired` **не должны попадать в активный in‑memory кэш** (`EphemeralKeyStore::keys/statuses`); если мы хотим удержать их только в логах/аудите, загружать можно отдельно (через вспомогательный путь), но runtime‑операции с ними не выполняются.
-- При чтении старого формата (до Iteration 5) Borsh автоматически подставит `created_daa_score = 0` и `None` для опциональных полей — это и есть сигналы «старый ключ»; логика очистки/TTL должна быть устойчива к этим дефолтам (например, считать `valid_until_daa = None` как «храним до ручного решения или глобального лимита возраста»).
+- Для ключей, созданных до Iteration 5 (`created_daa_score = 0`, `valid_until_daa = None`, `master_anchor/delegation_id = None`), логика очистки/TTL должна быть устойчива к этим дефолтам (например, считать `valid_until_daa = None` как «храним до ручного решения или глобального лимита возраста»).
 
 ### 2.3. Логика заполнения метаданных при скане
 
@@ -728,37 +737,46 @@ API для RPC‑слоя:
     - тесты делегаций/anchor mismatch;
     - RPC `anchor_hint`.
 
-## 8. Пошаговый план работ (чек‑лист Iteration 5)
+## 8. Пошаговый план работ (чек‑лист Iteration 5, по файлам и порядку)
 
-1. **EphemeralKeyStore / формат хранения**
-   - [ ] Расширить `EphemeralKeyEntry` дополнительными полями `created_daa_score`, `delegation_id`, `master_anchor`, `valid_until_daa` (через `#[borsh(default)]`, без отдельного `v1`‑типа).
-   - [ ] Обновить `EphemeralKeyStatus` и методы `store`, `entries`, `load_entries`.
-   - [ ] Реализовать `cleanup_expired(current_daa_score)` и unit‑тесты.
-2. **StealthUtxoHandler / StealthAccount**
-   - [ ] Добавить в `StealthUtxoHandler` метод `on_daa_score_changed`.
-   - [ ] В `UtxoProcessor::handle_daa_score_change` вызывать его для всех stealth‑хендлеров.
-   - [ ] В `StealthAccount`:
-     - [ ] обновить `try_claim_utxo_internal` и `try_claim_utxo` для заполнения метаданных делегации;
-     - [ ] заменить прямое `ephemeral_keys.remove` на `mark_removed` + очистку через `on_daa_score_changed`.
-3. **События**
-   - [ ] Добавить `MasterDelegationExpired`, `MasterDelegationRevoked`, `MasterAnchorMismatch` в `Events` и `EventKind`.
-   - [ ] Эмитить события при истечении делегаций, ревоке и anchor mismatch.
-4. **RPC модель и сервис**
-   - [ ] Добавить `anchor_hint` в `RpcStealthOutputInfo` + bump версии сериализации.
-   - [ ] Прокинуть поле через `GetBlockViewTagsResponse`, gRPC/wRPC/WASM.
-   - [ ] Обновить `extract_stealth_outputs_from_block` и `get_block_view_tags_call` так, чтобы они могли заполнять `anchor_hint` (пока хотя бы `None`).
-5. **Индексатор**
-   - [ ] Добавить `StealthAnchorHintCache` в `indexes/processor`.
-   - [ ] Обновить `Processor::process_utxos_changed`, чтобы кэшировать хинты для стелс‑UTXO.
-   - [ ] Определить и задокументировать интерфейс, через который RPC‑слой будет их запрашивать.
-6. **Тесты**
-   - [ ] Unit‑тесты для новых статусов/очистки `EphemeralKeyStore`.
-   - [ ] Unit‑/integration‑тесты для делегаций/orphaned UTXO и reorg‑сценариев.
-   - [ ] Тесты сериализации `RpcStealthOutputInfo`/`GetBlockViewTagsResponse` с `anchor_hint`.
-7. **Документация и статус**
-   - [ ] Обновить `docs/plans/phase2/Phase2_MLDSA_master_key.md` (раздел Iteration 5) фактическими деталями реализации.
-   - [ ] Обновить `docs/todo/stealth_view_tags.md` описанием `anchor_hint` и индекса.
-   - [ ] Добавить запись в `docs/IMPLEMENTATION_STATUS.md` о старте/завершении Iteration 5.
+1. **EphemeralKeyStore / формат хранения** (`wallet/core/src/storage/ephemeral_keys.rs`)
+   - [ ] Добавить поля `created_daa_score`, `valid_until_daa` к `EphemeralKeyEntry` (порядок полей сохранить, новые в хвост).
+   - [ ] Расширить ручной `BorshDeserialize` чтением хвостовых полей с дефолтами при `UnexpectedEof`.
+   - [ ] Расширить `EphemeralKeyStatus` (`Orphaned { OrphanReason }`, `Expired`) и ввести `OrphanReason`.
+   - [ ] Добавить `cleanup_expired(current_daa_score)` + вспомогательные геттеры/обновления статусов.
+   - [ ] Unit‑тесты: миграция старого формата → новый, кейсы `cleanup_expired`.
+
+2. **DAA‑хуки и обработка удаления** (`wallet/core/src/utxo/stealth_handler.rs`, `wallet/core/src/utxo/processor.rs`, `wallet/core/src/account/variants/stealth.rs`)
+   - [ ] В трейд `StealthUtxoHandler` добавить `on_daa_score_changed`.
+   - [ ] В `UtxoProcessor::handle_daa_score_change` вызывать `on_daa_score_changed` для всех stealth‑хендлеров.
+   - [ ] В `StealthAccount` реализовать `on_daa_score_changed`: `cleanup_expired` + проверки делегаций.
+   - [ ] Заменить прямое `ephemeral_keys.remove` на `mark_removed(outpoint, current_daa)` (мягкое удаление, reorg‑дружественно).
+
+3. **Orphan‑overlay и интеграция с генератором** (`wallet/core/src/account/variants/stealth.rs`, `wallet/core/src/tx/generator/*`)
+   - [ ] Ввести `OrphanOverlayMap` (outpoint → {reason, first_marked_daa}) и хранить его в стелс‑аккаунте.
+   - [ ] Наполнять overlay при `try_claim_utxo_internal`/`try_claim_utxo` для UTXO вне окна делегации; восстанавливать overlay при загрузке из `EphemeralKeyStore`.
+   - [ ] Фильтровать `utxo_iterator`/`priority_utxo_entries` для обычных платежей через overlay; предусмотреть отдельный путь для ручных сценариев (consolidate/spend‑orphaned).
+
+4. **События кошелька** (`wallet/core/src/events.rs`, `wallet/core/src/wasm/events.rs` при наличии)
+   - [ ] Добавить события `MasterDelegationExpired`, `MasterDelegationRevoked`, `MasterAnchorMismatch` + `EventKind`.
+   - [ ] Эмитить: истечение окна делегации (DAA‑хук), revoke/rotate делегации, anchor‑mismatch при скане.
+
+5. **RPC `anchor_hint`** (`rpc/core/src/model/message.rs`, `rpc/grpc/core/proto/rpc.proto`, `rpc/grpc/core/src/convert/message.rs`, `rpc/core/src/wasm/message.rs`, `rpc/service/src/converter/consensus.rs`, `rpc/service/src/service.rs`)
+   - [ ] В `RpcStealthOutputInfo` добавить `anchor_hint: Option<String>`, bump version `2 → 3` с обратной совместимостью.
+   - [ ] Протянуть поле через gRPC/wRPC/WASM.
+   - [ ] В сервисе пока заполнять `anchor_hint = None` (до появления индексатора).
+
+6. **Индексатор (можно отдельным шагом)** (`indexes/processor/src/processor.rs` + новый модуль кэша)
+   - [ ] Добавить `StealthAnchorHintCache (outpoint → anchor_hint u32)` в `Processor`.
+   - [ ] Кэшировать хинты на `UtxosChanged` для стелс‑скриптов; предоставить API `get(txid, index)`.
+   - [ ] В RPC‑слое использовать кэш при формировании `RpcStealthOutputInfo`.
+
+7. **Тесты**
+   - Unit: `ephemeral_keys` (миграция, cleanup), `stealth.rs` (delegation window, orphan reasons), RPC модель `RpcStealthOutputInfo` с/без `anchor_hint`.
+   - Integration: `stealth_flow.rs` reorg + истечение делегации (ключи не теряются до `valid_until_daa`), обратная совместимость fallback без utxoindex; `mldsa_master.rs` — истечение/ревок делегации → событие + orphaned.
+
+8. **Документация/статус**
+   - [ ] Обновить `Phase2_MLDSA_master_key.md`, `docs/todo/stealth_view_tags.md`, `docs/IMPLEMENTATION_STATUS.md` после реализации.
 
 ## 9. Definition of Done (Iteration 5)
 

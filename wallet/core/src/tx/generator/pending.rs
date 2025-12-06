@@ -287,7 +287,8 @@ impl PendingTransaction {
     /// transaction contains stealth inputs.
     pub async fn try_sign_stealth(&self, signer: &super::stealth_signer::StealthSigner) -> Result<()> {
         let signable_tx = self.inner.signable_tx.lock()?.clone();
-        let signed = signer.sign(signable_tx).await?;
+        let include = self.inner.generator.include_delegation_id();
+        let signed = signer.sign(signable_tx, include).await?;
         *self.inner.signable_tx.lock().unwrap() = signed.unwrap();
         Ok(())
     }
@@ -307,6 +308,36 @@ impl PendingTransaction {
             .entries
             .iter()
             .any(|entry| entry.as_ref().map(|e| e.script_public_key.version() == STEALTH_SCRIPT_VERSION).unwrap_or(false))
+    }
+
+    /// Checks if this transaction has any non-stealth inputs.
+    ///
+    /// Non-stealth inputs are identified by a script version that differs from STEALTH_SCRIPT_VERSION.
+    pub fn has_non_stealth_inputs(&self) -> bool {
+        use kaspa_txscript::STEALTH_SCRIPT_VERSION;
+
+        let signable_tx = match self.inner.signable_tx.lock() {
+            Ok(tx) => tx,
+            Err(_) => return false,
+        };
+
+        signable_tx
+            .entries
+            .iter()
+            .any(|entry| entry.as_ref().map(|e| e.script_public_key.version() != STEALTH_SCRIPT_VERSION).unwrap_or(false))
+    }
+
+    /// Checks if stealth and non-stealth inputs are mixed in the same transaction.
+    pub fn has_mixed_stealth_and_legacy_inputs(&self) -> bool {
+        self.has_stealth_inputs() && self.has_non_stealth_inputs()
+    }
+
+    /// Enforces that a transaction does not mix stealth and legacy inputs.
+    pub fn enforce_stealth_only_inputs(&self) -> Result<()> {
+        if self.has_mixed_stealth_and_legacy_inputs() {
+            return Err(Error::MixedStealthAndLegacyInputsNotAllowed);
+        }
+        Ok(())
     }
 
     /// Combined signing method that handles both regular and stealth inputs.

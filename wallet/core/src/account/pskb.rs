@@ -375,6 +375,7 @@ pub fn pskt_to_pending_transaction(
         final_transaction_payload: None,
         stealth_change_creator: None,
         random_fee_settings: RandomFeeSettings::default(),
+        include_delegation_id: false,
     };
 
     // Create the Generator

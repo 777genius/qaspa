@@ -204,6 +204,28 @@ All 9 error types tested:
 - ✅ Mismatched security levels
 - ✅ Deterministic behavior
 
+## Iteration 4 Additions (Dec 2025)
+
+Phase 2 / Iteration 4 introduces end-to-end validation for delegation records, TLV-encoded signature scripts, and RPC smoke scenarios. The following suites extend the baseline 57 ML-DSA tests:
+
+- **Wallet Core**
+  - `wallet/core/src/account/delegation.rs` — Borsh/serde roundtrip, hash invariants, CRDT `select_active`, and master-signature verification (8 tests).
+  - `wallet/core/src/storage/ephemeral_keys.rs` — migration V0→V1 plus persistence of `master_anchor`/`delegation_id`.
+  - `wallet/core/src/tx/generator/stealth_signer.rs` and `wallet/core/src/tx/generator/test.rs` — TLV prefix (`0xA1 || delegation_id`), mixed stealth/non-stealth inputs, generator flag propagation.
+- **TxScript**
+  - `crypto/txscript/tests/stealth_transactions.rs` — variable-length `signature_script`, TLV parser rejection paths, `kip10_enabled` gating.
+- **Integration**
+  - `testing/integration/src/mldsa_master.rs` — full `master → delegation → stealth UTXO → spend` flow. Requires `KASPA_DISABLE_STEALTH_POLICY=1` to allow legacy miner UTXO funding. Command:
+    ```bash
+    KASPA_DISABLE_STEALTH_POLICY=1 \
+      cargo test -p kaspa-testing-integration \
+      mldsa_master::test_mldsa_master_delegation_flow -- --test-threads=1
+    ```
+- **RPC Smoke**
+  - `testing/integration/src/rpc_tests.rs` now covers `RegisterMldsaAnchor` and `ListMldsaDelegations` branches to prevent regressions in gRPC/wRPC transports.
+
+These additions increase the ML-DSA-related regression suite by **+12 tests**, bringing the combined total past 70 without altering the crypto module counts above. All new suites run in CI as part of the Phase 2 gating workflow.
+
 ## Performance Testing
 
 **Benchmark Suite:** `crypto/mldsa/benches/mldsa_bench.rs`

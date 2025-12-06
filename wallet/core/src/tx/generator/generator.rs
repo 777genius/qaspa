@@ -316,6 +316,8 @@ struct Inner {
     final_transaction_payload_mass: u64,
     // Optional stealth change creator for pre-calculating spending keys
     stealth_change_creator: Option<DynStealthChangeCreator>,
+    // Include delegation id TLV in stealth signatures
+    include_delegation_id: bool,
     // execution context
     context: Mutex<Context>,
     // random fee configuration
@@ -344,6 +346,7 @@ impl std::fmt::Debug for Inner {
             .field("final_transaction_outputs_compute_mass", &self.final_transaction_outputs_compute_mass)
             .field("final_transaction_payload", &self.final_transaction_payload)
             .field("final_transaction_payload_mass", &self.final_transaction_payload_mass)
+            .field("include_delegation_id", &self.include_delegation_id)
             .field("random_fee_settings", &self.random_fee_settings)
             .field("random_fee_offset", &self.random_fee_offset)
             // .field("context", &self.context)
@@ -378,6 +381,7 @@ impl Generator {
             destination_utxo_context,
             stealth_change_creator,
             random_fee_settings,
+            include_delegation_id,
         } = settings;
 
         let network_type = NetworkType::from(network_id);
@@ -527,6 +531,7 @@ impl Generator {
             final_transaction_payload,
             final_transaction_payload_mass,
             stealth_change_creator,
+            include_delegation_id,
             destination_utxo_context,
             random_fee_settings,
             random_fee_offset,
@@ -574,6 +579,11 @@ impl Generator {
     #[inline(always)]
     pub fn destination_utxo_context(&self) -> &Option<UtxoContext> {
         &self.inner.destination_utxo_context
+    }
+
+    #[inline(always)]
+    pub fn include_delegation_id(&self) -> bool {
+        self.inner.include_delegation_id
     }
 
     /// Core [`Multiplexer<Events>`] (if available)
@@ -1207,6 +1217,8 @@ impl Generator {
                     kind,
                 )?;
 
+                pending_tx.enforce_stealth_only_inputs()?;
+
                 // Store pre-calculated stealth change key if present
                 if let Some(stealth_change) = pending_stealth_change {
                     pending_tx.set_stealth_change(stealth_change);
@@ -1283,7 +1295,7 @@ impl Generator {
                     _ => unreachable!(),
                 }
 
-                Ok(Some(PendingTransaction::try_new(
+                let pending_tx = PendingTransaction::try_new(
                     self,
                     tx,
                     utxo_entry_references,
@@ -1297,7 +1309,11 @@ impl Generator {
                     transaction_mass,
                     transaction_fees,
                     kind,
-                )?))
+                )?;
+
+                pending_tx.enforce_stealth_only_inputs()?;
+
+                Ok(Some(pending_tx))
             }
         }
     }
