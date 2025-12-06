@@ -347,15 +347,9 @@ impl KaspaCli {
                                     this.term().refresh_prompt();
 
                                 },
-                                Events::WalletHint {
-                                    hint
-                                } => {
-
-                                    if let Some(hint) = hint {
-                                        tprintln!(this, "\nYour wallet hint is: {hint}\n");
-                                    }
-
-                                },
+                                Events::WalletHint { hint: Some(hint) } => {
+                                    tprintln!(this, "\nYour wallet hint is: {hint}\n");
+                                }
                                 Events::AccountSelection { .. } => { },
                                 Events::WalletCreate { .. } => { },
                                 Events::WalletError { .. } => { },
