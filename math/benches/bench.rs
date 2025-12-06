@@ -46,8 +46,8 @@ fn bench_uint128(c: &mut Criterion) {
     bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a.wrapping_mul(b as u128), "multiplication u64");
     bench_op(&mut u128_c, &u128_one, &u128_two, |a, b| a / (b | 1), "division");
     bench_op(&mut u128_c, &u128_one, &u64s, |a, b| a / ((b as u128) | 1), "u64 division");
-    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a.wrapping_shl((b & 127) as u32), "left shift");
-    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a.wrapping_shr((b & 127) as u32), "right shift");
+    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a.wrapping_shl(b & 127), "left shift");
+    bench_op(&mut u128_c, &u128_one, &shifts, |a, b| a.wrapping_shr(b & 127), "right shift");
     u128_c.finish();
 
     let mut uint128_c = c.benchmark_group("Uint128");

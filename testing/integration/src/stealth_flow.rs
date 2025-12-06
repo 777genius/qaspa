@@ -1250,7 +1250,7 @@ async fn test_ephemeral_key_operations() {
 
     // Verify key operations
     assert!(stealth.ephemeral_keys().contains(&outpoint));
-    assert!(stealth.ephemeral_keys().len() >= 1);
+    assert!(!stealth.ephemeral_keys().is_empty());
 
     let outpoints = stealth.ephemeral_keys().outpoints();
     assert!(outpoints.contains(&outpoint));
