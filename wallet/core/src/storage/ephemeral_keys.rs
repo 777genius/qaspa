@@ -245,7 +245,7 @@ impl EphemeralKeyStore {
 
     /// Returns delegation metadata for an outpoint, if present.
     pub fn delegation_metadata(&self, outpoint: &TransactionOutpoint) -> Option<(Option<[u8; 32]>, Option<u64>)> {
-        self.delegations.get(outpoint).map(|v| v.value().clone())
+        self.delegations.get(outpoint).map(|v| *v.value())
     }
 
     /// Removes an ephemeral key
@@ -293,8 +293,7 @@ impl EphemeralKeyStore {
                 let outpoint = *r.key();
                 let data = r.value().clone();
                 let status = self.statuses.get(&outpoint).map(|s| s.clone()).unwrap_or_default();
-                let (master_anchor, delegation_id) =
-                    self.delegations.get(&outpoint).map(|v| v.value().clone()).unwrap_or((None, None));
+                let (master_anchor, delegation_id) = self.delegations.get(&outpoint).map(|v| *v.value()).unwrap_or((None, None));
                 EphemeralKeyEntry { outpoint, data, status, master_anchor, delegation_id }
             })
             .collect()
@@ -442,7 +441,7 @@ impl EphemeralKeyProvider for EphemeralKeyStore {
 
     async fn get_ephemeral_entry(&self, outpoint: &TransactionOutpoint) -> Option<(EphemeralKeyData, Option<u64>)> {
         let key = self.get(outpoint).await?;
-        let delegation = self.delegation_metadata(outpoint).map(|(_, id)| id).flatten();
+        let delegation = self.delegation_metadata(outpoint).and_then(|(_, id)| id);
         Some((key, delegation))
     }
 }

@@ -39,6 +39,12 @@ pub struct DelegationStore {
     next_id: AtomicU64,
 }
 
+impl Default for DelegationStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DelegationStore {
     pub fn new() -> Self {
         Self { by_id: DashMap::new(), by_anchor_account: DashMap::new(), next_id: AtomicU64::new(0) }
@@ -46,7 +52,7 @@ impl DelegationStore {
 
     pub fn upsert(&self, record: DelegationRecordV1) -> Result<DelegationId> {
         let key = (record.anchor, record.account_id);
-        let mut list = self.by_anchor_account.entry(key).or_insert_with(Vec::new);
+        let mut list = self.by_anchor_account.entry(key).or_default();
 
         if let Some(last_id) = list.last() {
             if let Some(prev) = self.by_id.get(last_id) {
@@ -129,7 +135,7 @@ impl DelegationStore {
             max_id = max_id.max(id);
             let key = (record.anchor, record.account_id);
             self.by_id.insert(DelegationId(id), record.clone());
-            self.by_anchor_account.entry(key).or_insert_with(Vec::new).push(DelegationId(id));
+            self.by_anchor_account.entry(key).or_default().push(DelegationId(id));
         }
         self.next_id.store(max_id + 1, Ordering::SeqCst);
         Ok(self.by_id.len())

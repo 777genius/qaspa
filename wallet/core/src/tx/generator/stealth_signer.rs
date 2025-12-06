@@ -98,12 +98,8 @@ impl StealthSigner {
 
             // Retrieve spending key from ephemeral store (with delegation metadata if available)
             let fallback = self.key_provider.get_ephemeral_key(&outpoint).await.map(|k| (k, None));
-            let (key_data, delegation_id) = self
-                .key_provider
-                .get_ephemeral_entry(&outpoint)
-                .await
-                .or_else(|| fallback)
-                .ok_or(Error::EphemeralKeyNotFound(outpoint))?;
+            let (key_data, delegation_id) =
+                self.key_provider.get_ephemeral_entry(&outpoint).await.or(fallback).ok_or(Error::EphemeralKeyNotFound(outpoint))?;
 
             // Get spending secret bytes
             let spending_secret_bytes =
@@ -236,7 +232,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_signature_script_includes_tlv_when_flag_enabled() {
-        let delegation_id = 0xA5A5_EE_u64;
+        let delegation_id = 0x00A5_A5EE_u64;
         let (signer, signable) = build_stealth_signer_with_tx(Some(delegation_id));
         let signed = signer.sign(signable, true).await.unwrap();
 

@@ -26,17 +26,16 @@ impl From<DelegationId> for u64 {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum DelegationStatus {
+    #[default]
     Active,
-    Revoked { revoked_daa: u64 },
-    Expired { expired_daa: u64 },
-}
-
-impl Default for DelegationStatus {
-    fn default() -> Self {
-        Self::Active
-    }
+    Revoked {
+        revoked_daa: u64,
+    },
+    Expired {
+        expired_daa: u64,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
