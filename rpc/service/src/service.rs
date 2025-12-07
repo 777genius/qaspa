@@ -263,11 +263,6 @@ impl RpcCoreService {
         self.anchor_hint_cache.insert(txid, index, anchor_hint);
     }
 
-    /// Возвращает shared кэш anchor_hint (например, чтобы внешний индексатор мог регистрировать подсказки).
-    pub(crate) fn anchor_hint_cache(&self) -> Arc<StealthAnchorHintCache> {
-        self.anchor_hint_cache.clone()
-    }
-
     pub fn start_impl(&self) {
         self.notifier().start();
     }
@@ -331,7 +326,7 @@ impl RpcCoreService {
             .iter()
             .flat_map(|tx| {
                 let tx_id = tx.id();
-                let rpc_tx_id: RpcTransactionId = tx_id.into();
+                let rpc_tx_id: RpcTransactionId = tx_id;
                 let is_coinbase = tx.is_coinbase();
                 tx.outputs.iter().enumerate().filter_map(move |(idx, out)| {
                     if out.script_public_key.version() != STEALTH_SCRIPT_VERSION {
