@@ -21,6 +21,7 @@ use crate::tx::generator::stealth_signer::StealthSigner;
 use crate::tx::{Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, RandomFeeSettings};
 use crate::utxo::stealth_handler::StealthUtxoHandler;
 use crate::utxo::UtxoContext;
+use dashmap::DashMap;
 use kaspa_addresses::{Address, Version};
 use kaspa_bip32::ExtendedPrivateKey;
 use kaspa_consensus_core::{
@@ -37,7 +38,6 @@ use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAdd
 use kaspa_txscript::{extract_stealth_output, STEALTH_SCRIPT_VERSION};
 use kaspa_utils::hex::ToHex;
 use secp256k1::{PublicKey, SecretKey, XOnlyPublicKey, SECP256K1};
-use dashmap::DashMap;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -634,10 +634,7 @@ impl StealthAccount {
         self.orphan_overlay.clear();
         for entry in self.ephemeral_keys.entries() {
             if let EphemeralKeyStatus::Orphaned { reason } = entry.status {
-                self.orphan_overlay.insert(
-                    entry.outpoint,
-                    OrphanOverlayEntry { reason, first_marked_daa: entry.created_daa_score },
-                );
+                self.orphan_overlay.insert(entry.outpoint, OrphanOverlayEntry { reason, first_marked_daa: entry.created_daa_score });
             }
         }
     }
@@ -681,21 +678,15 @@ impl StealthAccount {
         }
     }
 
-    fn select_delegation_for_utxo(
-        &self,
-        block_daa: u64,
-    ) -> (Option<DelegationId>, Option<DelegationRecordV1>, Option<OrphanReason>) {
+    fn select_delegation_for_utxo(&self, block_daa: u64) -> (Option<DelegationId>, Option<DelegationRecordV1>, Option<OrphanReason>) {
         let Some(anchor) = self.master_anchor() else {
             // Обычный стелс-аккаунт без master: считаем UTXO валидным, не помечаем orphan.
             return (None, None, None);
         };
 
         let store = self.wallet().delegation_store();
-        let candidates: Vec<(DelegationId, DelegationRecordV1)> = store
-            .by_anchor(&anchor)
-            .into_iter()
-            .filter(|(_, rec)| rec.account_id == *self.id())
-            .collect();
+        let candidates: Vec<(DelegationId, DelegationRecordV1)> =
+            store.by_anchor(&anchor).into_iter().filter(|(_, rec)| rec.account_id == *self.id()).collect();
 
         if candidates.is_empty() {
             return (None, None, Some(OrphanReason::AnchorMismatch));
@@ -1526,18 +1517,12 @@ impl StealthUtxoHandler for StealthAccount {
 
                 let block_daa = utxo.utxo_entry.block_daa_score;
                 let current_daa = self.wallet().utxo_processor().current_daa_score().unwrap_or(block_daa);
-                let safety_margin = self
-                    .wallet()
-                    .utxo_processor()
-                    .network_params()
-                    .map(|p| p.user_transaction_maturity_period_daa())
-                    .unwrap_or(0);
+                let safety_margin =
+                    self.wallet().utxo_processor().network_params().map(|p| p.user_transaction_maturity_period_daa()).unwrap_or(0);
                 let (selected_id, record, orphan_reason) = self.select_delegation_for_utxo(block_daa);
                 let anchor = self.master_anchor();
                 let delegation_id = selected_id;
-                let valid_until = record
-                    .as_ref()
-                    .and_then(|r| r.valid_until_daa.map(|u| u.saturating_add(safety_margin)));
+                let valid_until = record.as_ref().and_then(|r| r.valid_until_daa.map(|u| u.saturating_add(safety_margin)));
 
                 if let Err(e) = self
                     .ephemeral_keys
@@ -1555,7 +1540,11 @@ impl StealthUtxoHandler for StealthAccount {
                             if let Some(expected) = self.master_anchor() {
                                 let _ = self
                                     .wallet()
-                                    .notify(Events::MasterAnchorMismatch { account_id: *self.id(), expected_anchor: expected, actual_anchor: [0u8; 32] })
+                                    .notify(Events::MasterAnchorMismatch {
+                                        account_id: *self.id(),
+                                        expected_anchor: expected,
+                                        actual_anchor: [0u8; 32],
+                                    })
                                     .await;
                             }
                         }
@@ -1806,9 +1795,9 @@ impl StealthAccount {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::account::delegation::DelegationId;
     use crate::deterministic::AccountId;
     use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStore};
-    use crate::account::delegation::DelegationId;
     use kaspa_consensus_core::network::{NetworkId, NetworkType};
     use kaspa_consensus_core::subnets;
     use kaspa_hashes::Hash;
@@ -1842,10 +1831,8 @@ mod tests {
         let rec1 = DelegationRecordV1 { nonce: 1, valid_from_daa: 10, valid_until_daa: Some(20), ..make_record(10, Some(20)) };
         let rec2 = DelegationRecordV1 { nonce: 2, valid_from_daa: 10, valid_until_daa: Some(20), ..make_record(10, Some(20)) };
 
-        let (id, rec, reason) = select_delegation_from_records(
-            15,
-            vec![(DelegationId(1), rec1.clone()), (DelegationId(2), rec2.clone())],
-        );
+        let (id, rec, reason) =
+            select_delegation_from_records(15, vec![(DelegationId(1), rec1.clone()), (DelegationId(2), rec2.clone())]);
         assert_eq!(id, Some(DelegationId(2)));
         assert_eq!(rec.unwrap().nonce, 2);
         assert!(reason.is_none());

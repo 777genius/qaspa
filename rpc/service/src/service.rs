@@ -36,9 +36,9 @@ use kaspa_index_core::{
     connection::IndexChannelConnection, indexed_utxos::UtxoSetByScriptPublicKey, notification::Notification as IndexNotification,
     notifier::IndexNotifier,
 };
+use kaspa_index_processor::processor::StealthAnchorHintCache;
 use kaspa_mining::feerate::FeeEstimateVerbose;
 use kaspa_mining::model::tx_query::TransactionQuery;
-use kaspa_index_processor::processor::StealthAnchorHintCache;
 use kaspa_mining::{manager::MiningManagerProxy, mempool::tx::Orphan};
 use kaspa_notify::listener::ListenerLifespan;
 use kaspa_notify::subscription::context::SubscriptionContext;
@@ -56,6 +56,7 @@ use kaspa_p2p_flows::flow_context::FlowContext;
 use kaspa_p2p_lib::common::ProtocolError;
 use kaspa_p2p_mining::rule_engine::MiningRuleEngine;
 use kaspa_perf_monitor::{counters::CountersSnapshot, Monitor as PerfMonitor};
+use kaspa_rpc_core::RpcTransactionId;
 use kaspa_rpc_core::{
     api::{
         connection::DynRpcConnection,
@@ -70,7 +71,6 @@ use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, pay
 use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
 use kaspa_utils::{expiring_cache::ExpiringCache, hex::ToHex};
-use kaspa_rpc_core::RpcTransactionId;
 use kaspa_utils_tower::counters::TowerConnectionCounters;
 use kaspa_utxoindex::api::UtxoIndexProxy;
 use log::info;

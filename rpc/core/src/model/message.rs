@@ -1716,16 +1716,7 @@ impl Deserializer for RpcStealthOutputInfo {
         let amount = load!(u64, reader)?;
         let is_coinbase = if version >= 2 { load!(bool, reader)? } else { false };
         let anchor_hint = if version >= 3 { load!(Option<String>, reader)? } else { None };
-        Ok(Self {
-            transaction_id,
-            output_index,
-            view_tag,
-            ephemeral_pubkey,
-            destination_pubkey,
-            amount,
-            is_coinbase,
-            anchor_hint,
-        })
+        Ok(Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount, is_coinbase, anchor_hint })
     }
 }
 

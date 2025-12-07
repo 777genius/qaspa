@@ -11,12 +11,12 @@ use kaspa_rpc_service::service::DelegationProvider;
 use kaspa_utils::hex::ToHex;
 use kaspa_wallet_core::account::variants::mldsa_master::MldsaMasterAccount;
 use kaspa_wallet_core::api::traits::WalletApi;
+use kaspa_wallet_core::events::Events;
+use kaspa_wallet_core::storage::ephemeral_keys::{EphemeralKeyStatus, OrphanReason};
 use kaspa_wallet_core::{
     account::delegation::DelegationStatus, account::Account, deterministic::AccountId, storage::keydata::PrvKeyDataVariantKind,
     wallet::args::PrvKeyDataCreateArgs, wallet::Wallet,
 };
-use kaspa_wallet_core::events::Events;
-use kaspa_wallet_core::storage::ephemeral_keys::{EphemeralKeyStatus, OrphanReason};
 use kaspa_wallet_keys::secret::Secret;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -381,10 +381,7 @@ async fn test_mldsa_delegation_expiry_emits_event_and_orphans() {
     .await;
 
     let status = stealth_account.ephemeral_keys().status(&outpoint);
-    let is_orphaned = matches!(
-        status,
-        Some(EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired })
-    );
+    let is_orphaned = matches!(status, Some(EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired }));
     let is_expired = matches!(status, Some(EphemeralKeyStatus::Expired));
     assert!(
         is_orphaned || is_expired || status.is_none(),

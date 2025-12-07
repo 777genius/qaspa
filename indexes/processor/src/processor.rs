@@ -3,6 +3,7 @@ use crate::{
     IDENT,
 };
 use async_trait::async_trait;
+use dashmap::DashMap;
 use kaspa_consensus_notify::{notification as consensus_notification, notification::Notification as ConsensusNotification};
 use kaspa_core::{debug, trace};
 use kaspa_index_core::notification::{Notification, PruningPointUtxoSetOverrideNotification, UtxosChangedNotification};
@@ -13,9 +14,8 @@ use kaspa_notify::{
     notification::Notification as NotificationTrait,
     notifier::DynNotify,
 };
-use kaspa_utils::triggers::SingleTrigger;
-use dashmap::DashMap;
 use kaspa_rpc_core::RpcTransactionId;
+use kaspa_utils::triggers::SingleTrigger;
 use kaspa_utxoindex::api::UtxoIndexProxy;
 use std::sync::{
     atomic::{AtomicBool, Ordering},

@@ -801,10 +801,7 @@ mod tests {
 
         let outpoint = TransactionOutpoint::new(Hash::from_bytes([7u8; 32]), 0);
         let key_data = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
-        store
-            .store_with_metadata(outpoint, key_data, 5, None, Some(1), Some(10))
-            .await
-            .expect("store");
+        store.store_with_metadata(outpoint, key_data, 5, None, Some(1), Some(10)).await.expect("store");
         store.set_status(outpoint, EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired });
 
         store.cleanup_expired(20);
