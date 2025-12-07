@@ -163,7 +163,7 @@ impl StealthAnchorHintCache {
     }
 
     pub fn get(&self, txid: &RpcTransactionId, index: u32) -> Option<String> {
-        self.map.get(&(txid.clone(), index)).map(|v| v.clone())
+        self.map.get(&(*txid, index)).map(|v| v.clone())
     }
 }
 
