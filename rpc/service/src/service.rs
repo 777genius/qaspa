@@ -38,6 +38,7 @@ use kaspa_index_core::{
 };
 use kaspa_mining::feerate::FeeEstimateVerbose;
 use kaspa_mining::model::tx_query::TransactionQuery;
+use kaspa_index_processor::processor::StealthAnchorHintCache;
 use kaspa_mining::{manager::MiningManagerProxy, mempool::tx::Orphan};
 use kaspa_notify::listener::ListenerLifespan;
 use kaspa_notify::subscription::context::SubscriptionContext;
@@ -70,7 +71,6 @@ use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
 use kaspa_utils::{expiring_cache::ExpiringCache, hex::ToHex};
 use kaspa_rpc_core::RpcTransactionId;
-use dashmap::DashMap;
 use kaspa_utils_tower::counters::TowerConnectionCounters;
 use kaspa_utxoindex::api::UtxoIndexProxy;
 use log::info;
@@ -104,26 +104,6 @@ use workflow_rpc::server::WebSocketCounters as WrpcServerCounters;
 struct AnchorInfo {
     metadata: Option<String>,
     _registered_at: u64,
-}
-
-pub(crate) struct StealthAnchorHintCache {
-    map: DashMap<(RpcTransactionId, u32), String>,
-}
-
-impl StealthAnchorHintCache {
-    pub(crate) fn new() -> Self {
-        Self { map: DashMap::new() }
-    }
-
-    pub(crate) fn insert(&self, txid: RpcTransactionId, index: u32, anchor_hint: [u8; 4]) {
-        // Храним первые 4 байта anchor в hex, как описано в планах (best-effort).
-        let value = format!("{:08x}", u32::from_le_bytes(anchor_hint));
-        self.map.insert((txid, index), value);
-    }
-
-    pub(crate) fn get(&self, txid: &RpcTransactionId, index: u32) -> Option<String> {
-        self.map.get(&(txid.clone(), index)).map(|v| v.clone())
-    }
 }
 
 #[async_trait]
@@ -184,6 +164,7 @@ impl RpcCoreService {
         grpc_tower_counters: Arc<TowerConnectionCounters>,
         system_info: SystemInfo,
         mining_rule_engine: Arc<MiningRuleEngine>,
+        anchor_hint_cache: Option<Arc<StealthAnchorHintCache>>,
     ) -> Self {
         // This notifier UTXOs subscription granularity to index-processor or consensus notifier
         let policies = match index_notifier {
@@ -268,7 +249,7 @@ impl RpcCoreService {
             mining_rule_engine,
             mldsa_anchors: Mutex::new(HashMap::new()),
             delegation_provider: Mutex::new(None),
-            anchor_hint_cache: Arc::new(StealthAnchorHintCache::new()),
+            anchor_hint_cache: anchor_hint_cache.unwrap_or_else(|| Arc::new(StealthAnchorHintCache::new())),
         }
     }
 

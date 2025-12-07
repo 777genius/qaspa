@@ -23,6 +23,7 @@ const INDEX_SERVICE: &str = IDENT;
 pub struct IndexService {
     utxoindex: Option<UtxoIndexProxy>,
     notifier: Arc<IndexNotifier>,
+    processor: Arc<Processor>,
     shutdown: SingleTrigger,
 }
 
@@ -45,8 +46,16 @@ impl IndexService {
         // Prepare the index-processor notifier
         // No subscriber is defined here because the subscription are manually created during the construction and never changed after that.
         let events: EventSwitches = [EventType::UtxosChanged, EventType::PruningPointUtxoSetOverride].as_ref().into();
-        let collector = Arc::new(Processor::new(utxoindex.clone(), consensus_notify_channel.receiver()));
-        let notifier = Arc::new(IndexNotifier::new(INDEX_SERVICE, events, vec![collector], vec![], subscription_context, 1, policies));
+        let processor = Arc::new(Processor::new(utxoindex.clone(), consensus_notify_channel.receiver()));
+        let notifier = Arc::new(IndexNotifier::new(
+            INDEX_SERVICE,
+            events,
+            vec![processor.clone()],
+            vec![],
+            subscription_context,
+            1,
+            policies,
+        ));
 
         // Manually subscribe to index-processor related event types
         consensus_notifier
@@ -56,7 +65,7 @@ impl IndexService {
             .try_start_notify(consensus_notify_listener_id, PruningPointUtxoSetOverrideScope::default().into())
             .expect("the subscription always succeeds");
 
-        Self { utxoindex, notifier, shutdown: SingleTrigger::default() }
+        Self { utxoindex, notifier, processor, shutdown: SingleTrigger::default() }
     }
 
     pub fn notifier(&self) -> Arc<IndexNotifier> {
@@ -65,6 +74,10 @@ impl IndexService {
 
     pub fn utxoindex(&self) -> Option<UtxoIndexProxy> {
         self.utxoindex.clone()
+    }
+
+    pub fn stealth_anchor_cache(&self) -> Arc<crate::processor::StealthAnchorHintCache> {
+        self.processor.stealth_anchor_cache()
     }
 }
 

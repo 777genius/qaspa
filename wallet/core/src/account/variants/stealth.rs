@@ -410,7 +410,7 @@ fn select_delegation_from_records(
     candidates: Vec<(DelegationId, DelegationRecordV1)>,
 ) -> (Option<DelegationId>, Option<DelegationRecordV1>, Option<OrphanReason>) {
     if candidates.is_empty() {
-        return (None, None, Some(OrphanReason::AnchorMismatch));
+        return (None, None, Some(OrphanReason::NoDelegation));
     }
 
     let mut covering: Option<(DelegationId, DelegationRecordV1)> = None;
@@ -1861,7 +1861,7 @@ mod tests {
         let (id, rec, reason) = select_delegation_from_records(15, vec![]);
         assert!(id.is_none());
         assert!(rec.is_none());
-        assert!(matches!(reason, Some(OrphanReason::AnchorMismatch)));
+        assert!(matches!(reason, Some(OrphanReason::NoDelegation)));
     }
 
     #[test]
