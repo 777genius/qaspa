@@ -386,6 +386,7 @@ pub struct StealthAccount {
     orphan_overlay: Arc<DashMap<TransactionOutpoint, OrphanOverlayEntry>>,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct OrphanOverlayEntry {
     reason: OrphanReason,
@@ -420,10 +421,8 @@ fn select_delegation_from_records(
         }
         let starts = rec.valid_from_daa <= block_daa;
         let ends = rec.valid_until_daa.map(|u| block_daa <= u).unwrap_or(true);
-        if starts && ends {
-            if covering.as_ref().map(|c| rec.nonce > c.1.nonce).unwrap_or(true) {
-                covering = Some((id, rec));
-            }
+        if starts && ends && covering.as_ref().map(|c| rec.nonce > c.1.nonce).unwrap_or(true) {
+            covering = Some((id, rec));
         }
     }
 

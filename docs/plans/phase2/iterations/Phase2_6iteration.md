@@ -34,7 +34,7 @@
 | Native FFI (desktop / hardware bridge) | `wallet/native/src/types.rs`, `wallet/native/src/runtime.rs` | C‑friendly структуры/функции для парсинга/генерации `MasterDelegationRequest/Response` из JSON/Borsh для оффлайн приложений. |
 | CLI | `cli/src/modules/wallet.rs` | Новая команда `wallet master sign-delegation --input deleg.json --out deleg_signed.json` + helper’ы в `master_command`. |
 | Документация | `docs/guides/master_cold_storage.md`, `docs/plans/phase2/Phase2_MLDSA_master_key.md`, `docs/IMPLEMENTATION_STATUS.md` | Новый гайд по cold storage, описание форматов `delegation_request` / `delegation_response`, обновление статуса Iteration 6. |
-| Интеграционные тесты | `testing/integration/airgap_mldsa.rs` | E2E сценарии формирования запроса, оффлайн‑подписи и применения ответа. |
+| Интеграционные тесты | `testing/integration/src/airgap_mldsa.rs` | E2E сценарии формирования запроса, оффлайн‑подписи и применения ответа. |
 
 ## 2. Дизайн форматов `MasterDelegationRequest/Response`
 
@@ -123,6 +123,8 @@ pub struct MasterDelegationResponseBodyV1 {
 - **JSON (delegation_request.json / delegation_response.json):**
   - Использует Serde‑деривацию с `camelCase` полями.
   - Все массивы байт (`anchor`, pubkeys, `request_id`) сериализуются как hex‑строки (`"deadbeef..."`), совместимо с существующими `MasterAnchorInfo` и паттернами в `api/message.rs`.
+  - Подписи MLDSA в поле `signature` кодируются только в стандартном base64 (без url‑safe), чтобы сократить размер; все остальные байтовые поля остаются hex.
+  - `network_id` сериализуется строкой из существующего `NetworkId` (`mainnet`, `testnet10`, `devnet`, `simnet`), отклоняем неизвестные значения.
   - JSON является основным форматом для CLI / desktop‑GUI / браузерных клиентов; внутри JSON содержимое строго соответствует Borsh‑структурам по полям и версиям.
 
 Пример JSON‑структуры запроса (упрощённый):
@@ -168,7 +170,7 @@ pub struct MasterDelegationResponseBodyV1 {
       "validFromDaa": 1000000,
       "validUntilDaa": 1100000,
       "nonce": 5,
-      "signature": "mldsa_sig_base64_or_hex..."
+      "signature": "mldsa_sig_base64"
     }
   ]
 }
@@ -188,7 +190,7 @@ pub struct MasterDelegationResponseBodyV1 {
   - клиенты, не понимающие указанную версию, должны **отклонять** файл с чёткой ошибкой, а не пытаться интерпретировать частично.
 - Хранилище делегаций:
   - при применении ответа Iteration 6 всегда пишет `V1`, даже если внутри уже есть записи других версий (миграция описывается в Iteration 7);
-  - `request_id` служит сквозным идентификатором «сессии делегации» и хранится вместе с делегациями, чтобы можно было корректно повторно импортировать либо откатить конфликтующие ответы.
+  - `request_id` служит сквозным идентификатором «сессии делегации» и хранится вместе с делегациями; заводим индекс по `request_id`, чтобы повторные импорты были идемпотентны и диагностируемы.
 
 ### 2.6. Тест‑векторы и межъязыковая консистентность
 
@@ -254,9 +256,7 @@ pub struct MasterDelegationResponseBodyV1 {
   - Строит `DelegationRecordHeaderV1` и назначает `nonce` по правилам CRDT (из матрицы рисков).
   - Использует:
     - `self.network_id()?` для заполнения `network_id` в `MasterDelegationRequestBodyV1`;
-    - `self.utxo_processor().current_daa_score()` как источник «текущего» DAA; при его отсутствии (кошелёк оффлайн) Flow либо:
-      - явно требует подключения/синхронизации перед построением запроса;
-      - либо запускается в деградирующем режиме с `valid_from_daa = 0` (такая политика должна быть чётко описана в гайде и, по умолчанию, отключена).
+    - `self.utxo_processor().current_daa_score()` как источник «текущего» DAA; при его отсутствии (кошелёк оффлайн) **по умолчанию строить запрос запрещено** (ошибка с подсказкой «синхронизируйтесь»). Деградирующий режим `valid_from_daa = 0` допускается только под явным флагом/конфигом (disabled by default) и должен быть документирован как рискованный.
   - С точки зрения конкурентности:
     - как и другие методы Wallet (см. `wallet/core/src/wallet/api.rs`), вызов через `WalletApi` должен происходить под `WalletGuard`, чтобы построение запросов не пересекалось с параллельными миграциями/изменениями аккаунтов;
     - прямых запись/commit внутри `build_master_delegation_request` нет — функция чисто читает состояние и формирует signable‑payload.
@@ -302,7 +302,7 @@ pub struct MasterDelegationResponseBodyV1 {
 - Внутри `master_command` добавляем ветку:
 
 ```text
-wallet master sign-delegation --input <path|-?> --out <path|-?>
+wallet master sign-delegation --input <path|-> --out <path|->
 ```
 
 - Поведение:
@@ -315,6 +315,7 @@ wallet master sign-delegation --input <path|-?> --out <path|-?>
   4. Проверить `network_id`:
      - если локальный `wallet.network_id()` отличается от `request.network_id` → по умолчанию завершить с ошибкой;
      - если указан флаг `--force-network-mismatch` → продолжить, но вывести жирное предупреждение в stderr.
+     - флаг поддерживается в CLI и WalletApi; wasm/native FFI по умолчанию блокируют mismatch без альтернатив.
   5. Найти мастер:
      - По `master_anchor` из запроса среди `master_anchor_infos()`.
      - Если не найден — попросить пользователя выбрать из списка возможных (`id` / `anchor`), но по умолчанию — ошибка.
@@ -380,9 +381,9 @@ wallet master sign-delegation --input <path|-?> --out <path|-?>
 В `wallet/core/src/api/message.rs`:
 
 - `MasterDelegationApplyRequest`:
-  - Поля:
+  - Поля (в Iteration 6 все обязательны):
     - `wallet_secret: Secret` — для записи в storage.
-    - `request: MasterDelegationRequestBodyV1` — оригинальный запрос (опционально, если хранится локально — можно передавать только `request_id`).
+    - `request: MasterDelegationRequestBodyV1` — оригинальный запрос; онлайн‑кошелёк обязан хранить его локально по `request_id` и передавать в apply.
     - `response: MasterDelegationResponseBodyV1`.
 - `MasterDelegationApplyResponse`:
   - `applied: usize` — количество успешно применённых делегаций.
@@ -400,7 +401,7 @@ wallet master sign-delegation --input <path|-?> --out <path|-?>
     - Перепроверить подпись MLDSA (через `MasterSignDomain::Delegation` и публичный мастер‑ключ, восстановленный по anchor).
     - Проверить `nonce`: он должен быть > текущего `delegation_nonce` для данной `(anchor, account_id)`; при нарушении — пометить как `skipped`.
   - При успехе:
-    - Сохранить `DelegationRecord` в `wallet/core/src/account/delegation.rs` хранилище.
+    - Сохранить `DelegationRecord` в `wallet/core/src/account/delegation.rs` хранилище, вместе с `request_id` (для idempotency и повторных импортов); исходный `MasterDelegationRequestBodyV1` хранится/кэшируется локально по тому же `request_id`.
     - Обновить payload stealth‑аккаунта: `delegation_id` (ссылка на новую запись), `master_anchor` (если не установлен).
     - Эмитить события `MasterDelegationCreated` / `MasterDelegationRotated` / `MasterDelegationRevoked` (зависит от типа делегации, см. Iteration 4).
     - Закоммитить storage (`store.commit(wallet_secret)`).
@@ -460,7 +461,7 @@ wallet master apply-delegation --input deleg_signed.json
 Для консистентного UX между Rust/CLI/wasm/native Iteration 6 вводит чётко нормализованный набор ошибок делегации:
 
 - На уровне Rust:
-  - в `wallet/core` добавляется либо отдельный `enum MasterDelegationError`, либо расширение существующего `WalletError` с семейством под‑ошибок:
+  - в `wallet/core` расширяем `WalletError` семейством под‑ошибок `MasterDelegation*`:
     - `InvalidRequestChecksum`;
     - `UnsupportedVersion`;
     - `MasterAnchorNotFound`;
@@ -518,7 +519,7 @@ wallet master apply-delegation --input deleg_signed.json
 
 - Новые события:
   - `MasterDelegationRequestBuilt { master_anchor, request_id, targets: Vec<AccountId> }` — успешное формирование оффлайн‑запроса.
-  - `MasterDelegationSignedOffline { master_anchor, request_id, delegations: usize }` — зафиксирован факт применения подписанного ответа (даже если часть делегаций была `skipped`).
+  - `MasterDelegationResponseApplied { master_anchor, request_id, delegations: usize, skipped: usize }` — онлайн‑кошелёк успешно импортировал оффлайн‑ответ (даже если часть делегаций была `skipped`).
   - `MasterDelegationApplyFailed { master_anchor, request_id, reason: String }` — типизированные ошибки (конфликт nonce, mismatch network_id и т.п.).
 - Требования:
   - события должны быть сериализуемы в WASM/JS (см. паттерны для `MasterAnchorCreated` / `MasterSeedExported`);
@@ -534,10 +535,11 @@ wallet master apply-delegation --input deleg_signed.json
   - Roundtrip `DelegationRecordHeaderV1` и `MasterDelegationRequestBodyV1` через Borsh/Serde.
   - Проверка, что `calc_request_id` детерминирован и чувствителен к любому изменению полей.
   - Проверка `hash_delegation_header` + верификация подписи MLDSA под доменом Delegation.
+  - Проверка соответствия `DelegationRecordHeaderV1` ↔ `DelegationRecord` (минус `signature`) через `From`/`Into`, чтобы новые поля не расходились.
 - `wallet/core/src/api/message.rs` и wasm‑bridge:
   - JS‑roundtrip для `IMasterDelegationRequest/Response` аналогично существующим тестам для `MasterAnchorList`.
 
-### 7.2. Integration: `testing/integration/airgap_mldsa.rs`
+### 7.2. Integration: `testing/integration/src/airgap_mldsa.rs`
 
 Сценарии:
 

@@ -330,7 +330,7 @@ impl EphemeralKeyStore {
 
     /// Marks an entry as removed in a reorg-safe manner
     pub async fn mark_removed(&self, outpoint: &TransactionOutpoint, current_daa_score: u64) -> Result<()> {
-        let valid_until = self.valid_until_daa.get(outpoint).map(|v| *v.value()).flatten();
+        let valid_until = self.valid_until_daa.get(outpoint).and_then(|v| *v.value());
         let status = self.statuses.get(outpoint).map(|s| s.clone()).unwrap_or_default();
 
         let new_status = match (valid_until, status.clone()) {
@@ -352,7 +352,7 @@ impl EphemeralKeyStore {
         for entry in self.statuses.iter() {
             let outpoint = *entry.key();
             let status = entry.value();
-            let valid_until = self.valid_until_daa.get(&outpoint).map(|v| *v.value()).flatten();
+            let valid_until = self.valid_until_daa.get(&outpoint).and_then(|v| *v.value());
 
             let expired_by_window = valid_until.map(|limit| current_daa_score > limit).unwrap_or(false);
             let explicitly_expired = matches!(status, EphemeralKeyStatus::Expired);
