@@ -15,9 +15,12 @@ use kaspa_wallet_core::{
     account::delegation::DelegationStatus, account::Account, deterministic::AccountId, storage::keydata::PrvKeyDataVariantKind,
     wallet::args::PrvKeyDataCreateArgs, wallet::Wallet,
 };
+use kaspa_wallet_core::events::Events;
+use kaspa_wallet_core::storage::ephemeral_keys::{EphemeralKeyStatus, OrphanReason};
 use kaspa_wallet_keys::secret::Secret;
 use std::collections::HashSet;
 use std::sync::Arc;
+use tokio::sync::{oneshot, Mutex};
 
 struct WalletDelegationProvider {
     wallet: Arc<Wallet>,
@@ -273,6 +276,124 @@ async fn test_mldsa_delegation_revocation_propagates() {
     let rpc_revoked = rpc_delegations.delegations.iter().find(|rec| rec.nonce == revoked_record.1.nonce).expect("revoked rpc record");
     assert!(rpc_revoked.status.starts_with("revoked:"), "rpc status should be revoked:*, got {}", rpc_revoked.status);
 
+    env.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mldsa_delegation_expiry_emits_event_and_orphans() {
+    let env = StealthTestEnv::new().await;
+    env.daemon.rpc_core_service().set_delegation_provider(Arc::new(WalletDelegationProvider { wallet: env.wallet.clone() }));
+    let wallet = env.wallet.clone();
+
+    env.mine_blocks(env.coinbase_maturity + 6).await;
+
+    let (anchor_bytes, master_account_id) = create_master_account(&env, &wallet).await;
+    register_anchor(&env, anchor_bytes).await;
+    activate_account(&wallet, &master_account_id).await;
+    unlock_master_account(&env, &wallet, &master_account_id).await;
+
+    let stealth_account = env.create_stealth_account("delegated-expiry").await;
+    stealth_account.unlock(&env.wallet_secret, None).await.expect("unlock stealth");
+    stealth_account.clone().connect().await.expect("connect stealth");
+    attach_stealth_to_master(&wallet, &env.wallet_secret, stealth_account.id(), &master_account_id).await;
+
+    let current_daa = env.rpc_client.get_server_info().await.expect("server info").virtual_daa_score;
+    let valid_until = current_daa + 6;
+    let delegation_id = wallet
+        .link_stealth_to_master(&env.wallet_secret, *stealth_account.id(), anchor_bytes, current_daa, Some(valid_until))
+        .await
+        .expect("delegation");
+
+    let event_channel = env.wallet.multiplexer().channel();
+    let (stop_tx, stop_rx) = oneshot::channel();
+    let events = Arc::new(Mutex::new(Vec::<Events>::new()));
+    let events_clone = events.clone();
+    let listener = tokio::spawn(async move {
+        let mut stop_rx = stop_rx;
+        loop {
+            tokio::select! {
+                _ = &mut stop_rx => break,
+                msg = event_channel.recv() => {
+                    match msg {
+                        Ok(evt) => events_clone.lock().await.push((*evt).clone()),
+                        Err(_) => break,
+                    }
+                }
+            }
+        }
+    });
+
+    // Fund the delegated stealth account
+    let send_amount = 2_000_000_000u64;
+    let (_, outpoint) = env.send_to_stealth(send_amount, stealth_account.stealth_address()).await;
+    env.mine_blocks(2).await;
+
+    wait_for(
+        200,
+        100,
+        || {
+            let acc = stealth_account.clone();
+            let op = outpoint;
+            async move { acc.ephemeral_keys().contains(&op) }
+        },
+        "delegated stealth UTXO not detected",
+    )
+    .await;
+
+    let entries = stealth_account.ephemeral_keys().entries();
+    let entry = entries.iter().find(|e| e.outpoint == outpoint).expect("ephemeral entry missing");
+    assert_eq!(entry.delegation_id, Some(delegation_id.0), "delegation id should be stored on entry");
+    assert_eq!(entry.master_anchor, Some(anchor_bytes), "master anchor should be stored on entry");
+    let recorded_valid_until = entry.valid_until_daa.expect("valid_until_daa should be set on entry");
+    assert!(
+        recorded_valid_until >= valid_until,
+        "recorded valid_until_daa {} should cover requested {}",
+        recorded_valid_until,
+        valid_until
+    );
+
+    // Advance DAA past valid_until to trigger expiry handling
+    let info_after_fund = env.rpc_client.get_server_info().await.expect("server info after fund");
+    let target = recorded_valid_until.saturating_add(1);
+    let delta = target.saturating_sub(info_after_fund.virtual_daa_score).max(1);
+    env.mine_blocks(delta).await;
+
+    wait_for(
+        200,
+        100,
+        || {
+            let events = events.clone();
+            async move {
+                events.lock().await.iter().any(|evt| {
+                    matches!(
+                        evt,
+                        Events::MasterDelegationExpired {
+                            delegation_id: id,
+                            anchor,
+                            ..
+                        } if *id == delegation_id.0 && *anchor == anchor_bytes
+                    )
+                })
+            }
+        },
+        "MasterDelegationExpired event not observed",
+    )
+    .await;
+
+    let status = stealth_account.ephemeral_keys().status(&outpoint);
+    let is_orphaned = matches!(
+        status,
+        Some(EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired })
+    );
+    let is_expired = matches!(status, Some(EphemeralKeyStatus::Expired));
+    assert!(
+        is_orphaned || is_expired || status.is_none(),
+        "entry should be orphaned/expired/removed after delegation expiry, got {:?}",
+        status
+    );
+
+    let _ = stop_tx.send(());
+    listener.await.expect("event listener task");
     env.shutdown().await;
 }
 

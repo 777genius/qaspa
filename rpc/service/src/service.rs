@@ -69,6 +69,8 @@ use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, pay
 use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
 use kaspa_utils::{expiring_cache::ExpiringCache, hex::ToHex};
+use kaspa_rpc_core::RpcTransactionId;
+use dashmap::DashMap;
 use kaspa_utils_tower::counters::TowerConnectionCounters;
 use kaspa_utxoindex::api::UtxoIndexProxy;
 use log::info;
@@ -104,6 +106,26 @@ struct AnchorInfo {
     _registered_at: u64,
 }
 
+pub(crate) struct StealthAnchorHintCache {
+    map: DashMap<(RpcTransactionId, u32), String>,
+}
+
+impl StealthAnchorHintCache {
+    pub(crate) fn new() -> Self {
+        Self { map: DashMap::new() }
+    }
+
+    pub(crate) fn insert(&self, txid: RpcTransactionId, index: u32, anchor_hint: [u8; 4]) {
+        // Храним первые 4 байта anchor в hex, как описано в планах (best-effort).
+        let value = format!("{:08x}", u32::from_le_bytes(anchor_hint));
+        self.map.insert((txid, index), value);
+    }
+
+    pub(crate) fn get(&self, txid: &RpcTransactionId, index: u32) -> Option<String> {
+        self.map.get(&(txid.clone(), index)).map(|v| v.clone())
+    }
+}
+
 #[async_trait]
 pub trait DelegationProvider: Send + Sync {
     async fn list_by_anchor(&self, anchor: [u8; 32]) -> RpcResult<Vec<RpcDelegationRecord>>;
@@ -135,6 +157,7 @@ pub struct RpcCoreService {
     mining_rule_engine: Arc<MiningRuleEngine>,
     mldsa_anchors: Mutex<HashMap<[u8; 32], AnchorInfo>>,
     delegation_provider: Mutex<Option<Arc<dyn DelegationProvider>>>,
+    anchor_hint_cache: Arc<StealthAnchorHintCache>,
 }
 
 const RPC_CORE: &str = "rpc-core";
@@ -245,12 +268,23 @@ impl RpcCoreService {
             mining_rule_engine,
             mldsa_anchors: Mutex::new(HashMap::new()),
             delegation_provider: Mutex::new(None),
+            anchor_hint_cache: Arc::new(StealthAnchorHintCache::new()),
         }
     }
 
     pub fn set_delegation_provider(&self, provider: Arc<dyn DelegationProvider>) {
         let mut guard = self.delegation_provider.lock().unwrap();
         *guard = Some(provider);
+    }
+
+    /// External hook (e.g. индексатор) для регистрации anchor_hint по outpoint.
+    pub fn register_anchor_hint(&self, txid: RpcTransactionId, index: u32, anchor_hint: [u8; 4]) {
+        self.anchor_hint_cache.insert(txid, index, anchor_hint);
+    }
+
+    /// Возвращает shared кэш anchor_hint (например, чтобы внешний индексатор мог регистрировать подсказки).
+    pub(crate) fn anchor_hint_cache(&self) -> Arc<StealthAnchorHintCache> {
+        self.anchor_hint_cache.clone()
     }
 
     pub fn start_impl(&self) {
@@ -310,26 +344,29 @@ impl RpcCoreService {
     }
 
     /// Extracts stealth outputs from a block for view tag scanning
-    fn extract_stealth_outputs_from_block(block: &Block) -> Vec<RpcStealthOutputInfo> {
+    fn extract_stealth_outputs_from_block(&self, block: &Block) -> Vec<RpcStealthOutputInfo> {
         block
             .transactions
             .iter()
             .flat_map(|tx| {
                 let tx_id = tx.id();
+                let rpc_tx_id: RpcTransactionId = tx_id.into();
                 let is_coinbase = tx.is_coinbase();
                 tx.outputs.iter().enumerate().filter_map(move |(idx, out)| {
                     if out.script_public_key.version() != STEALTH_SCRIPT_VERSION {
                         return None;
                     }
                     let eph = extract_stealth_output(&out.script_public_key).ok()?;
+                    let hint = self.anchor_hint_cache.get(&rpc_tx_id, idx as u32);
                     Some(RpcStealthOutputInfo::new(
-                        tx_id,
+                        rpc_tx_id,
                         idx as u32,
                         eph.view_tag,
                         faster_hex::hex_string(&eph.ephemeral_pubkey.serialize()),
                         faster_hex::hex_string(&eph.destination_pubkey.serialize()),
                         out.value,
                         is_coinbase,
+                        hint,
                     ))
                 })
             })
@@ -800,7 +837,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         let block = session.async_get_block_even_if_header_only(request.hash).await?;
         let ghostdag = session.async_get_ghostdag_data(request.hash).await?;
 
-        let stealth_outputs = Self::extract_stealth_outputs_from_block(&block);
+        let stealth_outputs = self.extract_stealth_outputs_from_block(&block);
 
         Ok(GetBlockViewTagsResponse::new(request.hash, ghostdag.blue_score, stealth_outputs))
     }
@@ -1479,5 +1516,19 @@ impl AsyncService for RpcCoreService {
             trace!("{} stopped", Self::IDENT);
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anchor_hint_cache_roundtrip() {
+        let cache = StealthAnchorHintCache::new();
+        let txid = RpcTransactionId::default();
+        cache.insert(txid, 42, [0xde, 0xad, 0xbe, 0xef]);
+        assert_eq!(cache.get(&RpcTransactionId::default(), 42), Some("efbeadde".to_string()));
+        assert!(cache.get(&RpcTransactionId::default(), 0).is_none());
     }
 }

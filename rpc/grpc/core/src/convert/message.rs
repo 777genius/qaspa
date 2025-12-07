@@ -451,6 +451,7 @@ from!(item: &kaspa_rpc_core::RpcStealthOutputInfo, protowire::RpcStealthOutputIn
         destination_pubkey: item.destination_pubkey.clone(),
         amount: item.amount,
         is_coinbase: item.is_coinbase,
+        anchor_hint: item.anchor_hint.clone().unwrap_or_default(),
     }
 });
 from!(item: &kaspa_rpc_core::GetBlockViewTagsRequest, protowire::GetBlockViewTagsRequestMessage, {
@@ -1030,6 +1031,7 @@ try_from!(item: &protowire::RpcStealthOutputInfo, kaspa_rpc_core::RpcStealthOutp
         destination_pubkey: item.destination_pubkey.clone(),
         amount: item.amount,
         is_coinbase: item.is_coinbase,
+        anchor_hint: (!item.anchor_hint.is_empty()).then(|| item.anchor_hint.clone()),
     }
 });
 try_from!(item: &protowire::GetBlockViewTagsRequestMessage, kaspa_rpc_core::GetBlockViewTagsRequest, {

@@ -1788,6 +1788,7 @@ declare! {
         destinationPubkey: HexString;
         amount: bigint;
         isCoinbase: boolean;
+        anchorHint?: string;
     }
     "#,
 }

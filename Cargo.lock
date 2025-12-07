@@ -2920,6 +2920,7 @@ version = "1.0.1"
 dependencies = [
  "async-channel 2.3.1",
  "async-trait",
+ "dashmap",
  "derive_more",
  "futures",
  "kaspa-consensus",
@@ -2931,6 +2932,7 @@ dependencies = [
  "kaspa-hashes",
  "kaspa-index-core",
  "kaspa-notify",
+ "kaspa-rpc-core",
  "kaspa-utils",
  "kaspa-utxoindex",
  "log",
@@ -3265,6 +3267,7 @@ name = "kaspa-rpc-service"
 version = "1.0.1"
 dependencies = [
  "async-trait",
+ "dashmap",
  "faster-hex",
  "kaspa-addresses",
  "kaspa-consensus-core",

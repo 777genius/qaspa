@@ -1034,6 +1034,7 @@ message RpcStealthOutputInfo {
   string destinationPubkey = 5;
   uint64 amount = 6;
   bool isCoinbase = 7;
+  string anchorHint = 8;
 }
 
 message GetBlockViewTagsRequestMessage {

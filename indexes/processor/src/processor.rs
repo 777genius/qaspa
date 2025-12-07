@@ -14,6 +14,8 @@ use kaspa_notify::{
     notifier::DynNotify,
 };
 use kaspa_utils::triggers::SingleTrigger;
+use dashmap::DashMap;
+use kaspa_rpc_core::RpcTransactionId;
 use kaspa_utxoindex::api::UtxoIndexProxy;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -32,6 +34,9 @@ pub struct Processor {
 
     recv_channel: CollectorNotificationReceiver<ConsensusNotification>,
 
+    /// Best-effort кэш anchor_hint (outpoint → 4 байта anchor в hex)
+    stealth_anchor_cache: Arc<StealthAnchorHintCache>,
+
     /// Has this collector been started?
     is_started: Arc<AtomicBool>,
 
@@ -43,9 +48,25 @@ impl Processor {
         Self {
             utxoindex,
             recv_channel,
+            stealth_anchor_cache: Arc::new(StealthAnchorHintCache::new()),
             collect_shutdown: Arc::new(SingleTrigger::new()),
             is_started: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Внешний хук для регистрации anchor_hint по outpoint.
+    pub fn register_anchor_hint(&self, txid: RpcTransactionId, index: u32, anchor_hint: [u8; 4]) {
+        self.stealth_anchor_cache.insert(txid, index, anchor_hint);
+    }
+
+    /// Получить anchor_hint, если он был зарегистрирован.
+    pub fn anchor_hint(&self, txid: &RpcTransactionId, index: u32) -> Option<String> {
+        self.stealth_anchor_cache.get(txid, index)
+    }
+
+    /// Доступ к кэшу (например, для RPC‑слоя).
+    pub fn stealth_anchor_cache(&self) -> Arc<StealthAnchorHintCache> {
+        self.stealth_anchor_cache.clone()
     }
 
     fn spawn_collecting_task(self: Arc<Self>, notifier: DynNotify<Notification>) {
@@ -122,6 +143,27 @@ impl Collector<Notification> for Processor {
 
     async fn join(self: Arc<Self>) -> Result<()> {
         self.join_collecting_task().await
+    }
+}
+
+/// Лёгкий in-memory кэш anchor_hint (outpoint → 4 байта anchor в hex).
+#[derive(Debug, Default)]
+pub struct StealthAnchorHintCache {
+    map: DashMap<(RpcTransactionId, u32), String>,
+}
+
+impl StealthAnchorHintCache {
+    pub fn new() -> Self {
+        Self { map: DashMap::new() }
+    }
+
+    pub fn insert(&self, txid: RpcTransactionId, index: u32, anchor_hint: [u8; 4]) {
+        let value = format!("{:08x}", u32::from_le_bytes(anchor_hint));
+        self.map.insert((txid, index), value);
+    }
+
+    pub fn get(&self, txid: &RpcTransactionId, index: u32) -> Option<String> {
+        self.map.get(&(txid.clone(), index)).map(|v| v.clone())
     }
 }
 
@@ -246,5 +288,14 @@ mod tests {
         assert!(pipeline.processor_receiver.is_empty(), "the notification receiver should be empty");
         pipeline.consensus_sender.close();
         pipeline.processor.clone().join().await.expect("stopping the processor must succeed");
+    }
+
+    #[test]
+    fn stealth_anchor_hint_cache_roundtrip() {
+        let cache = StealthAnchorHintCache::new();
+        let txid = RpcTransactionId::default();
+        cache.insert(txid, 1, [0xde, 0xad, 0xbe, 0xef]);
+        assert_eq!(cache.get(&RpcTransactionId::default(), 1), Some("efbeadde".to_string()));
+        assert!(cache.get(&RpcTransactionId::default(), 2).is_none());
     }
 }

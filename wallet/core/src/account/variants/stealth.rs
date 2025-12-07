@@ -13,12 +13,12 @@ use crate::events::Events;
 use crate::imports::*;
 use crate::serializer::StorageHeader;
 use crate::storage::account::{AccountSettings, AccountStorable, AccountStorage};
-use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStore};
+use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStatus, EphemeralKeyStore, OrphanReason};
 use crate::storage::interface::StorageDescriptor;
 use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use crate::tx::generator::stealth_change::{DynStealthChangeCreator, PendingStealthChange, StealthChangeCreator};
 use crate::tx::generator::stealth_signer::StealthSigner;
-use crate::tx::{Fees, GeneratorSummary, PaymentDestination, RandomFeeSettings};
+use crate::tx::{Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, RandomFeeSettings};
 use crate::utxo::stealth_handler::StealthUtxoHandler;
 use crate::utxo::UtxoContext;
 use kaspa_addresses::{Address, Version};
@@ -37,6 +37,7 @@ use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAdd
 use kaspa_txscript::{extract_stealth_output, STEALTH_SCRIPT_VERSION};
 use kaspa_utils::hex::ToHex;
 use secp256k1::{PublicKey, SecretKey, XOnlyPublicKey, SECP256K1};
+use dashmap::DashMap;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -380,6 +381,15 @@ pub struct StealthAccount {
 
     /// Reserved for delegation id (Iteration 4)
     delegation_id: Mutex<Option<DelegationId>>,
+
+    /// Orphan overlay map (Iteration 5)
+    orphan_overlay: Arc<DashMap<TransactionOutpoint, OrphanOverlayEntry>>,
+}
+
+#[derive(Clone, Debug)]
+struct OrphanOverlayEntry {
+    reason: OrphanReason,
+    first_marked_daa: u64,
 }
 
 fn delegation_window_ok(record: &DelegationRecordV1, current_daa: u64) -> bool {
@@ -393,6 +403,42 @@ fn delegation_window_ok(record: &DelegationRecordV1, current_daa: u64) -> bool {
         Some(until) => current_daa <= until,
         None => true,
     }
+}
+
+fn select_delegation_from_records(
+    block_daa: u64,
+    candidates: Vec<(DelegationId, DelegationRecordV1)>,
+) -> (Option<DelegationId>, Option<DelegationRecordV1>, Option<OrphanReason>) {
+    if candidates.is_empty() {
+        return (None, None, Some(OrphanReason::AnchorMismatch));
+    }
+
+    let mut covering: Option<(DelegationId, DelegationRecordV1)> = None;
+    for (id, rec) in candidates.iter().cloned() {
+        if !matches!(rec.status, DelegationStatus::Active) {
+            continue;
+        }
+        let starts = rec.valid_from_daa <= block_daa;
+        let ends = rec.valid_until_daa.map(|u| block_daa <= u).unwrap_or(true);
+        if starts && ends {
+            if covering.as_ref().map(|c| rec.nonce > c.1.nonce).unwrap_or(true) {
+                covering = Some((id, rec));
+            }
+        }
+    }
+
+    if let Some((id, rec)) = covering {
+        return (Some(id), Some(rec), None);
+    }
+
+    let max_until = candidates.iter().filter_map(|(_, r)| r.valid_until_daa).max();
+    if let Some(limit) = max_until {
+        if block_daa > limit {
+            return (None, None, Some(OrphanReason::DelegationExpired));
+        }
+    }
+
+    (None, None, Some(OrphanReason::NoDelegation))
 }
 
 impl StealthAccount {
@@ -448,6 +494,7 @@ impl StealthAccount {
             creation_daa_score,
             master_anchor: Mutex::new(None),
             delegation_id: Mutex::new(None),
+            orphan_overlay: Arc::new(DashMap::new()),
         })
     }
 
@@ -489,6 +536,7 @@ impl StealthAccount {
             creation_daa_score: payload.creation_daa_score,
             master_anchor: Mutex::new(payload.master_anchor),
             delegation_id: Mutex::new(payload.delegation_id.map(DelegationId)),
+            orphan_overlay: Arc::new(DashMap::new()),
         };
 
         if let Some(id) = account.delegation_id() {
@@ -530,6 +578,7 @@ impl StealthAccount {
                 let _ = self.ephemeral_keys.load_from_storage(&wallet_folder, network_id, wallet_secret).await;
             }
         }
+        self.rebuild_orphan_overlay_from_store();
 
         self.register_cached_stealth_outpoints();
         if let Err(err) = self.flush_pending_ephemeral_keys().await {
@@ -549,6 +598,7 @@ impl StealthAccount {
         }
         let mut cached = self.wallet_secret_cache.write().await;
         *cached = None;
+        self.orphan_overlay.clear();
     }
 
     /// Returns true if the account is currently unlocked
@@ -578,6 +628,90 @@ impl StealthAccount {
 
     pub fn delegation_id(&self) -> Option<DelegationId> {
         *self.delegation_id.lock().unwrap()
+    }
+
+    fn rebuild_orphan_overlay_from_store(&self) {
+        self.orphan_overlay.clear();
+        for entry in self.ephemeral_keys.entries() {
+            if let EphemeralKeyStatus::Orphaned { reason } = entry.status {
+                self.orphan_overlay.insert(
+                    entry.outpoint,
+                    OrphanOverlayEntry { reason, first_marked_daa: entry.created_daa_score },
+                );
+            }
+        }
+    }
+
+    fn mark_orphan_overlay(&self, outpoint: TransactionOutpoint, reason: OrphanReason, current_daa: u64) {
+        self.orphan_overlay.insert(outpoint, OrphanOverlayEntry { reason, first_marked_daa: current_daa });
+    }
+
+    fn apply_orphan_filter(&self, mut settings: GeneratorSettings) -> GeneratorSettings {
+        let overlay = self.orphan_overlay.clone();
+        if overlay.is_empty() {
+            return settings;
+        }
+        let iter = settings.utxo_iterator;
+        let overlay_for_iter = overlay.clone();
+        let filtered_iter = iter.filter(move |entry| {
+            let op = entry.outpoint();
+            let key = TransactionOutpoint::new(op.transaction_id(), op.index());
+            !overlay_for_iter.contains_key(&key)
+        });
+        settings.utxo_iterator = Box::new(filtered_iter);
+
+        if let Some(priority) = settings.priority_utxo_entries.as_mut() {
+            let overlay_for_priority = overlay.clone();
+            priority.retain(|entry| {
+                let op = entry.outpoint();
+                let key = TransactionOutpoint::new(op.transaction_id(), op.index());
+                !overlay_for_priority.contains_key(&key)
+            });
+        }
+        settings
+    }
+
+    /// Returns settings optionally пропуская фильтрацию orphan-UTXO.
+    /// По умолчанию (allow_orphans = false) orphan-выходы скрываются.
+    pub fn apply_orphan_filter_with_override(&self, settings: GeneratorSettings, allow_orphans: bool) -> GeneratorSettings {
+        if allow_orphans {
+            settings
+        } else {
+            self.apply_orphan_filter(settings)
+        }
+    }
+
+    fn select_delegation_for_utxo(
+        &self,
+        block_daa: u64,
+    ) -> (Option<DelegationId>, Option<DelegationRecordV1>, Option<OrphanReason>) {
+        let Some(anchor) = self.master_anchor() else {
+            // Обычный стелс-аккаунт без master: считаем UTXO валидным, не помечаем orphan.
+            return (None, None, None);
+        };
+
+        let store = self.wallet().delegation_store();
+        let candidates: Vec<(DelegationId, DelegationRecordV1)> = store
+            .by_anchor(&anchor)
+            .into_iter()
+            .filter(|(_, rec)| rec.account_id == *self.id())
+            .collect();
+
+        if candidates.is_empty() {
+            return (None, None, Some(OrphanReason::AnchorMismatch));
+        }
+
+        select_delegation_from_records(block_daa, candidates)
+    }
+
+    fn mark_delegation_as_orphaned(&self, delegation_id: DelegationId, reason: OrphanReason, current_daa: u64) {
+        for entry in self.ephemeral_keys.entries() {
+            if entry.delegation_id == Some(delegation_id.0) {
+                let reason_clone = reason.clone();
+                self.ephemeral_keys.set_status(entry.outpoint, EphemeralKeyStatus::Orphaned { reason: reason_clone.clone() });
+                self.mark_orphan_overlay(entry.outpoint, reason_clone, current_daa);
+            }
+        }
     }
 
     fn validate_delegation_record(&self, record: &DelegationRecordV1, expected_anchor: Option<[u8; 32]>) -> Result<()> {
@@ -1264,6 +1398,7 @@ impl Account for StealthAccount {
             payload,
             random_fee_settings,
         )?;
+        let settings = self.apply_orphan_filter(settings);
         let settings = self.clone().ensure_stealth_change_support(settings).await?;
 
         let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
@@ -1288,6 +1423,47 @@ impl Account for StealthAccount {
             }
 
             ids.push(tx_id);
+
+            if let Some(notifier) = notifier.as_ref() {
+                notifier(&transaction);
+            }
+            yield_executor().await;
+        }
+
+        Ok((generator.summary(), ids))
+    }
+
+    async fn sweep(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        payment_secret: Option<Secret>,
+        fee_rate: Option<f64>,
+        abortable: &Abortable,
+        notifier: Option<GenerationNotifier>,
+    ) -> Result<(GeneratorSummary, Vec<kaspa_hashes::Hash>)> {
+        use crate::tx::generator::{Generator, GeneratorSettings, Signer};
+        use futures::TryStreamExt;
+        use workflow_core::task::yield_executor;
+
+        let keydata = self.prv_key_data(wallet_secret).await?;
+        let signer = Arc::new(Signer::new(self.clone().as_dyn_arc(), keydata, payment_secret));
+        let settings = GeneratorSettings::try_new_with_account(
+            self.clone().as_dyn_arc(),
+            PaymentDestination::Change,
+            fee_rate,
+            Fees::None,
+            None,
+            None,
+        )?;
+        let settings = self.apply_orphan_filter(settings);
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
+        let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
+
+        let mut stream = generator.stream();
+        let mut ids = vec![];
+        while let Some(transaction) = stream.try_next().await? {
+            transaction.try_sign()?;
+            ids.push(transaction.try_submit(&self.wallet().rpc_api()).await?);
 
             if let Some(notifier) = notifier.as_ref() {
                 notifier(&transaction);
@@ -1348,14 +1524,47 @@ impl StealthUtxoHandler for StealthAccount {
             Ok(Some(key_data)) => {
                 let outpoint = TransactionOutpoint::new(utxo.outpoint.transaction_id, utxo.outpoint.index);
 
-                let daa_score = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
-                let (anchor, delegation_id) = self.delegation_metadata().await.ok()?;
+                let block_daa = utxo.utxo_entry.block_daa_score;
+                let current_daa = self.wallet().utxo_processor().current_daa_score().unwrap_or(block_daa);
+                let safety_margin = self
+                    .wallet()
+                    .utxo_processor()
+                    .network_params()
+                    .map(|p| p.user_transaction_maturity_period_daa())
+                    .unwrap_or(0);
+                let (selected_id, record, orphan_reason) = self.select_delegation_for_utxo(block_daa);
+                let anchor = self.master_anchor();
+                let delegation_id = selected_id;
+                let valid_until = record
+                    .as_ref()
+                    .and_then(|r| r.valid_until_daa.map(|u| u.saturating_add(safety_margin)));
 
-                // Store ephemeral key
-                if let Err(e) = self.ephemeral_keys.store(outpoint, key_data, daa_score, anchor, delegation_id.map(|d| d.0)).await {
+                if let Err(e) = self
+                    .ephemeral_keys
+                    .store_with_metadata(outpoint, key_data, block_daa, anchor, delegation_id.map(|d| d.0), valid_until)
+                    .await
+                {
                     log_error!("Failed to store ephemeral key: {}", e);
                     return None;
                 }
+                let status = match orphan_reason {
+                    Some(reason) => {
+                        let reason_for_overlay = reason.clone();
+                        self.mark_orphan_overlay(outpoint, reason_for_overlay, current_daa);
+                        if matches!(reason, OrphanReason::AnchorMismatch) {
+                            if let Some(expected) = self.master_anchor() {
+                                let _ = self
+                                    .wallet()
+                                    .notify(Events::MasterAnchorMismatch { account_id: *self.id(), expected_anchor: expected, actual_anchor: [0u8; 32] })
+                                    .await;
+                            }
+                        }
+                        EphemeralKeyStatus::Orphaned { reason }
+                    }
+                    None => EphemeralKeyStatus::Pending { added_daa_score: block_daa },
+                };
+                self.ephemeral_keys.set_status(outpoint, status);
+
                 self.wallet().utxo_processor().register_stealth_outpoint(outpoint, *self.id());
                 self.note_pending_ephemeral_key(outpoint).await;
 
@@ -1382,12 +1591,63 @@ impl StealthUtxoHandler for StealthAccount {
     }
 
     async fn handle_utxo_removed(&self, outpoint: &TransactionOutpoint) -> Result<()> {
-        self.ephemeral_keys.remove(outpoint).await?;
+        let current_daa = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
+        self.ephemeral_keys.mark_removed(outpoint, current_daa).await?;
+        self.orphan_overlay.remove(outpoint);
         Ok(())
     }
 
     fn ephemeral_key_store(&self) -> Option<Arc<EphemeralKeyStore>> {
         Some(self.ephemeral_keys.clone())
+    }
+
+    async fn on_daa_score_changed(&self, current_daa_score: u64) -> Result<()> {
+        self.ephemeral_keys.cleanup_expired(current_daa_score);
+
+        let active: HashSet<_> = self.ephemeral_keys.outpoints().into_iter().collect();
+        self.orphan_overlay.retain(|outpoint, _| active.contains(outpoint));
+
+        if let Some(anchor) = self.master_anchor() {
+            let store = self.wallet().delegation_store();
+            let mut expired_events = Vec::new();
+            let mut revoked_events = Vec::new();
+
+            for (id, rec) in store.by_anchor(&anchor).into_iter().filter(|(_, r)| r.account_id == *self.id()) {
+                match rec.status {
+                    DelegationStatus::Active => {
+                        if let Some(until) = rec.valid_until_daa {
+                            if current_daa_score >= until {
+                                expired_events.push((id, rec));
+                            }
+                        }
+                    }
+                    DelegationStatus::Revoked { .. } => revoked_events.push((id, rec)),
+                    _ => {}
+                }
+            }
+
+            for (id, rec) in expired_events {
+                self.mark_delegation_as_orphaned(id, OrphanReason::DelegationExpired, current_daa_score);
+                let _ = self
+                    .wallet()
+                    .notify(Events::MasterDelegationExpired {
+                        account_id: *self.id(),
+                        delegation_id: id.0,
+                        anchor,
+                        valid_until_daa: rec.valid_until_daa.unwrap_or_default(),
+                    })
+                    .await;
+            }
+
+            for (id, _rec) in revoked_events {
+                self.mark_delegation_as_orphaned(id, OrphanReason::DelegationRevoked, current_daa_score);
+                let _ = self
+                    .wallet()
+                    .notify(Events::MasterDelegationRevoked { account_id: *self.id(), delegation_id: id.0, anchor })
+                    .await;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1431,6 +1691,115 @@ impl StealthChangeCreator for StealthChangeCreatorImpl {
 }
 
 // ============================================================================
+// Orphan-aware helpers (inherent methods)
+// ============================================================================
+
+impl StealthAccount {
+    /// Отправка с опцией разрешить использование orphan-UTXO.
+    pub async fn send_allowing_orphans(
+        self: Arc<Self>,
+        destination: PaymentDestination,
+        fee_rate: Option<f64>,
+        priority_fee_sompi: Fees,
+        random_fee_settings: Option<RandomFeeSettings>,
+        payload: Option<Vec<u8>>,
+        wallet_secret: Secret,
+        payment_secret: Option<Secret>,
+        abortable: &Abortable,
+        notifier: Option<GenerationNotifier>,
+        allow_orphans: bool,
+    ) -> Result<(GeneratorSummary, Vec<kaspa_hashes::Hash>)> {
+        use crate::tx::generator::{Generator, GeneratorSettings, Signer};
+        use futures::TryStreamExt;
+        use workflow_core::task::yield_executor;
+
+        if !self.is_unlocked().await {
+            return Err(Error::AccountLocked);
+        }
+
+        let keydata = self.prv_key_data(wallet_secret.clone()).await?;
+        let signer = Arc::new(Signer::new(self.clone().as_dyn_arc(), keydata, payment_secret));
+        let stealth_signer = StealthSigner::new(self.ephemeral_keys.clone());
+
+        let settings = GeneratorSettings::try_new_with_account(
+            self.clone().as_dyn_arc(),
+            destination,
+            fee_rate,
+            priority_fee_sompi,
+            payload,
+            random_fee_settings,
+        )?;
+        let settings = self.apply_orphan_filter_with_override(settings, allow_orphans);
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
+
+        let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
+
+        let mut stream = generator.stream();
+        let mut ids = vec![];
+        while let Some(transaction) = stream.try_next().await? {
+            transaction.try_sign()?;
+            if transaction.has_stealth_inputs() {
+                transaction.try_sign_stealth(&stealth_signer).await?;
+            }
+            let tx_id = transaction.try_submit(&self.wallet().rpc_api()).await?;
+            if let Some(pending_change) = transaction.take_stealth_change() {
+                self.finalize_stealth_change(tx_id, &pending_change, &wallet_secret).await?;
+            }
+            ids.push(tx_id);
+            if let Some(notifier) = notifier.as_ref() {
+                notifier(&transaction);
+            }
+            yield_executor().await;
+        }
+
+        Ok((generator.summary(), ids))
+    }
+
+    /// Sweep с возможностью включать orphan-UTXO.
+    pub async fn sweep_allowing_orphans(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        payment_secret: Option<Secret>,
+        fee_rate: Option<f64>,
+        abortable: &Abortable,
+        notifier: Option<GenerationNotifier>,
+        allow_orphans: bool,
+    ) -> Result<(GeneratorSummary, Vec<kaspa_hashes::Hash>)> {
+        use crate::tx::generator::{Generator, GeneratorSettings, Signer};
+        use futures::TryStreamExt;
+        use workflow_core::task::yield_executor;
+
+        let keydata = self.prv_key_data(wallet_secret).await?;
+        let signer = Arc::new(Signer::new(self.clone().as_dyn_arc(), keydata, payment_secret));
+        let settings = GeneratorSettings::try_new_with_account(
+            self.clone().as_dyn_arc(),
+            PaymentDestination::Change,
+            fee_rate,
+            Fees::None,
+            None,
+            None,
+        )?;
+        let settings = self.apply_orphan_filter_with_override(settings, allow_orphans);
+        let settings = self.clone().ensure_stealth_change_support(settings).await?;
+        let generator = Generator::try_new(settings, Some(signer), Some(abortable))?;
+
+        let mut stream = generator.stream();
+        let mut ids = vec![];
+        while let Some(transaction) = stream.try_next().await? {
+            transaction.try_sign()?;
+            ids.push(transaction.try_submit(&self.wallet().rpc_api()).await?);
+
+            if let Some(notifier) = notifier.as_ref() {
+                notifier(&transaction);
+            }
+            yield_executor().await;
+        }
+
+        Ok((generator.summary(), ids))
+    }
+}
+
+// ============================================================================
 // TESTS
 // ============================================================================
 
@@ -1439,6 +1808,7 @@ mod tests {
     use super::*;
     use crate::deterministic::AccountId;
     use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStore};
+    use crate::account::delegation::DelegationId;
     use kaspa_consensus_core::network::{NetworkId, NetworkType};
     use kaspa_consensus_core::subnets;
     use kaspa_hashes::Hash;
@@ -1465,6 +1835,33 @@ mod tests {
             status: DelegationStatus::Active,
             signature: Vec::new(),
         }
+    }
+
+    #[test]
+    fn select_delegation_prefers_latest_nonce_and_handles_expiry() {
+        let rec1 = DelegationRecordV1 { nonce: 1, valid_from_daa: 10, valid_until_daa: Some(20), ..make_record(10, Some(20)) };
+        let rec2 = DelegationRecordV1 { nonce: 2, valid_from_daa: 10, valid_until_daa: Some(20), ..make_record(10, Some(20)) };
+
+        let (id, rec, reason) = select_delegation_from_records(
+            15,
+            vec![(DelegationId(1), rec1.clone()), (DelegationId(2), rec2.clone())],
+        );
+        assert_eq!(id, Some(DelegationId(2)));
+        assert_eq!(rec.unwrap().nonce, 2);
+        assert!(reason.is_none());
+
+        let (id2, rec2_sel, reason2) = select_delegation_from_records(30, vec![(DelegationId(1), rec1)]);
+        assert!(id2.is_none());
+        assert!(rec2_sel.is_none());
+        assert!(matches!(reason2, Some(OrphanReason::DelegationExpired)));
+    }
+
+    #[test]
+    fn select_delegation_anchor_mismatch_when_no_records() {
+        let (id, rec, reason) = select_delegation_from_records(15, vec![]);
+        assert!(id.is_none());
+        assert!(rec.is_none());
+        assert!(matches!(reason, Some(OrphanReason::AnchorMismatch)));
     }
 
     #[test]

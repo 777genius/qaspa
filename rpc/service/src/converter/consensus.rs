@@ -200,6 +200,7 @@ impl ConsensusConverter {
                         faster_hex::hex_string(&eph.destination_pubkey.serialize()),
                         out.value,
                         is_coinbase,
+                        None,
                     ))
                 })
             })

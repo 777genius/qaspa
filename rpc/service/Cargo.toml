@@ -29,6 +29,7 @@ kaspa-txscript.workspace = true
 kaspa-utils.workspace = true
 kaspa-utils-tower.workspace = true
 kaspa-utxoindex.workspace = true
+dashmap.workspace = true
 
 async-trait.workspace = true
 faster-hex.workspace = true

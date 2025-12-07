@@ -155,6 +155,25 @@ pub enum Events {
     StealthDetachedFromMaster {
         stealth_id: AccountId,
     },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationExpired {
+        account_id: AccountId,
+        delegation_id: u64,
+        anchor: [u8; 32],
+        valid_until_daa: u64,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationRevoked {
+        account_id: AccountId,
+        delegation_id: u64,
+        anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAnchorMismatch {
+        account_id: AccountId,
+        expected_anchor: [u8; 32],
+        actual_anchor: [u8; 32],
+    },
     /// Accounts have been activated
     AccountActivation {
         ids: Vec<AccountId>,
@@ -332,6 +351,9 @@ pub enum EventKind {
     MasterAccountRevoked,
     StealthAttachedToMaster,
     StealthDetachedFromMaster,
+    MasterDelegationExpired,
+    MasterDelegationRevoked,
+    MasterAnchorMismatch,
     AccountActivation,
     AccountDeactivation,
     AccountSelection,
@@ -378,6 +400,9 @@ impl From<&Events> for EventKind {
             Events::MasterAccountRevoked { .. } => EventKind::MasterAccountRevoked,
             Events::StealthAttachedToMaster { .. } => EventKind::StealthAttachedToMaster,
             Events::StealthDetachedFromMaster { .. } => EventKind::StealthDetachedFromMaster,
+            Events::MasterDelegationExpired { .. } => EventKind::MasterDelegationExpired,
+            Events::MasterDelegationRevoked { .. } => EventKind::MasterDelegationRevoked,
+            Events::MasterAnchorMismatch { .. } => EventKind::MasterAnchorMismatch,
             Events::AccountActivation { .. } => EventKind::AccountActivation,
             Events::AccountDeactivation { .. } => EventKind::AccountDeactivation,
             Events::AccountSelection { .. } => EventKind::AccountSelection,
@@ -427,6 +452,9 @@ impl FromStr for EventKind {
             "master-account-revoked" => Ok(EventKind::MasterAccountRevoked),
             "stealth-attached-to-master" => Ok(EventKind::StealthAttachedToMaster),
             "stealth-detached-from-master" => Ok(EventKind::StealthDetachedFromMaster),
+            "master-delegation-expired" => Ok(EventKind::MasterDelegationExpired),
+            "master-delegation-revoked" => Ok(EventKind::MasterDelegationRevoked),
+            "master-anchor-mismatch" => Ok(EventKind::MasterAnchorMismatch),
             "account-activation" => Ok(EventKind::AccountActivation),
             "account-deactivation" => Ok(EventKind::AccountDeactivation),
             "account-selection" => Ok(EventKind::AccountSelection),
@@ -484,6 +512,9 @@ impl std::fmt::Display for EventKind {
             EventKind::MasterAccountRevoked => "master-account-revoked",
             EventKind::StealthAttachedToMaster => "stealth-attached-to-master",
             EventKind::StealthDetachedFromMaster => "stealth-detached-from-master",
+            EventKind::MasterDelegationExpired => "master-delegation-expired",
+            EventKind::MasterDelegationRevoked => "master-delegation-revoked",
+            EventKind::MasterAnchorMismatch => "master-anchor-mismatch",
             EventKind::AccountActivation => "account-activation",
             EventKind::AccountDeactivation => "account-deactivation",
             EventKind::AccountSelection => "account-selection",

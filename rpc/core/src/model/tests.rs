@@ -1145,6 +1145,7 @@ mod mockery {
                 destination_pubkey: "0".repeat(64),
                 amount: mock(),
                 is_coinbase: false,
+                anchor_hint: Some("deadbeef".to_string()),
             }
         }
     }
@@ -1170,6 +1171,20 @@ mod mockery {
         assert!(!decoded.is_coinbase);
         assert_eq!(decoded.transaction_id, info.transaction_id);
         assert_eq!(decoded.output_index, info.output_index);
+        assert!(decoded.anchor_hint.is_none());
+    }
+
+    #[test]
+    fn rpc_stealth_output_info_anchor_hint_roundtrip() {
+        let info = RpcStealthOutputInfo::mock();
+        let mut buffer = Vec::new();
+        let writer = &mut buffer;
+        workflow_serializer::serializer::Serializer::serialize(&info, writer).unwrap();
+
+        let reader = &mut buffer.as_slice();
+        use workflow_serializer::serializer::Deserializer as RpcDeserializer;
+        let decoded = <RpcStealthOutputInfo as RpcDeserializer>::deserialize(reader).unwrap();
+        assert_eq!(decoded.anchor_hint, info.anchor_hint);
     }
 
     impl Mock for GetBlockViewTagsRequest {

@@ -65,6 +65,11 @@ pub trait StealthUtxoHandler: Send + Sync {
     /// Returns the ephemeral key store for this handler.
     /// Used for signing stealth inputs.
     fn ephemeral_key_store(&self) -> Option<Arc<EphemeralKeyStore>>;
+
+    /// Called on DAA score change (best effort).
+    async fn on_daa_score_changed(&self, _current_daa_score: u64) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Type alias for dynamic stealth handler

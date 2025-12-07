@@ -32,6 +32,18 @@ pub enum EphemeralKeyStatus {
     Pending { added_daa_score: u64 },
     /// UTXO has sufficient confirmations
     Confirmed { confirmed_daa_score: u64 },
+    /// Делегация не покрывает UTXO, но ключ сохранён
+    Orphaned { reason: OrphanReason },
+    /// Ключ очищен после истечения окна действия
+    Expired,
+}
+
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq)]
+pub enum OrphanReason {
+    DelegationExpired,
+    DelegationRevoked,
+    AnchorMismatch,
+    NoDelegation,
 }
 
 impl Default for EphemeralKeyStatus {
@@ -127,6 +139,10 @@ pub struct EphemeralKeyEntry {
     pub master_anchor: Option<[u8; 32]>,
     /// Optional delegation id associated with this UTXO (Iteration 4)
     pub delegation_id: Option<u64>,
+    /// DAA высота фиксации UTXO кошельком (Iteration 5)
+    pub created_daa_score: u64,
+    /// DAA после которой делегация перестаёт покрывать UTXO (Iteration 5)
+    pub valid_until_daa: Option<u64>,
 }
 
 impl Zeroize for EphemeralKeyEntry {
@@ -172,7 +188,19 @@ impl borsh::BorshDeserialize for EphemeralKeyEntry {
             Err(err) => return Err(err),
         };
 
-        Ok(Self { outpoint, data, status, master_anchor, delegation_id })
+        let created_daa_score = match u64::deserialize_reader(reader) {
+            Ok(score) => score,
+            Err(err) if is_optional_field_missing(&err) => 0,
+            Err(err) => return Err(err),
+        };
+
+        let valid_until_daa = match Option::<u64>::deserialize_reader(reader) {
+            Ok(value) => value,
+            Err(err) if is_optional_field_missing(&err) => None,
+            Err(err) => return Err(err),
+        };
+
+        Ok(Self { outpoint, data, status, master_anchor, delegation_id, created_daa_score, valid_until_daa })
     }
 }
 
@@ -181,6 +209,7 @@ impl borsh::BorshDeserialize for EphemeralKeyEntry {
 // ============================================================================
 
 /// In-memory store for ephemeral keys with disk persistence.
+const STALE_ENTRY_MAX_AGE_DAA: u64 = 200_000;
 pub struct EphemeralKeyStore {
     account_id: AccountId,
 
@@ -193,6 +222,10 @@ pub struct EphemeralKeyStore {
     /// Delegation metadata (Iteration 4)
     delegations: DashMap<TransactionOutpoint, (Option<[u8; 32]>, Option<u64>)>,
 
+    /// DAA метаданные (Iteration 5)
+    created_daa_scores: DashMap<TransactionOutpoint, u64>,
+    valid_until_daa: DashMap<TransactionOutpoint, Option<u64>>,
+
     /// Dirty flag for persistence
     modified: AtomicBool,
 }
@@ -204,6 +237,8 @@ impl EphemeralKeyStore {
             keys: DashMap::new(),
             statuses: DashMap::new(),
             delegations: DashMap::new(),
+            created_daa_scores: DashMap::new(),
+            valid_until_daa: DashMap::new(),
             modified: AtomicBool::new(false),
         }
     }
@@ -226,9 +261,24 @@ impl EphemeralKeyStore {
         master_anchor: Option<[u8; 32]>,
         delegation_id: Option<u64>,
     ) -> Result<()> {
+        self.store_with_metadata(outpoint, data, daa_score, master_anchor, delegation_id, None).await
+    }
+
+    /// Stores an ephemeral key with explicit metadata
+    pub async fn store_with_metadata(
+        &self,
+        outpoint: TransactionOutpoint,
+        data: EphemeralKeyData,
+        created_daa_score: u64,
+        master_anchor: Option<[u8; 32]>,
+        delegation_id: Option<u64>,
+        valid_until_daa: Option<u64>,
+    ) -> Result<()> {
         self.keys.insert(outpoint, data);
-        self.statuses.insert(outpoint, EphemeralKeyStatus::Pending { added_daa_score: daa_score });
+        self.statuses.insert(outpoint, EphemeralKeyStatus::Pending { added_daa_score: created_daa_score });
         self.delegations.insert(outpoint, (master_anchor, delegation_id));
+        self.created_daa_scores.insert(outpoint, created_daa_score);
+        self.valid_until_daa.insert(outpoint, valid_until_daa);
         self.modified.store(true, Ordering::SeqCst);
         Ok(())
     }
@@ -253,6 +303,8 @@ impl EphemeralKeyStore {
         self.keys.remove(outpoint);
         self.statuses.remove(outpoint);
         self.delegations.remove(outpoint);
+        self.created_daa_scores.remove(outpoint);
+        self.valid_until_daa.remove(outpoint);
         self.modified.store(true, Ordering::SeqCst);
         Ok(())
     }
@@ -262,6 +314,71 @@ impl EphemeralKeyStore {
         self.statuses.entry(*outpoint).and_modify(|status| {
             *status = EphemeralKeyStatus::Confirmed { confirmed_daa_score: daa_score };
         });
+        self.modified.store(true, Ordering::SeqCst);
+    }
+
+    /// Force set status (used by delegation/orphan logic)
+    pub fn set_status(&self, outpoint: TransactionOutpoint, status: EphemeralKeyStatus) {
+        self.statuses.insert(outpoint, status);
+        self.modified.store(true, Ordering::SeqCst);
+    }
+
+    /// Returns status if present
+    pub fn status(&self, outpoint: &TransactionOutpoint) -> Option<EphemeralKeyStatus> {
+        self.statuses.get(outpoint).map(|s| s.clone())
+    }
+
+    /// Marks an entry as removed in a reorg-safe manner
+    pub async fn mark_removed(&self, outpoint: &TransactionOutpoint, current_daa_score: u64) -> Result<()> {
+        let valid_until = self.valid_until_daa.get(outpoint).map(|v| *v.value()).flatten();
+        let status = self.statuses.get(outpoint).map(|s| s.clone()).unwrap_or_default();
+
+        let new_status = match (valid_until, status.clone()) {
+            (Some(limit), _) if current_daa_score > limit => EphemeralKeyStatus::Expired,
+            // Already expired/orphaned – leave as-is to avoid oscillation on reorg
+            (_, EphemeralKeyStatus::Expired) | (_, EphemeralKeyStatus::Orphaned { .. }) => status,
+            // Otherwise keep current status to allow reorg recovery
+            _ => status,
+        };
+
+        self.statuses.insert(*outpoint, new_status);
+        self.modified.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    /// Best-effort cleanup based on DAA heights
+    pub fn cleanup_expired(&self, current_daa_score: u64) {
+        let mut to_remove = vec![];
+        for entry in self.statuses.iter() {
+            let outpoint = *entry.key();
+            let status = entry.value();
+            let valid_until = self.valid_until_daa.get(&outpoint).map(|v| *v.value()).flatten();
+
+            let expired_by_window = valid_until.map(|limit| current_daa_score > limit).unwrap_or(false);
+            let explicitly_expired = matches!(status, EphemeralKeyStatus::Expired);
+            let created = self.created_daa_scores.get(&outpoint).map(|v| *v.value()).unwrap_or(0);
+            let stale_without_window =
+                valid_until.is_none() && created > 0 && current_daa_score.saturating_sub(created) > STALE_ENTRY_MAX_AGE_DAA;
+
+            if expired_by_window || explicitly_expired || stale_without_window {
+                to_remove.push(outpoint);
+            }
+        }
+
+        if to_remove.is_empty() {
+            return;
+        }
+
+        for outpoint in to_remove {
+            if let Some(mut data) = self.keys.get_mut(&outpoint) {
+                data.value_mut().zeroize();
+            }
+            self.keys.remove(&outpoint);
+            self.statuses.remove(&outpoint);
+            self.delegations.remove(&outpoint);
+            self.created_daa_scores.remove(&outpoint);
+            self.valid_until_daa.remove(&outpoint);
+        }
         self.modified.store(true, Ordering::SeqCst);
     }
 
@@ -294,7 +411,9 @@ impl EphemeralKeyStore {
                 let data = r.value().clone();
                 let status = self.statuses.get(&outpoint).map(|s| s.clone()).unwrap_or_default();
                 let (master_anchor, delegation_id) = self.delegations.get(&outpoint).map(|v| *v.value()).unwrap_or((None, None));
-                EphemeralKeyEntry { outpoint, data, status, master_anchor, delegation_id }
+                let created_daa_score = self.created_daa_scores.get(&outpoint).map(|v| *v.value()).unwrap_or_default();
+                let valid_until_daa = self.valid_until_daa.get(&outpoint).map(|v| *v.value()).unwrap_or(None);
+                EphemeralKeyEntry { outpoint, data, status, master_anchor, delegation_id, created_daa_score, valid_until_daa }
             })
             .collect()
     }
@@ -305,6 +424,8 @@ impl EphemeralKeyStore {
             self.keys.insert(entry.outpoint, entry.data);
             self.statuses.insert(entry.outpoint, entry.status);
             self.delegations.insert(entry.outpoint, (entry.master_anchor, entry.delegation_id));
+            self.created_daa_scores.insert(entry.outpoint, entry.created_daa_score);
+            self.valid_until_daa.insert(entry.outpoint, entry.valid_until_daa);
         }
         self.modified.store(false, Ordering::SeqCst);
     }
@@ -322,6 +443,8 @@ impl EphemeralKeyStore {
         self.keys.clear();
         self.statuses.clear();
         self.delegations.clear();
+        self.created_daa_scores.clear();
+        self.valid_until_daa.clear();
     }
 
     // ========================================================================
@@ -669,5 +792,47 @@ mod tests {
         // Cleanup
         EphemeralKeyStore::delete_storage(wallet_folder, &account_id, network_id).await.unwrap();
         assert!(!EphemeralKeyStore::storage_exists(wallet_folder, &account_id, network_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn cleanup_removes_expired_entries() {
+        let account_id = test_account_id("00000006");
+        let store = EphemeralKeyStore::new(account_id);
+
+        let outpoint = TransactionOutpoint::new(Hash::from_bytes([7u8; 32]), 0);
+        let key_data = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
+        store
+            .store_with_metadata(outpoint, key_data, 5, None, Some(1), Some(10))
+            .await
+            .expect("store");
+        store.set_status(outpoint, EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired });
+
+        store.cleanup_expired(20);
+        assert!(!store.contains(&outpoint));
+    }
+
+    #[tokio::test]
+    async fn mark_removed_respects_valid_until_and_ttl() {
+        let account_id = test_account_id("00000007");
+        let store = EphemeralKeyStore::new(account_id);
+
+        let outpoint1 = TransactionOutpoint::new(Hash::from_bytes([1u8; 32]), 0);
+        let key_data1 = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
+        store.store_with_metadata(outpoint1, key_data1, 50, None, None, Some(60)).await.unwrap();
+        store.confirm(&outpoint1, 55);
+        store.mark_removed(&outpoint1, 70).await.unwrap();
+        // valid_until passed -> status becomes Expired and cleanup removes
+        assert!(matches!(store.status(&outpoint1).unwrap(), EphemeralKeyStatus::Expired));
+        store.cleanup_expired(71);
+        assert!(!store.contains(&outpoint1));
+
+        let outpoint2 = TransactionOutpoint::new(Hash::from_bytes([2u8; 32]), 0);
+        let key_data2 = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
+        store.store_with_metadata(outpoint2, key_data2, 10, None, None, None).await.unwrap();
+        store.mark_removed(&outpoint2, 15).await.unwrap();
+        // without valid_until keep prior status (Pending) and eventually cleaned by TTL
+        assert!(matches!(store.status(&outpoint2).unwrap(), EphemeralKeyStatus::Pending { .. }));
+        store.cleanup_expired(10 + STALE_ENTRY_MAX_AGE_DAA + 1);
+        assert!(!store.contains(&outpoint2));
     }
 }

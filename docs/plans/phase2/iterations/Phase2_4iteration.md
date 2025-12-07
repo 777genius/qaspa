@@ -193,11 +193,12 @@
   - `async fn list_delegations_for_master(&self, master_anchor: [u8; 32]) -> Result<Vec<DelegationRecordV1>>`;
   - `async fn revoke_delegation(&self, delegation_id: DelegationId) -> Result<()>`.
 - Поток `link_stealth_to_master`:
-  1. Найти `StealthAccount` по `stealth_id`, убедиться, что он привязан к `master_anchor` (из `Payload` итерации 3).
-  2. Считать `scan_pubkey`/`spend_pubkey`, `account_id`, текущий `virtual_daa_score`.
-  3. Собрать `DelegationRecordV1` без подписи, выставить `valid_from_daa = current_daa`, `valid_until_daa = current_daa + valid_for_daa` (если задано).
-  4. Сформировать `delegation_message_hash`, передать в мастер‑аккаунт (итерация 3) или напрямую в `PrvKeyDataVariant::MlDsaMaster` для подписи.
-  5. Сохранить делегацию в `DelegationStore`, обновить `StealthAccount::Payload.master_anchor`/`delegation_id`.
+  1. Проверить `WalletSettings::EnableMldsaMaster`; если флаг выключен — вернуть ошибку и не создавать делегацию.
+  2. Найти `StealthAccount` по `stealth_id`, убедиться, что он привязан к `master_anchor` (из `Payload` итерации 3).
+  3. Считать `scan_pubkey`/`spend_pubkey`, `account_id`, текущий `virtual_daa_score`.
+  4. Собрать `DelegationRecordV1` без подписи, выставить `valid_from_daa = current_daa`, `valid_until_daa = current_daa + valid_for_daa` (если задано).
+  5. Сформировать `delegation_message_hash`, передать в мастер‑аккаунт (итерация 3) или напрямую в `PrvKeyDataVariant::MlDsaMaster` для подписи.
+  6. Сохранить делегацию в `DelegationStore`, обновить `StealthAccount::Payload.master_anchor`/`delegation_id`.
 
 ### 2.4. Миграция существующих кошельков и UX
 
@@ -361,6 +362,8 @@
   - `ListMldsaDelegationsResponse { delegations: Vec<RpcDelegationRecord> }`.
 - `RpcDelegationRecord` — wire‑представление `DelegationRecordV1`:
   - те же поля, но подпись в `Vec<u8>` и `status` в виде `String`/enum.
+- `GetServerInfoResponse`:
+  - добавить/задокументировать `has_mldsa_master: bool` как отражение фактической поддержки (или явно отметить, что пока возвращается `false`/`NotImplemented` для мягкой миграции).
 
 В `rpc/core/src/api/rpc.rs`:
 
@@ -450,6 +453,10 @@
      - `signature_script` содержит ожидаемый TLV.
 - Smoke‑тест RPC:
   - `register_mldsa_anchor` + `list_mldsa_delegations` не ломают существующие клиенты (`NotImplemented`/пустые структуры).
+- Gating/флаги:
+  - проверить, что при `kip10_enabled=false` stealth‑входы с `len != 65` отвергаются, а при `kip10_enabled=true` принимаются оба формата;
+  - проверить, что `WalletSettings::EnableMldsaMaster=false` блокирует создание делегаций (`link_stealth_to_master`);
+  - `GetServerInfoResponse.has_mldsa_master` отражает выбранную реализацию (правдиво или помечено как заглушка).
 
 ## 8. Чеклист Итерации 4
 

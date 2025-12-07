@@ -431,6 +431,11 @@ impl UtxoProcessor {
         self.notify(Events::DaaScoreChange { current_daa_score }).await?;
         self.handle_pending(current_daa_score).await?;
         self.handle_outgoing(current_daa_score).await?;
+
+        // Stealth-specific DAA hooks
+        for handler in self.inner.stealth_store.handlers() {
+            handler.on_daa_score_changed(current_daa_score).await?;
+        }
         Ok(())
     }
 

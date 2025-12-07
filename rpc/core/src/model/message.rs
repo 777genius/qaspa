@@ -1671,6 +1671,8 @@ pub struct RpcStealthOutputInfo {
     pub destination_pubkey: String,
     pub amount: u64,
     pub is_coinbase: bool,
+    /// Best-effort подсказка по якорю мастера
+    pub anchor_hint: Option<String>,
 }
 
 impl RpcStealthOutputInfo {
@@ -1682,14 +1684,15 @@ impl RpcStealthOutputInfo {
         destination_pubkey: String,
         amount: u64,
         is_coinbase: bool,
+        anchor_hint: Option<String>,
     ) -> Self {
-        Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount, is_coinbase }
+        Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount, is_coinbase, anchor_hint }
     }
 }
 
 impl Serializer for RpcStealthOutputInfo {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &2, writer)?;
+        store!(u16, &3, writer)?;
         store!(RpcTransactionId, &self.transaction_id, writer)?;
         store!(u32, &self.output_index, writer)?;
         store!(u8, &self.view_tag, writer)?;
@@ -1697,6 +1700,7 @@ impl Serializer for RpcStealthOutputInfo {
         store!(String, &self.destination_pubkey, writer)?;
         store!(u64, &self.amount, writer)?;
         store!(bool, &self.is_coinbase, writer)?;
+        store!(Option<String>, &self.anchor_hint, writer)?;
         Ok(())
     }
 }
@@ -1711,7 +1715,17 @@ impl Deserializer for RpcStealthOutputInfo {
         let destination_pubkey = load!(String, reader)?;
         let amount = load!(u64, reader)?;
         let is_coinbase = if version >= 2 { load!(bool, reader)? } else { false };
-        Ok(Self { transaction_id, output_index, view_tag, ephemeral_pubkey, destination_pubkey, amount, is_coinbase })
+        let anchor_hint = if version >= 3 { load!(Option<String>, reader)? } else { None };
+        Ok(Self {
+            transaction_id,
+            output_index,
+            view_tag,
+            ephemeral_pubkey,
+            destination_pubkey,
+            amount,
+            is_coinbase,
+            anchor_hint,
+        })
     }
 }
 

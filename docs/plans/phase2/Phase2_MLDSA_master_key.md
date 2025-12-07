@@ -331,6 +331,7 @@
   2. Внедрить TLV `delegation_id` в `StealthSigner` и `EphemeralKeyData`.  
   3. Расширить RPC (wrpc/grpc) методами регистрации/запроса anchor.  
   4. Обновить CLI/SDK поток `link-stealth-to-master`.  
+- **Gate по консенсусу:** приём `signature_script.len() >= 65` для stealth-входов и игнорируемый TLV включается **только** при `kip10_enabled = true`; при `kip10_enabled = false` остаётся строгое `len == 65`. Это нужно учитывать в rollout devnet/testnet/mainnet.
 - **Проверки:**  
   - `cargo test -p kaspa-wallet-core delegation::tests` — Borsh/serde, CRDT и подписи мастером.  
   - `cargo test -p kaspa-wallet-core ephemeral_key` — миграции `EphemeralKeyEntry` + сохранение делегаций.  
