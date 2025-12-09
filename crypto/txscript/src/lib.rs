@@ -146,14 +146,7 @@ pub fn get_sig_op_count<T: VerifiableTransaction>(tx: &T, input_idx: usize) -> R
 
     let sig_cache = Cache::new(0);
     let reused_values = SigHashReusedValuesUnsync::new();
-    let mut vm = TxScriptEngine::from_transaction_input(
-        tx,
-        &tx.inputs()[input_idx],
-        input_idx,
-        utxo,
-        &reused_values,
-        &sig_cache,
-    );
+    let mut vm = TxScriptEngine::from_transaction_input(tx, &tx.inputs()[input_idx], input_idx, utxo, &reused_values, &sig_cache);
     vm.execute()?;
     Ok(vm.used_sig_ops())
 }

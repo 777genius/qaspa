@@ -447,10 +447,7 @@ impl Wallet {
     async fn master_apply_delegation(self: Arc<Self>, ctx: Arc<KaspaCli>, argv: Vec<String>) -> Result<()> {
         Self::ensure_wallet_open(&ctx)?;
         if argv.is_empty() {
-            tprintln!(
-                ctx,
-                "Usage: wallet master apply-delegation [--request <path>] --response <path> [--force-network-mismatch]"
-            );
+            tprintln!(ctx, "Usage: wallet master apply-delegation [--request <path>] --response <path> [--force-network-mismatch]");
             return Ok(());
         }
 
@@ -484,9 +481,7 @@ impl Wallet {
             let request_json = std::fs::read_to_string(path)?;
             Some(serde_json::from_str(&request_json).map_err(|e| Error::custom(format!("invalid request json: {e}")))?)
         } else {
-            ctx.wallet()
-                .load_cached_master_delegation_request(&response.request_id)
-                .await?
+            ctx.wallet().load_cached_master_delegation_request(&response.request_id).await?
         };
 
         let request =

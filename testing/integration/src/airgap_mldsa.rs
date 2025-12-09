@@ -280,10 +280,7 @@ async fn test_airgap_delegation_tampered_response_rejected_online() {
     let mut tampered_response = signed.response.clone();
     tampered_response.request_id[0] ^= 0xFF;
 
-    let result = env
-        .wallet
-        .apply_master_delegation_response(&env.wallet_secret, request_body, tampered_response, false)
-        .await;
+    let result = env.wallet.apply_master_delegation_response(&env.wallet_secret, request_body, tampered_response, false).await;
     assert!(result.is_err(), "tampered response must be rejected online");
 
     env.shutdown().await;
@@ -384,6 +381,7 @@ async fn build_delegation_request(
                     valid_from_daa: Some(valid_from),
                     valid_until_daa: Some(valid_until),
                     nonce_hint: nonce_hint.or(Some(1)),
+                    status: None,
                 }],
                 created_at_unixtime: Some(
                     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),

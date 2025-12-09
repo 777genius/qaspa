@@ -638,25 +638,22 @@ impl Wallet {
                 if let Some(parent) = path.parent() {
                     fs::create_dir_all(parent).await?;
                 }
-                let json = serde_json::to_vec_pretty(request)
-                    .map_err(|e| Error::Custom(format!("serialize delegation request: {e}")))?;
+                let json =
+                    serde_json::to_vec_pretty(request).map_err(|e| Error::Custom(format!("serialize delegation request: {e}")))?;
                 fs::write(&path, json.as_slice()).await?;
             }
         }
         Ok(())
     }
 
-    pub async fn load_cached_master_delegation_request(
-        &self,
-        request_id: &[u8; 32],
-    ) -> Result<Option<MasterDelegationRequestBodyV1>> {
+    pub async fn load_cached_master_delegation_request(&self, request_id: &[u8; 32]) -> Result<Option<MasterDelegationRequestBodyV1>> {
         if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
             if let Ok(network_id) = self.network_id() {
                 let path = Self::delegation_request_path(&wallet_folder, network_id, request_id);
                 if fs::exists(&path).await? {
                     let data = fs::read(&path).await?;
-                    let request = serde_json::from_slice(&data)
-                        .map_err(|e| Error::Custom(format!("read cached delegation request: {e}")))?;
+                    let request =
+                        serde_json::from_slice(&data).map_err(|e| Error::Custom(format!("read cached delegation request: {e}")))?;
                     return Ok(Some(request));
                 }
             }

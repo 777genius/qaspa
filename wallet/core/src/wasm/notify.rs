@@ -466,6 +466,154 @@ declare! {
 
 #[cfg(feature = "wasm32-sdk")]
 declare! {
+    IMasterAnchorCreatedEvent,
+    r#"
+    /**
+     * Эмитится после создания или получения мастера ML-DSA.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterAnchorCreatedEvent {
+        info: IMasterAnchorInfo;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IMasterSeedExportedEvent,
+    r#"
+    /**
+     * Эмитится при экспорте master seed.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterSeedExportedEvent {
+        masterId: HexString;
+        anchor?: HexString;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IMasterAccountCreatedEvent,
+    r#"
+    /**
+     * Эмитится при создании master-аккаунта.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterAccountCreatedEvent {
+        accountId: HexString;
+        anchor: HexString;
+        level: number;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IMasterAccountRotatedEvent,
+    r#"
+    /**
+     * Эмитится при ротации master-аккаунта.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterAccountRotatedEvent {
+        accountId: HexString;
+        oldAnchor: HexString;
+        newAnchor: HexString;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IMasterAccountRevokedEvent,
+    r#"
+    /**
+     * Эмитится при отзыве master-аккаунта.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterAccountRevokedEvent {
+        accountId: HexString;
+        anchor: HexString;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IStealthAttachedToMasterEvent,
+    r#"
+    /**
+     * Эмитится при привязке stealth-аккаунта к master.
+     *
+     * @category Wallet Events
+     */
+    export interface IStealthAttachedToMasterEvent {
+        stealthId: HexString;
+        masterId: HexString;
+        anchor: HexString;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IStealthDetachedFromMasterEvent,
+    r#"
+    /**
+     * Эмитится при отвязке stealth-аккаунта от master.
+     *
+     * @category Wallet Events
+     */
+    export interface IStealthDetachedFromMasterEvent {
+        stealthId: HexString;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IMasterDelegationExpiredEvent,
+    r#"
+    /**
+     * Эмитится при истечении делегации master.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterDelegationExpiredEvent {
+        accountId: HexString;
+        delegationId: number;
+        anchor: HexString;
+        validUntilDaa: number;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IMasterDelegationRevokedEvent,
+    r#"
+    /**
+     * Эмитится при отзыве делегации master.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterDelegationRevokedEvent {
+        accountId: HexString;
+        delegationId: number;
+        anchor: HexString;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
     IAccountActivationEvent,
     r#"
     /**

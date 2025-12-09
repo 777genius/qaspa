@@ -9,6 +9,7 @@
   - Структуры хранения master‑seed/anchor в `PrvKeyDataVariant::MlDsaMaster` + миграции и RPC/CLI API вокруг них.
   - `MldsaMasterAccount` как отдельный `AccountKind` в `wallet/core`, хранящий anchor/metadata и умеющий `unlock / sign / rotate`.
   - Структуры делегаций и связь master ↔ stealth‑аккаунты (`DelegationRecord`, `master_anchor`, `delegation_id` в payload’ах стелс‑аккаунтов), базовые RPC методы и airgap‑флоу (Iter.4–6).
+  - Статус Iter.4 в `docs/IMPLEMENTATION_STATUS.md` обновлён: делегации/TLV/RPC и e2e `mldsa_master` тесты в кодовой базе завершены и используются как основа для Iter.7.
 - **Что делаем в Iteration 7:**
   - Строим чёткую **матрицу тестов** для всего стека Phase 2 (криптопримитивы, ключи, аккаунты, делегации, RPC, airgap) и реализуем недостающие тесты.
   - Добавляем **property‑тесты** (proptest) для криптографических инвариантов и протокола делегаций.

@@ -253,7 +253,6 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply_ex(
     true
 }
 
-
 /// Parse delegation response JSON and fill a lightweight summary (anchor, level, request_id, delegations count).
 ///
 /// # Safety
@@ -343,10 +342,10 @@ pub unsafe extern "C" fn kaspa_wallet_master_anchor_list(
 mod tests {
     use super::*;
     use kaspa_consensus_core::network::{NetworkId, NetworkType};
+    use kaspa_utils::hex::FromHex;
     use kaspa_wallet_core::account::delegation::{DelegationRecordV1, DelegationStatus};
     use kaspa_wallet_core::deterministic::AccountId;
     use kaspa_wallet_core::message::DelegationRecordHeaderV1;
-    use kaspa_utils::hex::FromHex;
     use std::ptr;
 
     #[test]
@@ -391,10 +390,7 @@ mod tests {
             version: 1,
             level: 2,
             anchor: [1u8; 32],
-            account_id: AccountId::from_hex(
-                "0000000000000000000000000000000000000000000000000000000000000007",
-            )
-            .expect("account id"),
+            account_id: AccountId::from_hex("0000000000000000000000000000000000000000000000000000000000000007").expect("account id"),
             spend_pubkey: [2u8; 32],
             scan_pubkey: [3u8; 32],
             valid_from_daa: 10,
@@ -413,9 +409,7 @@ mod tests {
         };
         let json = serde_json::to_vec(&req).expect("json");
         let mut summary = KaspaMasterDelegationSummary::default();
-        let ok = unsafe {
-            kaspa_wallet_mldsa_delegation_request_summary(json.as_ptr(), json.len(), &mut summary as *mut _)
-        };
+        let ok = unsafe { kaspa_wallet_mldsa_delegation_request_summary(json.as_ptr(), json.len(), &mut summary as *mut _) };
         assert!(ok, "summary should parse valid request");
         assert_eq!(summary.master_anchor, req.master_anchor);
         assert_eq!(summary.request_id, req.request_id);
@@ -429,10 +423,7 @@ mod tests {
             version: 1,
             level: 2,
             anchor: [2u8; 32],
-            account_id: AccountId::from_hex(
-                "0000000000000000000000000000000000000000000000000000000000000008",
-            )
-            .expect("account id"),
+            account_id: AccountId::from_hex("0000000000000000000000000000000000000000000000000000000000000008").expect("account id"),
             spend_pubkey: [4u8; 32],
             scan_pubkey: [5u8; 32],
             valid_from_daa: 15,
@@ -451,9 +442,7 @@ mod tests {
         };
         let json = serde_json::to_vec(&resp).expect("json");
         let mut summary = KaspaMasterDelegationSummary::default();
-        let ok = unsafe {
-            kaspa_wallet_mldsa_delegation_response_summary(json.as_ptr(), json.len(), &mut summary as *mut _)
-        };
+        let ok = unsafe { kaspa_wallet_mldsa_delegation_response_summary(json.as_ptr(), json.len(), &mut summary as *mut _) };
         assert!(ok, "summary should parse valid response");
         assert_eq!(summary.master_anchor, resp.master_anchor);
         assert_eq!(summary.request_id, resp.request_id);
