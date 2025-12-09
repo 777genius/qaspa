@@ -542,6 +542,8 @@ Do you confirm? (y/n)";
         p2p_tower_counters.clone(),
     ));
 
+    let anchor_hint_cache = index_service.as_ref().map(|x| x.stealth_anchor_cache());
+
     let rpc_core_service = Arc::new(RpcCoreService::new(
         consensus_manager.clone(),
         notify_service.notifier(),
@@ -560,6 +562,7 @@ Do you confirm? (y/n)";
         grpc_tower_counters.clone(),
         system_info,
         mining_rule_engine.clone(),
+        anchor_hint_cache,
     ));
     let grpc_service_broadcasters: usize = 3; // TODO: add a command line argument or derive from other arg/config/host-related fields
     let grpc_service = if !args.disable_grpc {

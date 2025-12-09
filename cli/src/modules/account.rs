@@ -1,6 +1,11 @@
+use kaspa_utils::hex::FromHex;
+use kaspa_wallet_core::account::delegation::DelegationId;
 use kaspa_wallet_core::account::BIP32_ACCOUNT_KIND;
 use kaspa_wallet_core::account::LEGACY_ACCOUNT_KIND;
+use kaspa_wallet_core::account::MLDSA_MASTER_ACCOUNT_KIND;
 use kaspa_wallet_core::account::MULTISIG_ACCOUNT_KIND;
+use kaspa_wallet_core::account::STEALTH_ACCOUNT_KIND;
+use kaspa_wallet_core::deterministic::AccountId;
 
 use crate::imports::*;
 use crate::wizards;
@@ -61,7 +66,104 @@ impl Account {
                 let prv_key_data_info = ctx.select_private_key().await?;
 
                 let account_name = account_name.as_deref();
-                wizards::account::create(&ctx, prv_key_data_info, account_kind, account_name).await?;
+                if account_kind == STEALTH_ACCOUNT_KIND {
+                    wizards::account::create_stealth(&ctx, prv_key_data_info, account_name).await?;
+                } else if account_kind == MLDSA_MASTER_ACCOUNT_KIND {
+                    wizards::account::create_mldsa_master(&ctx, prv_key_data_info, account_name).await?;
+                } else {
+                    wizards::account::create(&ctx, prv_key_data_info, account_kind, account_name).await?;
+                }
+            }
+            "attach-stealth" => {
+                if argv.len() != 2 {
+                    tprintln!(ctx, "usage: account attach-stealth <stealth-id> <master-id>");
+                    return Ok(());
+                }
+                let stealth_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                let master_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                let guard = ctx.wallet().guard();
+                let guard = guard.lock().await;
+                ctx.wallet().attach_stealth_to_master(&wallet_secret, &stealth_id, &master_id, &guard).await?;
+                tprintln!(ctx, "Stealth account {} attached to master {}", stealth_id, master_id);
+            }
+            "detach-stealth" => {
+                if argv.len() != 1 {
+                    tprintln!(ctx, "usage: account detach-stealth <stealth-id>");
+                    return Ok(());
+                }
+                let stealth_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                let guard = ctx.wallet().guard();
+                let guard = guard.lock().await;
+                ctx.wallet().detach_stealth_from_master(&wallet_secret, &stealth_id, &guard).await?;
+                tprintln!(ctx, "Stealth account {} detached from master", stealth_id);
+            }
+            "delegation" => {
+                if argv.is_empty() {
+                    tprintln!(ctx, "usage: account delegation <link|list|revoke> ...");
+                    return Ok(());
+                }
+                let sub = argv.remove(0);
+                match sub.as_str() {
+                    "link" => {
+                        if argv.len() < 2 {
+                            tprintln!(ctx, "usage: account delegation link <stealth-id> <master-anchor-hex> [valid-for-daa]");
+                            return Ok(());
+                        }
+                        let stealth_id = AccountId::from_hex(argv.remove(0).as_str())?;
+                        let anchor_hex = argv.remove(0);
+                        let anchor_bytes =
+                            Vec::from_hex(&anchor_hex).map_err(|e| Error::custom(format!("invalid anchor hex: {e}")))?;
+                        let anchor: [u8; 32] = anchor_bytes.try_into().map_err(|_| Error::custom("anchor must be 32 bytes"))?;
+                        let valid_for_daa = if !argv.is_empty() { Some(argv.remove(0).parse::<u64>()?) } else { None };
+                        let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                        let delegation_id =
+                            ctx.wallet().link_stealth_to_master(&wallet_secret, stealth_id, anchor, 0, valid_for_daa).await?;
+                        tprintln!(ctx, "Delegation created: id={}", delegation_id.0);
+                    }
+                    "list" => {
+                        if argv.len() != 1 {
+                            tprintln!(ctx, "usage: account delegation list <master-anchor-hex>");
+                            return Ok(());
+                        }
+                        let anchor_hex = argv.remove(0);
+                        let anchor_bytes =
+                            Vec::from_hex(&anchor_hex).map_err(|e| Error::custom(format!("invalid anchor hex: {e}")))?;
+                        let anchor: [u8; 32] = anchor_bytes.try_into().map_err(|_| Error::custom("anchor must be 32 bytes"))?;
+                        let delegations = ctx.wallet().list_delegations_for_master(anchor).await?;
+                        if delegations.is_empty() {
+                            tprintln!(ctx, "No delegations for anchor {}", anchor_hex);
+                        } else {
+                            tprintln!(ctx, "Delegations for anchor {}:", anchor_hex);
+                            for (id, rec) in delegations {
+                                tprintln!(
+                                    ctx,
+                                    "- id={} nonce={} account={} status={:?} valid_from={} valid_until={:?}",
+                                    id.0,
+                                    rec.nonce,
+                                    rec.account_id,
+                                    rec.status,
+                                    rec.valid_from_daa,
+                                    rec.valid_until_daa
+                                );
+                            }
+                        }
+                    }
+                    "revoke" => {
+                        if argv.len() != 1 {
+                            tprintln!(ctx, "usage: account delegation revoke <delegation-id>");
+                            return Ok(());
+                        }
+                        let delegation_id: u64 = argv.remove(0).parse()?;
+                        let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+                        ctx.wallet().revoke_delegation(&wallet_secret, DelegationId(delegation_id)).await?;
+                        tprintln!(ctx, "Delegation {} revoked", delegation_id);
+                    }
+                    _ => {
+                        tprintln!(ctx, "unknown delegation subcommand");
+                    }
+                }
             }
             "import" => {
                 if argv.is_empty() {
@@ -101,16 +203,10 @@ impl Account {
                         }
 
                         if exists_legacy_v0_keydata().await? {
-                            let import_secret = Secret::new(
-                                ctx.term()
-                                    .ask(true, "Enter the password for the account you are importing: ")
-                                    .await?
-                                    .trim()
-                                    .as_bytes()
-                                    .to_vec(),
+                            let import_secret = helpers::string_to_secret(
+                                ctx.term().ask(true, "Enter the password for the account you are importing: ").await?,
                             );
-                            let wallet_secret =
-                                Secret::new(ctx.term().ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+                            let wallet_secret = helpers::string_to_secret(ctx.term().ask(true, "Enter wallet password: ").await?);
                             let ctx_ = ctx.clone();
                             wallet
                                 .import_legacy_keydata(
@@ -238,6 +334,26 @@ impl Account {
                 let fee_rate = None;
                 self.derivation_scan(&ctx, start, count, window, sweep, fee_rate).await?;
             }
+            "unlock" => {
+                let account = ctx.account().await?;
+                if let Ok(stealth) = account.clone().as_stealth_account() {
+                    let (wallet_secret, payment_secret) = ctx.ask_wallet_secret(Some(&account)).await?;
+                    stealth.unlock(&wallet_secret, payment_secret.as_ref()).await?;
+                    tprintln!(ctx, "Stealth account unlocked successfully");
+                    tprintln!(ctx, "Stealth address: {}", stealth.stealth_address());
+                } else {
+                    return Err(Error::custom("'unlock' is only available for stealth accounts"));
+                }
+            }
+            "lock" => {
+                let account = ctx.account().await?;
+                if let Ok(stealth) = account.clone().as_stealth_account() {
+                    stealth.lock().await;
+                    tprintln!(ctx, "Stealth account locked successfully");
+                } else {
+                    return Err(Error::custom("'lock' is only available for stealth accounts"));
+                }
+            }
             v => {
                 tprintln!(ctx, "unknown command: '{v}'\r\n");
                 return self.display_help(ctx, argv).await;
@@ -250,7 +366,7 @@ impl Account {
     async fn display_help(self: Arc<Self>, ctx: Arc<KaspaCli>, _argv: Vec<String>) -> Result<()> {
         ctx.term().help(
             &[
-                ("create [<type>] [<name>]", "Create a new account (types: 'bip32' (default), 'legacy', 'multisig')"),
+                ("create [<type>] [<name>]", "Create a new account (types: 'bip32' (default), 'legacy', 'multisig', 'stealth')"),
                 (
                     "import <import-type> [<key-type> [extra keys]]",
                     "Import accounts from a private key using 24 or 12 word mnemonic or legacy data \
@@ -262,6 +378,8 @@ impl Account {
                     "sweep [<derivations>] or sweep [<start>] [<derivations>]",
                     "Sweep extended address derivation chain (legacy accounts)",
                 ),
+                ("unlock", "Unlock a stealth account for scanning and spending"),
+                ("lock", "Lock a stealth account (clear keys from memory)"),
                 // ("purge", "Purge an account from the wallet"),
             ],
             None,

@@ -347,15 +347,9 @@ impl KaspaCli {
                                     this.term().refresh_prompt();
 
                                 },
-                                Events::WalletHint {
-                                    hint
-                                } => {
-
-                                    if let Some(hint) = hint {
-                                        tprintln!(this, "\nYour wallet hint is: {hint}\n");
-                                    }
-
-                                },
+                                Events::WalletHint { hint: Some(hint) } => {
+                                    tprintln!(this, "\nYour wallet hint is: {hint}\n");
+                                }
                                 Events::AccountSelection { .. } => { },
                                 Events::WalletCreate { .. } => { },
                                 Events::WalletError { .. } => { },
@@ -365,6 +359,25 @@ impl KaspaCli {
                                 Events::WalletReload { .. } => { },
                                 Events::WalletClose => {
                                     this.term().refresh_prompt();
+                                },
+                                Events::MasterAnchorCreated { info } => {
+                                    if !this.is_mutted() {
+                                        let anchor = info.anchor.clone().unwrap_or_else(|| "n/a".to_string());
+                                        let level = info.level.map(|lvl| format!("L{lvl}")).unwrap_or_else(|| "-".to_string());
+                                        let cipher_state = if info.is_encrypted { "sealed" } else { "plain" };
+                                        tprintln!(
+                                            this,
+                                            "{NOTIFY} MLDSA master {} registered (anchor {anchor}, level {level}, {cipher_state})",
+                                            info.id
+                                        );
+                                    }
+                                },
+                                Events::MasterSeedExported { master_id, .. } => {
+                                    let warning = style("WARNING").yellow().to_string();
+                                    tprintln!(
+                                        this,
+                                        "{NOTIFY} {warning}: MLDSA master {master_id} seed has been exported."
+                                    );
                                 },
                                 Events::PrvKeyDataCreate { .. } => { },
                                 Events::AccountDeactivation { .. } => { },
@@ -484,6 +497,26 @@ impl KaspaCli {
 
                                     this.term().refresh_prompt();
                                 }
+                                // Stealth scan progress notification
+                                // last_daa_score is omitted as blocks/claimed are more meaningful to users
+                                Events::StealthScanProgress {
+                                    account_id,
+                                    processed_blocks,
+                                    last_daa_score: _,
+                                    claimed,
+                                } => {
+                                    if !this.is_mutted() {
+                                        let id = account_id.short();
+                                        tprintln!(
+                                            this,
+                                            "{NOTIFY} {} {id}: scanned {} blocks, found {} UTXOs",
+                                            style("stealth".pad_to_width(8)).cyan(),
+                                            processed_blocks.separated_string(),
+                                            claimed.separated_string()
+                                        );
+                                    }
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -504,11 +537,11 @@ impl KaspaCli {
     /// Asks uses for a wallet secret, checks the supplied account's private key info
     /// and if it requires a payment secret, asks for it as well.
     pub(crate) async fn ask_wallet_secret(&self, account: Option<&Arc<dyn Account>>) -> Result<(Secret, Option<Secret>)> {
-        let wallet_secret = Secret::new(self.term().ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+        let wallet_secret = helpers::string_to_secret(self.term().ask(true, "Enter wallet password: ").await?);
 
         let payment_secret = if let Some(account) = account {
             if self.wallet().is_account_key_encrypted(account).await?.is_some_and(|f| f) {
-                Some(Secret::new(self.term().ask(true, "Enter payment password: ").await?.trim().as_bytes().to_vec()))
+                Some(helpers::string_to_secret(self.term().ask(true, "Enter payment password: ").await?))
             } else {
                 None
             }

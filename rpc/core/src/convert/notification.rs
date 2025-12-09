@@ -37,7 +37,7 @@ impl From<&consensus_notify::Notification> for Notification {
 
 impl From<&consensus_notify::BlockAddedNotification> for BlockAddedNotification {
     fn from(item: &consensus_notify::BlockAddedNotification) -> Self {
-        Self { block: Arc::new((&item.block).into()) }
+        Self { block: Arc::new((&item.block).into()), stealth_outputs: None }
     }
 }
 

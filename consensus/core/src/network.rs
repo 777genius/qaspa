@@ -77,8 +77,8 @@ impl TryFrom<Prefix> for NetworkType {
     type Error = NetworkTypeError;
     fn try_from(prefix: Prefix) -> Result<Self, Self::Error> {
         match prefix {
-            Prefix::Mainnet => Ok(NetworkType::Mainnet),
-            Prefix::Testnet => Ok(NetworkType::Testnet),
+            Prefix::Mainnet | Prefix::StealthMainnet => Ok(NetworkType::Mainnet),
+            Prefix::Testnet | Prefix::StealthTestnet => Ok(NetworkType::Testnet),
             Prefix::Simnet => Ok(NetworkType::Simnet),
             Prefix::Devnet => Ok(NetworkType::Devnet),
             #[allow(unreachable_patterns)]

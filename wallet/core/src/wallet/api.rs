@@ -2,6 +2,7 @@
 //! [`WalletApi`] trait implementation for the [`Wallet`] struct.
 //!
 
+use crate::account::delegation::DelegationId;
 use crate::api::{message::*, traits::WalletApi};
 use crate::events::Events;
 use crate::imports::*;
@@ -205,6 +206,58 @@ impl WalletApi for super::Wallet {
         Ok(WalletChangeSecretResponse {})
     }
 
+    // ---------------------------------------------------------------------
+    // Delegations (Iteration 4)
+    // ---------------------------------------------------------------------
+
+    async fn delegation_create_call(self: Arc<Self>, request: DelegationCreateRequest) -> Result<DelegationCreateResponse> {
+        let DelegationCreateRequest { wallet_secret, master_anchor, stealth_account_id, valid_for_daa } = request;
+        let bytes = Vec::from_hex(&master_anchor).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
+        let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
+
+        let delegation_id = self.link_stealth_to_master(&wallet_secret, stealth_account_id, anchor, 0, valid_for_daa).await?;
+        Ok(DelegationCreateResponse { delegation_id: delegation_id.0 })
+    }
+
+    async fn delegation_list_call(self: Arc<Self>, request: DelegationListRequest) -> Result<DelegationListResponse> {
+        let DelegationListRequest { master_anchor } = request;
+        let bytes = Vec::from_hex(&master_anchor).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
+        let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
+
+        let delegations = self.list_delegations_for_master(anchor).await?.into_iter().map(|(_, rec)| rec).collect();
+        Ok(DelegationListResponse { delegations })
+    }
+
+    async fn delegation_revoke_call(self: Arc<Self>, request: DelegationRevokeRequest) -> Result<DelegationRevokeResponse> {
+        let DelegationRevokeRequest { wallet_secret, delegation_id } = request;
+        self.revoke_delegation(&wallet_secret, DelegationId(delegation_id)).await?;
+        Ok(DelegationRevokeResponse {})
+    }
+
+    async fn master_delegation_build_call(
+        self: Arc<Self>,
+        request: MasterDelegationBuildRequest,
+    ) -> Result<MasterDelegationBuildResponse> {
+        let wallet_secret = request.wallet_secret.clone();
+        self.build_master_delegation_request(&wallet_secret, request).await
+    }
+
+    async fn master_delegation_sign_call(
+        self: Arc<Self>,
+        request: MasterDelegationSignRequest,
+    ) -> Result<MasterDelegationSignResponse> {
+        let MasterDelegationSignRequest { wallet_secret, request, force_network_mismatch } = request;
+        self.sign_master_delegation_request(&wallet_secret, request, force_network_mismatch).await
+    }
+
+    async fn master_delegation_apply_call(
+        self: Arc<Self>,
+        request: MasterDelegationApplyRequest,
+    ) -> Result<MasterDelegationApplyResponse> {
+        let MasterDelegationApplyRequest { wallet_secret, request, response, force_network_mismatch } = request;
+        self.apply_master_delegation_response(&wallet_secret, request, response, force_network_mismatch).await
+    }
+
     async fn wallet_export_call(self: Arc<Self>, request: WalletExportRequest) -> Result<WalletExportResponse> {
         let WalletExportRequest { wallet_secret, include_transactions } = request;
 
@@ -247,6 +300,17 @@ impl WalletApi for super::Wallet {
         let prv_key_data = self.store().as_prv_key_data_store()?.load_key_data(&wallet_secret, &prv_key_data_id).await?;
 
         Ok(PrvKeyDataGetResponse { prv_key_data })
+    }
+
+    async fn master_anchor_list_call(self: Arc<Self>, _request: MasterAnchorListRequest) -> Result<MasterAnchorListResponse> {
+        let anchors = self.master_anchor_infos().await?;
+        Ok(MasterAnchorListResponse { anchors })
+    }
+
+    async fn master_seed_export_call(self: Arc<Self>, request: MasterSeedExportRequest) -> Result<MasterSeedExportResponse> {
+        let MasterSeedExportRequest { wallet_secret, master_id, confirmation } = request;
+        let seed_hex = self.export_master_seed_hex(&wallet_secret, &master_id, &confirmation).await?;
+        Ok(MasterSeedExportResponse { seed_hex })
     }
 
     async fn accounts_rename_call(self: Arc<Self>, request: AccountsRenameRequest) -> Result<AccountsRenameResponse> {
@@ -392,16 +456,35 @@ impl WalletApi for super::Wallet {
     }
 
     async fn accounts_send_call(self: Arc<Self>, request: AccountsSendRequest) -> Result<AccountsSendResponse> {
-        let AccountsSendRequest { account_id, wallet_secret, payment_secret, destination, fee_rate, priority_fee_sompi, payload } =
-            request;
+        let AccountsSendRequest {
+            account_id,
+            wallet_secret,
+            payment_secret,
+            destination,
+            fee_rate,
+            priority_fee_sompi,
+            fee_randomization,
+            payload,
+        } = request;
 
         let guard = self.guard();
         let guard = guard.lock().await;
         let account = self.get_account_by_id(&account_id, &guard).await?.ok_or(Error::AccountNotFound(account_id))?;
 
         let abortable = Abortable::new();
-        let (generator_summary, transaction_ids) =
-            account.send(destination, fee_rate, priority_fee_sompi, payload, wallet_secret, payment_secret, &abortable, None).await?;
+        let (generator_summary, transaction_ids) = account
+            .send(
+                destination,
+                fee_rate,
+                priority_fee_sompi,
+                fee_randomization,
+                payload,
+                wallet_secret,
+                payment_secret,
+                &abortable,
+                None,
+            )
+            .await?;
 
         Ok(AccountsSendResponse { generator_summary, transaction_ids })
     }
@@ -462,6 +545,7 @@ impl WalletApi for super::Wallet {
             fee_rate,
             priority_fee_sompi,
             transfer_amount_sompi,
+            fee_randomization,
         } = request;
 
         let guard = self.guard();
@@ -477,6 +561,7 @@ impl WalletApi for super::Wallet {
                 transfer_amount_sompi,
                 fee_rate,
                 priority_fee_sompi.unwrap_or(Fees::SenderPays(0)),
+                fee_randomization,
                 wallet_secret,
                 payment_secret,
                 &abortable,
@@ -591,7 +676,7 @@ impl WalletApi for super::Wallet {
     }
 
     async fn accounts_estimate_call(self: Arc<Self>, request: AccountsEstimateRequest) -> Result<AccountsEstimateResponse> {
-        let AccountsEstimateRequest { account_id, destination, fee_rate, priority_fee_sompi, payload } = request;
+        let AccountsEstimateRequest { account_id, destination, fee_rate, priority_fee_sompi, fee_randomization, payload } = request;
 
         let guard = self.guard();
         let guard = guard.lock().await;
@@ -610,7 +695,7 @@ impl WalletApi for super::Wallet {
 
         let abortable = Abortable::new();
         self.inner.estimation_abortables.lock().unwrap().insert(account_id, abortable.clone());
-        let result = account.estimate(destination, fee_rate, priority_fee_sompi, payload, &abortable).await;
+        let result = account.estimate(destination, fee_rate, priority_fee_sompi, fee_randomization, payload, &abortable).await;
         self.inner.estimation_abortables.lock().unwrap().remove(&account_id);
 
         Ok(AccountsEstimateResponse { generator_summary: result? })

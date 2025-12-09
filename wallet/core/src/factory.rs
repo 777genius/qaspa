@@ -2,6 +2,7 @@
 //! Wallet Account factories (Account type registration and creation).
 //!
 
+use crate::account::variants::mldsa_master;
 use crate::imports::*;
 use crate::result::Result;
 use std::sync::OnceLock;
@@ -35,6 +36,8 @@ pub fn factories() -> &'static FactoryMap {
             (MULTISIG_ACCOUNT_KIND.into(), Arc::new(multisig::Ctor {})),
             (KEYPAIR_ACCOUNT_KIND.into(), Arc::new(keypair::Ctor {})),
             (BIP32_WATCH_ACCOUNT_KIND.into(), Arc::new(bip32watch::Ctor {})),
+            (STEALTH_ACCOUNT_KIND.into(), Arc::new(stealth::Ctor {})),
+            (MLDSA_MASTER_ACCOUNT_KIND.into(), Arc::new(mldsa_master::Ctor {})),
         ];
 
         let external = EXTERNAL.get_or_init(|| Mutex::new(AHashMap::new())).lock().unwrap().clone();

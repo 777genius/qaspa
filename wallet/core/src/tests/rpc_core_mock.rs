@@ -131,6 +131,22 @@ impl RpcApi for RpcCoreMock {
         Err(RpcError::NotImplemented)
     }
 
+    async fn register_mldsa_anchor_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: RegisterMldsaAnchorRequest,
+    ) -> RpcResult<RegisterMldsaAnchorResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
+    async fn list_mldsa_delegations_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: ListMldsaDelegationsRequest,
+    ) -> RpcResult<ListMldsaDelegationsResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
     async fn get_sync_status_call(
         &self,
         _connection: Option<&DynRpcConnection>,
@@ -307,6 +323,14 @@ impl RpcApi for RpcCoreMock {
         Err(RpcError::NotImplemented)
     }
 
+    async fn get_utxos_by_script_version_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: GetUtxosByScriptVersionRequest,
+    ) -> RpcResult<GetUtxosByScriptVersionResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
     async fn get_sink_blue_score_call(
         &self,
         _connection: Option<&DynRpcConnection>,
@@ -387,6 +411,14 @@ impl RpcApi for RpcCoreMock {
         Err(RpcError::NotImplemented)
     }
 
+    async fn get_block_view_tags_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        _request: GetBlockViewTagsRequest,
+    ) -> RpcResult<GetBlockViewTagsResponse> {
+        Err(RpcError::NotImplemented)
+    }
+
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Notification API
 
@@ -407,5 +439,21 @@ impl RpcApi for RpcCoreMock {
     async fn stop_notify(&self, id: ListenerId, scope: Scope) -> RpcResult<()> {
         self.core_notifier.try_stop_notify(id, scope)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_mldsa_anchor_calls_not_implemented() {
+        let rpc = RpcCoreMock::new();
+        let anchor = [0u8; 32];
+        let register = rpc.register_mldsa_anchor(anchor).await;
+        assert!(matches!(register, Err(RpcError::NotImplemented)));
+
+        let list = rpc.list_mldsa_delegations(anchor).await;
+        assert!(matches!(list, Err(RpcError::NotImplemented)));
     }
 }

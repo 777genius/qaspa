@@ -134,6 +134,9 @@ pub enum Error {
 
     #[error("To hex serialization error")]
     PskbSerializeToHexError,
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 impl Error {

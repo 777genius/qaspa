@@ -1,0 +1,49 @@
+[package]
+name = "kaspa-mldsa"
+description = "ML-DSA (CRYSTALS-Dilithium) post-quantum signatures for QUBIC"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+# Post-quantum cryptography (FIPS 204 final)
+ml-dsa.workspace = true
+signature.workspace = true
+
+# Random number generation for keypair
+rand.workspace = true
+rand_core.workspace = true
+getrandom.workspace = true
+
+# Serialization
+borsh = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+
+# Utilities
+thiserror.workspace = true
+hex.workspace = true
+hkdf.workspace = true
+sha3.workspace = true
+zeroize.workspace = true
+
+# Kaspa dependencies
+kaspa-hashes.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+
+[features]
+default = []
+borsh = ["dep:borsh"]
+wasm = []
+
+[[bench]]
+name = "mldsa_bench"
+harness = false

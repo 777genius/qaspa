@@ -23,12 +23,18 @@ pub enum WalletSettings {
     Server,
     #[describe("Wallet storage or file name (default 'kaspa')")]
     Wallet,
+    #[describe("Enable automatic MLDSA master derivation (default true)")]
+    EnableMldsaMaster,
 }
 
 #[async_trait]
 impl DefaultSettings for WalletSettings {
     async fn defaults() -> Vec<(Self, Value)> {
-        vec![(Self::Server, to_value("public").unwrap()), (Self::Wallet, to_value("kaspa").unwrap())]
+        vec![
+            (Self::Server, to_value("public").unwrap()),
+            (Self::Wallet, to_value("kaspa").unwrap()),
+            (Self::EnableMldsaMaster, to_value(true).unwrap()),
+        ]
     }
 }
 

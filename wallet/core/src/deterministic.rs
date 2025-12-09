@@ -2,12 +2,13 @@
 //! Deterministic byte sequence generation (used by Account ids).
 //!
 
-pub use crate::account::{bip32, bip32watch, keypair, legacy, multisig};
+pub use crate::account::{bip32, bip32watch, keypair, legacy, mldsa_master, multisig, stealth};
 use crate::encryption::sha256_hash;
 use crate::imports::*;
 use crate::storage::PrvKeyDataId;
 use kaspa_hashes::Hash;
 use kaspa_utils::as_slice::AsSlice;
+use kaspa_wallet_keys::keypair_mldsa::MasterAnchor;
 use secp256k1::PublicKey;
 
 /// Deterministic byte sequence derived from account data (can be used for auxiliary data storage encryption).
@@ -122,6 +123,19 @@ pub fn from_bip32<const N: usize>(prv_key_data_id: &PrvKeyDataId, data: &bip32::
     make_hashes(hashable)
 }
 
+/// Create deterministic hashes from stealth account data.
+pub fn from_stealth<const N: usize>(prv_key_data_id: &PrvKeyDataId, data: &stealth::Payload) -> [Hash; N] {
+    let hashable = DeterministicHashData {
+        account_kind: &stealth::STEALTH_ACCOUNT_KIND.into(),
+        prv_key_data_ids: &Some([*prv_key_data_id]),
+        ecdsa: Some(false), // Stealth uses Schnorr, not ECDSA
+        account_index: Some(data.account_index),
+        secp256k1_public_key: None,
+        data: Some(data.scan_pubkey.clone()), // Unique identifier
+    };
+    make_hashes(hashable)
+}
+
 /// Create deterministic hashes from legacy account data.
 pub fn from_legacy<const N: usize>(prv_key_data_id: &PrvKeyDataId, _data: &legacy::Payload) -> [Hash; N] {
     let hashable = DeterministicHashData {
@@ -199,6 +213,19 @@ pub fn from_bip32_watch<const N: usize>(public_key: &PublicKey) -> [Hash; N] {
         account_index: Some(0),
         secp256k1_public_key: Some(public_key.serialize().to_vec()),
         data: None,
+    };
+    make_hashes(hashable)
+}
+
+/// Create deterministic hashes from MLDSA master account data (anchor + prv_key_data_id).
+pub fn from_mldsa_master<const N: usize>(prv_key_data_id: &PrvKeyDataId, anchor: &MasterAnchor) -> [Hash; N] {
+    let hashable = DeterministicHashData {
+        account_kind: &mldsa_master::MLDSA_MASTER_ACCOUNT_KIND.into(),
+        prv_key_data_ids: &Some([*prv_key_data_id]),
+        ecdsa: None,
+        account_index: None,
+        secp256k1_public_key: None,
+        data: Some(anchor.as_bytes().to_vec()),
     };
     make_hashes(hashable)
 }

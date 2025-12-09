@@ -1030,11 +1030,77 @@ mod mockery {
                 has_utxo_index: true,
                 is_synced: false,
                 virtual_daa_score: mock(),
+                has_stealth_support: true,
+                has_mldsa_master: true,
             }
         }
     }
 
     test!(GetServerInfoResponse);
+
+    impl Mock for RegisterMldsaAnchorRequest {
+        fn mock() -> Self {
+            let mut anchor = [0u8; 32];
+            rand::thread_rng().fill(&mut anchor);
+            RegisterMldsaAnchorRequest { anchor, metadata: Some("meta".to_string()) }
+        }
+    }
+
+    test!(RegisterMldsaAnchorRequest);
+
+    impl Mock for RegisterMldsaAnchorResponse {
+        fn mock() -> Self {
+            RegisterMldsaAnchorResponse { accepted: true }
+        }
+    }
+
+    test!(RegisterMldsaAnchorResponse);
+
+    impl Mock for ListMldsaDelegationsRequest {
+        fn mock() -> Self {
+            let mut anchor = [0u8; 32];
+            rand::thread_rng().fill(&mut anchor);
+            ListMldsaDelegationsRequest { anchor }
+        }
+    }
+
+    test!(ListMldsaDelegationsRequest);
+
+    impl Mock for RpcDelegationRecord {
+        fn mock() -> Self {
+            let mut anchor = [0u8; 32];
+            rand::thread_rng().fill(&mut anchor);
+            RpcDelegationRecord {
+                anchor,
+                account_id: vec![1, 2, 3],
+                spend_pubkey: {
+                    let mut bytes = [0u8; 32];
+                    rand::thread_rng().fill(&mut bytes);
+                    bytes
+                },
+                scan_pubkey: {
+                    let mut bytes = [0u8; 32];
+                    rand::thread_rng().fill(&mut bytes);
+                    bytes
+                },
+                valid_from_daa: mock(),
+                valid_until_daa: Some(mock()),
+                nonce: mock(),
+                status: "active".to_string(),
+                signature: vec![0xaa, 0xbb],
+            }
+        }
+    }
+
+    test!(RpcDelegationRecord);
+
+    impl Mock for ListMldsaDelegationsResponse {
+        fn mock() -> Self {
+            ListMldsaDelegationsResponse { delegations: vec![RpcDelegationRecord::mock()] }
+        }
+    }
+
+    test!(ListMldsaDelegationsResponse);
 
     impl Mock for GetSyncStatusRequest {
         fn mock() -> Self {
@@ -1068,9 +1134,78 @@ mod mockery {
 
     test!(GetDaaScoreTimestampEstimateResponse);
 
+    // GetBlockViewTags
+    impl Mock for RpcStealthOutputInfo {
+        fn mock() -> Self {
+            RpcStealthOutputInfo {
+                transaction_id: mock(),
+                output_index: mock(),
+                view_tag: 42,
+                ephemeral_pubkey: "02".to_string() + &"0".repeat(64),
+                destination_pubkey: "0".repeat(64),
+                amount: mock(),
+                is_coinbase: false,
+                anchor_hint: Some("deadbeef".to_string()),
+            }
+        }
+    }
+
+    test!(RpcStealthOutputInfo);
+
+    #[test]
+    fn rpc_stealth_output_info_supports_legacy_version() {
+        let info = RpcStealthOutputInfo::mock();
+        let mut buffer = Vec::new();
+        let writer = &mut buffer;
+        store!(u16, &1, writer).unwrap();
+        store!(RpcTransactionId, &info.transaction_id, writer).unwrap();
+        store!(u32, &info.output_index, writer).unwrap();
+        store!(u8, &info.view_tag, writer).unwrap();
+        store!(String, &info.ephemeral_pubkey, writer).unwrap();
+        store!(String, &info.destination_pubkey, writer).unwrap();
+        store!(u64, &info.amount, writer).unwrap();
+
+        let reader = &mut buffer.as_slice();
+        use workflow_serializer::serializer::Deserializer as RpcDeserializer;
+        let decoded = <RpcStealthOutputInfo as RpcDeserializer>::deserialize(reader).unwrap();
+        assert!(!decoded.is_coinbase);
+        assert_eq!(decoded.transaction_id, info.transaction_id);
+        assert_eq!(decoded.output_index, info.output_index);
+        assert!(decoded.anchor_hint.is_none());
+    }
+
+    #[test]
+    fn rpc_stealth_output_info_anchor_hint_roundtrip() {
+        let info = RpcStealthOutputInfo::mock();
+        let mut buffer = Vec::new();
+        let writer = &mut buffer;
+        workflow_serializer::serializer::Serializer::serialize(&info, writer).unwrap();
+
+        let reader = &mut buffer.as_slice();
+        use workflow_serializer::serializer::Deserializer as RpcDeserializer;
+        let decoded = <RpcStealthOutputInfo as RpcDeserializer>::deserialize(reader).unwrap();
+        assert_eq!(decoded.anchor_hint, info.anchor_hint);
+    }
+
+    impl Mock for GetBlockViewTagsRequest {
+        fn mock() -> Self {
+            GetBlockViewTagsRequest { hash: mock() }
+        }
+    }
+
+    test!(GetBlockViewTagsRequest);
+
+    impl Mock for GetBlockViewTagsResponse {
+        fn mock() -> Self {
+            GetBlockViewTagsResponse { block_hash: mock(), daa_score: mock(), stealth_outputs: vec![mock()] }
+        }
+    }
+
+    test!(GetBlockViewTagsResponse);
+
     impl Mock for NotifyBlockAddedRequest {
         fn mock() -> Self {
-            NotifyBlockAddedRequest { command: Command::Start }
+            NotifyBlockAddedRequest { command: Command::Start, include_stealth_outputs: true }
         }
     }
 
@@ -1086,7 +1221,7 @@ mod mockery {
 
     impl Mock for BlockAddedNotification {
         fn mock() -> Self {
-            BlockAddedNotification { block: mock() }
+            BlockAddedNotification { block: mock(), stealth_outputs: Some(vec![RpcStealthOutputInfo::mock()]) }
         }
     }
 

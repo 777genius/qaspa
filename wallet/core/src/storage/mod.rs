@@ -7,6 +7,8 @@ pub use crate::encryption::{Decrypted, Encryptable, Encrypted};
 pub mod account;
 pub mod address;
 pub mod binding;
+pub mod delegation_store;
+pub mod ephemeral_keys;
 pub mod hint;
 pub mod id;
 pub mod interface;
@@ -19,6 +21,8 @@ pub mod transaction;
 pub use account::{AccountSettings, AccountStorable, AccountStorage};
 pub use address::AddressBookEntry;
 pub use binding::{Binding, BindingT};
+pub use delegation_store::DelegationStore;
+pub use ephemeral_keys::{EphemeralKeyData, EphemeralKeyEntry, EphemeralKeyStatus, EphemeralKeyStore};
 pub use hint::Hint;
 pub use id::IdT;
 pub use interface::{

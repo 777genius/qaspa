@@ -50,3 +50,21 @@ At the end, you will get a mnemonic;  preserve that in case you need to reset th
 If receiving a lot of transactions, you can use `mute` and `track <type>` commands to mute and toggle specific types of notifications.
 
 Please use `help` to get a complete list of commands.
+
+## Fee Randomization
+
+Wallet SDK и RPC теперь поддерживают опциональную рандомизацию финального priority fee.  
+Можно задать диапазон надбавки в сомпи двумя полями:
+
+- `feeRandomizationMinSompi`
+- `feeRandomizationMaxSompi`
+
+Поля доступны в:
+
+- `IAccountsSendRequest`, `IAccountsEstimateRequest`, `IAccountsTransferRequest`
+- `IGeneratorSettingsObject` (низкоуровневый конструктор `Generator`)
+
+Диапазон применим только к финальной транзакции (relay-транзакции не меняются).  
+Если диапазон задан, кошелёк выбирает случайное значение `min..=max` и добавляет его к priority fee.  
+Сводка генератора (`GeneratorSummary`) содержит поле `randomFeeOffset`, чтобы можно было
+зафиксировать фактическую надбавку.

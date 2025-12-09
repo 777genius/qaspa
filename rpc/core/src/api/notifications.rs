@@ -9,7 +9,7 @@ use kaspa_notify::{
     notification::{full_featured, Notification as NotificationTrait},
     subscription::{
         context::SubscriptionContext,
-        single::{OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
+        single::{BlockAddedSubscription, OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
         Subscription,
     },
 };
@@ -48,6 +48,9 @@ pub enum Notification {
 
     #[display(fmt = "NewBlockTemplate notification")]
     NewBlockTemplate(NewBlockTemplateNotification),
+
+    #[display(fmt = "StealthUtxosChanged notification: {} removed, {} added", "_0.removed.len()", "_0.added.len()")]
+    StealthUtxosChanged(StealthUtxosChangedNotification),
 }
 }
 
@@ -64,6 +67,7 @@ impl Notification {
             Notification::VirtualDaaScoreChanged(v) => to_value(&v),
             Notification::SinkBlueScoreChanged(v) => to_value(&v),
             Notification::VirtualChainChanged(v) => to_value(&v),
+            Notification::StealthUtxosChanged(v) => to_value(&v),
         }
     }
 }
@@ -72,6 +76,24 @@ impl NotificationTrait for Notification {
     fn apply_overall_subscription(&self, subscription: &OverallSubscription, _context: &SubscriptionContext) -> Option<Self> {
         match subscription.active() {
             true => Some(self.clone()),
+            false => None,
+        }
+    }
+
+    fn apply_block_added_subscription(&self, subscription: &BlockAddedSubscription, _context: &SubscriptionContext) -> Option<Self> {
+        match subscription.active() {
+            true => {
+                if let Notification::BlockAdded(ref payload) = self {
+                    // If subscriber doesn't want stealth outputs, strip them
+                    if !subscription.include_stealth_outputs() && payload.stealth_outputs.is_some() {
+                        return Some(Notification::BlockAdded(BlockAddedNotification {
+                            block: payload.block.clone(),
+                            stealth_outputs: None,
+                        }));
+                    }
+                }
+                Some(self.clone())
+            }
             false => None,
         }
     }
@@ -157,6 +179,10 @@ impl Serializer for Notification {
                 store!(u16, &8, writer)?;
                 serialize!(NewBlockTemplateNotification, notification, writer)?;
             }
+            Notification::StealthUtxosChanged(notification) => {
+                store!(u16, &9, writer)?;
+                serialize!(StealthUtxosChangedNotification, notification, writer)?;
+            }
         }
         Ok(())
     }
@@ -201,6 +227,10 @@ impl Deserializer for Notification {
             8 => {
                 let notification = deserialize!(NewBlockTemplateNotification, reader)?;
                 Ok(Notification::NewBlockTemplate(notification))
+            }
+            9 => {
+                let notification = deserialize!(StealthUtxosChangedNotification, reader)?;
+                Ok(Notification::StealthUtxosChanged(notification))
             }
             _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid variant")),
         }

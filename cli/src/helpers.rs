@@ -1,9 +1,11 @@
 use dashmap::DashMap;
+use kaspa_wallet_core::prelude::Secret;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use workflow_log::log_info;
+use zeroize::Zeroize;
 
 pub fn toggle(flag: &Arc<AtomicBool>) -> &'static str {
     let v = !flag.load(Ordering::SeqCst);
@@ -78,5 +80,25 @@ impl Flags {
 
     pub fn get(&self, track: Track) -> bool {
         self.0.get(&track).unwrap().load(Ordering::SeqCst)
+    }
+}
+
+fn trim_owned(mut input: String) -> String {
+    let trimmed = input.trim().to_owned();
+    input.zeroize();
+    trimmed
+}
+
+pub fn string_to_secret(input: String) -> Secret {
+    Secret::from(trim_owned(input))
+}
+
+pub fn string_to_optional_secret(input: String) -> Option<Secret> {
+    if input.trim().is_empty() {
+        let mut owned = input;
+        owned.zeroize();
+        None
+    } else {
+        Some(string_to_secret(input))
     }
 }

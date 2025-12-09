@@ -3,18 +3,22 @@
 //!
 
 use crate::derivation::create_xpub_from_xprv;
+use crate::encryption::{decrypt_xchacha20poly1305, encrypt_xchacha20poly1305, Decrypted};
 use crate::imports::*;
 use kaspa_bip32::{ExtendedPrivateKey, ExtendedPublicKey, Language, Mnemonic};
+use kaspa_mldsa::MlDsaLevel;
 use kaspa_utils::hex::ToHex;
+use kaspa_wallet_keys::keypair_mldsa::MasterAnchor;
 use secp256k1::SecretKey;
 use xxhash_rust::xxh3::xxh3_64;
 
-#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
 pub enum PrvKeyDataVariantKind {
     Mnemonic,
     Bip39Seed,
     ExtendedPrivateKey,
     SecretKey,
+    MlDsaMaster,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -29,15 +33,26 @@ pub enum PrvKeyDataVariant {
     ExtendedPrivateKey(String),
     // secp256k1::SecretKey
     SecretKey(String),
+    MlDsaMaster(MlDsaMasterPayload),
 }
 
 impl BorshSerialize for PrvKeyDataVariant {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         StorageHeader::new(Self::MAGIC, Self::VERSION).serialize(writer)?;
         let kind = self.kind();
-        let string = self.get_string();
         BorshSerialize::serialize(&kind, writer)?;
-        BorshSerialize::serialize(string.as_str(), writer)?;
+
+        match self {
+            PrvKeyDataVariant::Mnemonic(value)
+            | PrvKeyDataVariant::Bip39Seed(value)
+            | PrvKeyDataVariant::ExtendedPrivateKey(value)
+            | PrvKeyDataVariant::SecretKey(value) => {
+                BorshSerialize::serialize(value.as_str(), writer)?;
+            }
+            PrvKeyDataVariant::MlDsaMaster(payload) => {
+                BorshSerialize::serialize(payload, writer)?;
+            }
+        }
 
         Ok(())
     }
@@ -49,13 +64,28 @@ impl BorshDeserialize for PrvKeyDataVariant {
             StorageHeader::deserialize_reader(reader)?.try_magic(Self::MAGIC)?.try_version(Self::VERSION)?;
 
         let kind: PrvKeyDataVariantKind = BorshDeserialize::deserialize_reader(reader)?;
-        let string: String = BorshDeserialize::deserialize_reader(reader)?;
 
         match kind {
-            PrvKeyDataVariantKind::Mnemonic => Ok(Self::Mnemonic(string)),
-            PrvKeyDataVariantKind::Bip39Seed => Ok(Self::Bip39Seed(string)),
-            PrvKeyDataVariantKind::ExtendedPrivateKey => Ok(Self::ExtendedPrivateKey(string)),
-            PrvKeyDataVariantKind::SecretKey => Ok(Self::SecretKey(string)),
+            PrvKeyDataVariantKind::Mnemonic => {
+                let string: String = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(Self::Mnemonic(string))
+            }
+            PrvKeyDataVariantKind::Bip39Seed => {
+                let string: String = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(Self::Bip39Seed(string))
+            }
+            PrvKeyDataVariantKind::ExtendedPrivateKey => {
+                let string: String = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(Self::ExtendedPrivateKey(string))
+            }
+            PrvKeyDataVariantKind::SecretKey => {
+                let string: String = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(Self::SecretKey(string))
+            }
+            PrvKeyDataVariantKind::MlDsaMaster => {
+                let payload: MlDsaMasterPayload = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(Self::MlDsaMaster(payload))
+            }
         }
     }
 }
@@ -70,6 +100,7 @@ impl PrvKeyDataVariant {
             PrvKeyDataVariant::Bip39Seed(_) => PrvKeyDataVariantKind::Bip39Seed,
             PrvKeyDataVariant::ExtendedPrivateKey(_) => PrvKeyDataVariantKind::ExtendedPrivateKey,
             PrvKeyDataVariant::SecretKey(_) => PrvKeyDataVariantKind::SecretKey,
+            PrvKeyDataVariant::MlDsaMaster(_) => PrvKeyDataVariantKind::MlDsaMaster,
         }
     }
 
@@ -81,12 +112,17 @@ impl PrvKeyDataVariant {
         PrvKeyDataVariant::SecretKey(secret_key.secret_bytes().to_vec().to_hex())
     }
 
+    pub fn from_mldsa_master(payload: MlDsaMasterPayload) -> Self {
+        PrvKeyDataVariant::MlDsaMaster(payload)
+    }
+
     pub fn get_string(&self) -> Zeroizing<String> {
         match self {
             PrvKeyDataVariant::Mnemonic(s) => Zeroizing::new(s.clone()),
             PrvKeyDataVariant::Bip39Seed(s) => Zeroizing::new(s.clone()),
             PrvKeyDataVariant::ExtendedPrivateKey(s) => Zeroizing::new(s.clone()),
             PrvKeyDataVariant::SecretKey(s) => Zeroizing::new(s.clone()),
+            PrvKeyDataVariant::MlDsaMaster(payload) => Zeroizing::new(payload.key_id()),
         }
     }
 
@@ -103,6 +139,7 @@ impl Zeroize for PrvKeyDataVariant {
             PrvKeyDataVariant::Bip39Seed(s) => s.zeroize(),
             PrvKeyDataVariant::ExtendedPrivateKey(s) => s.zeroize(),
             PrvKeyDataVariant::SecretKey(s) => s.zeroize(),
+            PrvKeyDataVariant::MlDsaMaster(payload) => payload.zeroize(),
         }
     }
 }
@@ -113,6 +150,62 @@ impl Drop for PrvKeyDataVariant {
 }
 
 impl ZeroizeOnDrop for PrvKeyDataVariant {}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+pub struct MlDsaMasterPayload {
+    level: u8,
+    anchor: [u8; 32],
+    seed_cipher: Vec<u8>,
+}
+
+impl MlDsaMasterPayload {
+    pub fn new(level: MlDsaLevel, anchor: MasterAnchor, seed_cipher: Vec<u8>) -> Self {
+        Self { level: level as u8, anchor: *anchor.as_bytes(), seed_cipher }
+    }
+
+    pub fn level(&self) -> Option<MlDsaLevel> {
+        MlDsaLevel::from_u8(self.level)
+    }
+
+    pub fn anchor(&self) -> MasterAnchor {
+        MasterAnchor::new(self.anchor)
+    }
+
+    pub fn seed_cipher(&self) -> &[u8] {
+        &self.seed_cipher
+    }
+
+    fn key_id(&self) -> String {
+        format!("mldsa:{:02x}:{}", self.level, self.anchor.to_vec().to_hex())
+    }
+
+    pub fn decrypt_seed(&self, wallet_secret: &Secret) -> Result<Zeroizing<Vec<u8>>> {
+        let decrypted = decrypt_xchacha20poly1305(self.seed_cipher(), wallet_secret)?;
+        Ok(Zeroizing::new(decrypted.as_ref().to_vec()))
+    }
+
+    pub fn reencrypt_seed(&mut self, old_secret: &Secret, new_secret: &Secret) -> Result<()> {
+        let decrypted = decrypt_xchacha20poly1305(self.seed_cipher(), old_secret)?;
+        let new_cipher = encrypt_xchacha20poly1305(decrypted.as_ref(), new_secret)?;
+        self.seed_cipher = new_cipher;
+        Ok(())
+    }
+}
+
+impl Zeroize for MlDsaMasterPayload {
+    fn zeroize(&mut self) {
+        self.anchor.zeroize();
+        self.seed_cipher.zeroize();
+    }
+}
+
+impl Drop for MlDsaMasterPayload {
+    fn drop(&mut self) {
+        self.zeroize()
+    }
+}
+
+impl ZeroizeOnDrop for MlDsaMasterPayload {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]
@@ -127,6 +220,10 @@ impl PrvKeyDataPayload {
 
     pub fn try_new_with_secret_key(secret_key: SecretKey) -> Result<Self> {
         Ok(Self { prv_key_variant: PrvKeyDataVariant::from_secret_key(secret_key) })
+    }
+
+    pub fn try_new_with_mldsa_master(payload: MlDsaMasterPayload) -> Result<Self> {
+        Ok(Self { prv_key_variant: PrvKeyDataVariant::from_mldsa_master(payload) })
     }
 
     pub fn get_xprv(&self, payment_secret: Option<&Secret>) -> Result<ExtendedPrivateKey<SecretKey>> {
@@ -147,7 +244,7 @@ impl PrvKeyDataPayload {
                 let xkey: ExtendedPrivateKey<SecretKey> = extended_private_key.parse()?;
                 Ok(xkey)
             }
-            PrvKeyDataVariant::SecretKey(_) => Err(Error::XPrvSupport),
+            PrvKeyDataVariant::SecretKey(_) | PrvKeyDataVariant::MlDsaMaster(_) => Err(Error::XPrvSupport),
         }
     }
 
@@ -167,6 +264,28 @@ impl PrvKeyDataPayload {
             PrvKeyDataVariant::SecretKey(private_key) => Ok(Some(SecretKey::from_str(private_key)?)),
             _ => Ok(None),
         }
+    }
+
+    pub fn as_mldsa_master(&self) -> Result<Option<MlDsaMasterPayload>> {
+        match &self.prv_key_variant {
+            PrvKeyDataVariant::MlDsaMaster(payload) => Ok(Some(payload.clone())),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn as_mldsa_master_mut(&mut self) -> Option<&mut MlDsaMasterPayload> {
+        match &mut self.prv_key_variant {
+            PrvKeyDataVariant::MlDsaMaster(payload) => Some(payload),
+            _ => None,
+        }
+    }
+
+    pub fn reencrypt_mldsa_master_seed(&mut self, old_secret: &Secret, new_secret: &Secret) -> Result<bool> {
+        if let Some(payload) = self.as_mldsa_master_mut() {
+            payload.reencrypt_seed(old_secret, new_secret)?;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     pub fn id(&self) -> PrvKeyDataId {
@@ -263,6 +382,33 @@ impl PrvKeyData {
 
         Ok(prv_key_data)
     }
+
+    pub fn try_new_mldsa_master(payload: MlDsaMasterPayload) -> Result<Self> {
+        let payload = PrvKeyDataPayload::try_new_with_mldsa_master(payload)?;
+        let id = payload.id();
+        Ok(Self { id, payload: Encryptable::Plain(payload), name: None })
+    }
+
+    pub fn as_mldsa_master(&self, payment_secret: Option<&Secret>) -> Result<Option<MlDsaMasterPayload>> {
+        let payload = self.payload.decrypt(payment_secret)?;
+        payload.as_mldsa_master()
+    }
+
+    pub fn reencrypt_mldsa_master_seed(&mut self, old_secret: &Secret, new_secret: &Secret) -> Result<bool> {
+        match &mut self.payload {
+            Encryptable::Plain(payload) => payload.reencrypt_mldsa_master_seed(old_secret, new_secret),
+            Encryptable::XChaCha20Poly1305(cipher) => {
+                let decrypted_payload = cipher.decrypt::<PrvKeyDataPayload>(old_secret)?.unwrap();
+                let mut payload = decrypted_payload;
+                let updated = payload.reencrypt_mldsa_master_seed(old_secret, new_secret)?;
+                if updated {
+                    let reencrypted = Decrypted::new(payload).encrypt(new_secret, cipher.kind())?;
+                    cipher.replace(reencrypted);
+                }
+                Ok(updated)
+            }
+        }
+    }
 }
 
 impl AsRef<PrvKeyData> for PrvKeyData {
@@ -288,6 +434,10 @@ impl Drop for PrvKeyData {
 impl PrvKeyData {
     pub fn new(id: PrvKeyDataId, name: Option<String>, payload: Encryptable<PrvKeyDataPayload>) -> Self {
         Self { id, payload, name }
+    }
+
+    pub fn is_payload_encrypted(&self) -> bool {
+        self.payload.is_encrypted()
     }
 
     pub fn try_new_from_mnemonic(
@@ -327,7 +477,18 @@ impl PrvKeyData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encryption::{encrypt_xchacha20poly1305, EncryptionKind};
     use crate::tests::*;
+    use kaspa_mldsa::MlDsaLevel;
+
+    fn sample_seed() -> Vec<u8> {
+        vec![0x55; 48]
+    }
+
+    fn sample_payload(secret: &Secret) -> Result<MlDsaMasterPayload> {
+        let cipher = encrypt_xchacha20poly1305(&sample_seed(), secret)?;
+        Ok(MlDsaMasterPayload::new(MlDsaLevel::Level2, MasterAnchor::new([0x11; 32]), cipher))
+    }
 
     #[test]
     fn test_storage_prv_key_data() -> Result<()> {
@@ -339,6 +500,75 @@ mod tests {
             PrvKeyDataVariant::Bip39Seed(s) => assert_eq!(s, "lorem ipsum"),
             _ => unreachable!("invalid prv key variant storage data"),
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_storage_prv_key_data_mldsa_master() -> Result<()> {
+        let payload = MlDsaMasterPayload::new(MlDsaLevel::Level2, MasterAnchor::new([1u8; 32]), vec![1, 2, 3]);
+        let storable_in = PrvKeyDataVariant::from_mldsa_master(payload.clone());
+        let guard = StorageGuard::new(&storable_in);
+        let storable_out = guard.validate()?;
+
+        match storable_out {
+            PrvKeyDataVariant::MlDsaMaster(ref restored) => {
+                assert_eq!(restored.level(), Some(MlDsaLevel::Level2));
+                assert_eq!(restored.anchor().as_bytes(), payload.anchor().as_bytes());
+            }
+            _ => unreachable!("invalid prv key variant storage data"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mldsa_master_payload_encrypt_decrypt() -> Result<()> {
+        let wallet_secret = Secret::from("unit-test-master");
+        let payload = sample_payload(&wallet_secret)?;
+        let decrypted = payload.decrypt_seed(&wallet_secret)?;
+        let decrypted_bytes: &Vec<u8> = decrypted.as_ref();
+        assert_eq!(decrypted_bytes.as_slice(), sample_seed().as_slice());
+        Ok(())
+    }
+
+    #[test]
+    fn test_mldsa_master_payload_borsh_roundtrip() -> Result<()> {
+        let wallet_secret = Secret::from("unit-test-master");
+        let payload = sample_payload(&wallet_secret)?;
+        let guard = StorageGuard::new(&payload);
+        let restored: MlDsaMasterPayload = guard.validate()?;
+        assert_eq!(restored.anchor(), payload.anchor());
+        assert_eq!(restored.level(), payload.level());
+        Ok(())
+    }
+
+    #[test]
+    fn test_mldsa_master_payload_reencrypt_seed() -> Result<()> {
+        let old_secret = Secret::from("old-secret");
+        let new_secret = Secret::from("new-secret");
+        let mut payload = sample_payload(&old_secret)?;
+        payload.reencrypt_seed(&old_secret, &new_secret)?;
+        payload.decrypt_seed(&new_secret)?;
+        assert!(payload.decrypt_seed(&old_secret).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_reencrypt_mldsa_master_seed_encrypted_payload() -> Result<()> {
+        let old_secret = Secret::from("old-secret");
+        let new_secret = Secret::from("new-secret");
+        let payload = sample_payload(&old_secret)?;
+        let mut prv = PrvKeyData::try_new_mldsa_master(payload)?;
+        prv.encrypt(&old_secret, EncryptionKind::XChaCha20Poly1305)?;
+
+        let updated = prv.reencrypt_mldsa_master_seed(&old_secret, &new_secret)?;
+        assert!(updated);
+
+        let decrypted_payload = prv.payload.decrypt(Some(&new_secret))?;
+        let master = decrypted_payload.as_mldsa_master()?.expect("master payload");
+        master.decrypt_seed(&new_secret)?;
+        assert!(master.decrypt_seed(&old_secret).is_err());
 
         Ok(())
     }

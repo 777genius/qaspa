@@ -3,12 +3,21 @@
 use super::extensions::*;
 use crate::account::descriptor::IAccountDescriptor;
 use crate::api::message::*;
+use crate::api::message::{
+    MasterDelegationApplyRequest, MasterDelegationApplyResponse, MasterDelegationBuildRequest, MasterDelegationBuildResponse,
+    MasterDelegationSignRequest, MasterDelegationSignResponse, MasterDelegationTarget,
+};
 use crate::imports::*;
-use crate::tx::{Fees, PaymentDestination, PaymentOutputs};
+use crate::message::{DelegationRecordHeaderV1, MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
+use crate::tx::{Fees, PaymentDestination, PaymentOutputs, RandomFeeSettings};
 use crate::wasm::api::keydata::PrvKeyDataVariantKind;
 use crate::wasm::tx::fees::IFees;
 use crate::wasm::tx::GeneratorSummary;
+use faster_hex::{hex_decode, hex_string};
 use js_sys::Array;
+use kaspa_mldsa::MlDsaLevel;
+use kaspa_utils::hex::ToHex;
+use kaspa_wallet_core::deterministic::AccountId;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use serde_wasm_bindgen::from_value;
 use workflow_wasm::serde::to_value;
@@ -33,6 +42,36 @@ const TS_CATEGORY_WALLET: &'static str = r#"
 "#;
 
 // ---
+
+fn js_value_to_optional_u64(value: JsValue, field: &str) -> Result<Option<u64>> {
+    if value.is_undefined() || value.is_null() {
+        return Ok(None);
+    }
+
+    if let Some(num) = value.as_f64() {
+        if !num.is_finite() {
+            return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
+        }
+        if num < 0.0 {
+            return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
+        }
+        return Ok(Some(num as u64));
+    }
+
+    Err(Error::InvalidArgument(format!("{field} must be a number")))
+}
+
+fn build_fee_randomization_from_js(min: Option<u64>, max: Option<u64>) -> Result<Option<RandomFeeSettings>> {
+    match (min, max) {
+        (None, None) => Ok(None),
+        (Some(min), Some(max)) => {
+            let settings = RandomFeeSettings { enabled: true, min_sompi: min, max_sompi: max };
+            settings.validate()?;
+            Ok(Some(settings))
+        }
+        _ => Err(Error::InvalidArgument("feeRandomizationMinSompi and feeRandomizationMaxSompi must both be provided".to_string())),
+    }
+}
 
 // declare! {
 //     IPingRequest,
@@ -690,6 +729,489 @@ try_from! ( _args: WalletImportResponse, IWalletImportResponse, {
 
 // ---
 
+// Delegations (Iteration 4)
+declare! {
+    IDelegationCreateRequest,
+    r#"
+    /**
+     * Create delegation linking stealth account to master anchor.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationCreateRequest {
+        walletSecret: string;
+        masterAnchor: string;
+        stealthAccountId: string;
+        validForDaa?: number;
+    }
+    "#,
+}
+
+try_from! ( args: IDelegationCreateRequest, DelegationCreateRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let master_anchor = args.get_string("masterAnchor")?;
+    let stealth_account_id = AccountId::from_hex(args.get_string("stealthAccountId")?.as_str())?;
+    let valid_for_daa = js_value_to_optional_u64(args.try_get_value("validForDaa")?.unwrap_or(JsValue::UNDEFINED), "validForDaa")?;
+    Ok(DelegationCreateRequest { wallet_secret, master_anchor, stealth_account_id, valid_for_daa })
+});
+
+declare! {
+    IDelegationCreateResponse,
+    r#"
+    /**
+     * Delegation id created.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationCreateResponse {
+        delegationId: number;
+    }
+    "#,
+}
+
+try_from! ( args: DelegationCreateResponse, IDelegationCreateResponse, {
+    let response = IDelegationCreateResponse::default();
+    response.set("delegationId", &JsValue::from_f64(args.delegation_id as f64))?;
+    Ok(response)
+});
+
+declare! {
+    IDelegationListRequest,
+    r#"
+    /**
+     * List delegations for master anchor.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationListRequest {
+        masterAnchor: string;
+    }
+    "#,
+}
+
+try_from! ( args: IDelegationListRequest, DelegationListRequest, {
+    let master_anchor = args.get_string("masterAnchor")?;
+    Ok(DelegationListRequest { master_anchor })
+});
+
+declare! {
+    IDelegationListResponse,
+    r#"
+    /**
+     * Delegations list.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationListResponse {
+        delegations: any[];
+    }
+    "#,
+}
+
+try_from! ( args: DelegationListResponse, IDelegationListResponse, {
+    let response = IDelegationListResponse::default();
+    response.set("delegations", &to_value(&args.delegations)?)?;
+    Ok(response)
+});
+
+declare! {
+    IDelegationRevokeRequest,
+    r#"
+    /**
+     * Revoke delegation by id.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationRevokeRequest {
+        walletSecret: string;
+        delegationId: number;
+    }
+    "#,
+}
+
+try_from! ( args: IDelegationRevokeRequest, DelegationRevokeRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let delegation_id = js_value_to_optional_u64(args.get_value("delegationId")?, "delegationId")?.ok_or(Error::InvalidArgument("delegationId required".into()))?;
+    Ok(DelegationRevokeRequest { wallet_secret, delegation_id })
+});
+
+declare! {
+    IDelegationRevokeResponse,
+    r#"
+    /**
+     * Delegation revoked.
+     *
+     * @category Wallet API
+     */
+    export interface IDelegationRevokeResponse { }
+    "#,
+}
+
+try_from! ( _args: DelegationRevokeResponse, IDelegationRevokeResponse, {
+    Ok(IDelegationRevokeResponse::default())
+});
+
+// ---
+// Master delegation (Iteration 6)
+
+declare! {
+    IMasterDelegationHeader,
+    r#"
+    /**
+     * Signable delegation header (no signature).
+     * @category Wallet API
+     */
+    export interface IMasterDelegationHeader {
+        version: number;
+        level: number;
+        anchor: HexString;
+        accountId: string;
+        spendPubkey: HexString;
+        scanPubkey: HexString;
+        validFromDaa: number;
+        validUntilDaa?: number;
+        nonce: number;
+        status: any;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationHeader, DelegationRecordHeaderV1, {
+    let anchor_hex = args.get_string("anchor")?;
+    let spend_hex = args.get_string("spendPubkey")?;
+    let scan_hex = args.get_string("scanPubkey")?;
+    let anchor = {
+        let mut out = [0u8; 32];
+        hex_decode(anchor_hex.as_bytes(), &mut out).map_err(|e|Error::custom(format!("anchor: {e}")))?;
+        out
+    };
+    let spend_pubkey = {
+        let mut out = [0u8; 32];
+        hex_decode(spend_hex.as_bytes(), &mut out).map_err(|e|Error::custom(format!("spendPubkey: {e}")))?;
+        out
+    };
+    let scan_pubkey = {
+        let mut out = [0u8; 32];
+        hex_decode(scan_hex.as_bytes(), &mut out).map_err(|e|Error::custom(format!("scanPubkey: {e}")))?;
+        out
+    };
+    Ok(DelegationRecordHeaderV1 {
+        version: args.get_u8("version").unwrap_or(1),
+        level: args.get_u8("level").unwrap_or(2),
+        anchor,
+        account_id: args.get_account_id("accountId")?,
+        spend_pubkey,
+        scan_pubkey,
+        valid_from_daa: args.get_u64("validFromDaa")?,
+        valid_until_daa: args.try_get_value("validUntilDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        nonce: args.get_u64("nonce")?,
+        status: serde_wasm_bindgen::from_value(args.get_value("status")?).map_err(|e|Error::custom(format!("status: {e}")))?,
+    })
+});
+
+try_from! ( args: DelegationRecordHeaderV1, IMasterDelegationHeader, {
+    let obj = IMasterDelegationHeader::default();
+    obj.set("version", &JsValue::from_f64(args.version as f64))?;
+    obj.set("level", &JsValue::from_f64(args.level as f64))?;
+    obj.set("anchor", &JsValue::from_str(&hex_string(&args.anchor)))?;
+    obj.set("accountId", &JsValue::from_str(&args.account_id.to_string()))?;
+    obj.set("spendPubkey", &JsValue::from_str(&hex_string(&args.spend_pubkey)))?;
+    obj.set("scanPubkey", &JsValue::from_str(&hex_string(&args.scan_pubkey)))?;
+    obj.set("validFromDaa", &JsValue::from_f64(args.valid_from_daa as f64))?;
+    if let Some(v) = args.valid_until_daa {
+        obj.set("validUntilDaa", &JsValue::from_f64(v as f64))?;
+    }
+    obj.set("nonce", &JsValue::from_f64(args.nonce as f64))?;
+    obj.set("status", &serde_wasm_bindgen::to_value(&args.status)?)?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationTarget,
+    r#"
+    /**
+     * Delegation target descriptor for offline builders.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationTarget {
+        accountId: string;
+        validFromDaa?: number;
+        validUntilDaa?: number;
+        nonceHint?: number;
+        status?: any;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationTarget, MasterDelegationTarget, {
+    Ok(MasterDelegationTarget {
+        account_id: args.get_account_id("accountId")?,
+        valid_from_daa: args.try_get_value("validFromDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        valid_until_daa: args.try_get_value("validUntilDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        nonce_hint: args.try_get_value("nonceHint")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        status: args
+            .try_get_value("status")?
+            .and_then(|v| serde_wasm_bindgen::from_value(v).ok()),
+    })
+});
+
+try_from! ( args: MasterDelegationTarget, IMasterDelegationTarget, {
+    let obj = IMasterDelegationTarget::default();
+    obj.set("accountId", &JsValue::from_str(&args.account_id.to_string()))?;
+    if let Some(v) = args.valid_from_daa {
+        obj.set("validFromDaa", &JsValue::from_f64(v as f64))?;
+    }
+    if let Some(v) = args.valid_until_daa {
+        obj.set("validUntilDaa", &JsValue::from_f64(v as f64))?;
+    }
+    if let Some(v) = args.nonce_hint {
+        obj.set("nonceHint", &JsValue::from_f64(v as f64))?;
+    }
+    if let Some(status) = args.status.as_ref() {
+        obj.set("status", &serde_wasm_bindgen::to_value(status)?)?;
+    }
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationBuildRequest,
+    r#"
+    /**
+     * Build offline delegation request (signable).
+     * @category Wallet API
+     */
+    export interface IMasterDelegationBuildRequest {
+        walletSecret: string;
+        masterAnchor?: HexString;
+        masterLevel?: number;
+        networkId?: NetworkId | string;
+        targets: IMasterDelegationTarget[];
+        createdAtUnixtime?: number;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationBuildRequest, MasterDelegationBuildRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let master_anchor = args.try_get_string("masterAnchor")?;
+    let master_level = args.try_get_value("masterLevel")?.and_then(|v| v.as_f64()).map(|v| v as u8);
+    let network_id = args.try_get::<NetworkId>("networkId")?;
+    let targets: Vec<MasterDelegationTarget> =
+        serde_wasm_bindgen::from_value(args.get_value("targets")?).map_err(|e|Error::custom(format!("targets: {e}")))?;
+    let created_at_unixtime = args.try_get_value("createdAtUnixtime")?.and_then(|v| v.as_f64()).map(|v| v as u64);
+    Ok(MasterDelegationBuildRequest { wallet_secret, master_anchor, master_level, network_id, targets, created_at_unixtime })
+});
+
+declare! {
+    IMasterDelegationBuildResponse,
+    r#"
+    /**
+     * Built delegation request body plus JSON representation.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationBuildResponse {
+        request: IMasterDelegationRequest;
+        requestJson: string;
+    }
+    "#,
+}
+
+try_from! ( args: MasterDelegationBuildResponse, IMasterDelegationBuildResponse, {
+    let obj = IMasterDelegationBuildResponse::default();
+    obj.set("request", &serde_wasm_bindgen::to_value(&args.request)?)?;
+    obj.set("requestJson", &JsValue::from_str(&args.request_json))?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationRequest,
+    r#"
+    /**
+     * Delegation request body (signable).
+     * @category Wallet API
+     */
+    export interface IMasterDelegationRequest {
+        version: number;
+        masterAnchor: HexString;
+        masterLevel: number;
+        networkId: NetworkId | string;
+        delegations: IMasterDelegationHeader[];
+        createdAtUnixtime: number;
+        requestId: HexString;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationRequest, MasterDelegationRequestBodyV1, {
+    let anchor_hex = args.get_string("masterAnchor")?;
+    let request_id_hex = args.get_string("requestId")?;
+    let mut anchor = [0u8; 32];
+    hex_decode(anchor_hex.as_bytes(), &mut anchor).map_err(|e|Error::custom(format!("masterAnchor: {e}")))?;
+    let mut request_id = [0u8; 32];
+    hex_decode(request_id_hex.as_bytes(), &mut request_id).map_err(|e|Error::custom(format!("requestId: {e}")))?;
+    Ok(MasterDelegationRequestBodyV1 {
+        version: args.get_u8("version")?,
+        master_anchor: anchor,
+        master_level: args.get_u8("masterLevel")?,
+        network_id: args.get_network_id("networkId")?,
+        delegations: serde_wasm_bindgen::from_value(args.get_value("delegations")?)
+            .map_err(|e|Error::custom(format!("delegations: {e}")))?,
+        created_at_unixtime: args.get_u64("createdAtUnixtime")?,
+        request_id,
+    })
+});
+
+try_from! ( args: MasterDelegationRequestBodyV1, IMasterDelegationRequest, {
+    let obj = IMasterDelegationRequest::default();
+    obj.set("version", &JsValue::from_f64(args.version as f64))?;
+    obj.set("masterAnchor", &JsValue::from_str(&hex_string(&args.master_anchor)))?;
+    obj.set("masterLevel", &JsValue::from_f64(args.master_level as f64))?;
+    obj.set("networkId", &args.network_id.into())?;
+    obj.set("delegations", &serde_wasm_bindgen::to_value(&args.delegations)?)?;
+    obj.set("createdAtUnixtime", &JsValue::from_f64(args.created_at_unixtime as f64))?;
+    obj.set("requestId", &JsValue::from_str(&hex_string(&args.request_id)))?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationResponse,
+    r#"
+    /**
+     * Signed delegation response body.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationResponse {
+        version: number;
+        masterAnchor: HexString;
+        masterLevel: number;
+        requestId: HexString;
+        delegations: any[];
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationResponse, MasterDelegationResponseBodyV1, {
+    let anchor_hex = args.get_string("masterAnchor")?;
+    let request_hex = args.get_string("requestId")?;
+    let mut anchor = [0u8; 32];
+    hex_decode(anchor_hex.as_bytes(), &mut anchor).map_err(|e|Error::custom(format!("masterAnchor: {e}")))?;
+    let mut request_id = [0u8; 32];
+    hex_decode(request_hex.as_bytes(), &mut request_id).map_err(|e|Error::custom(format!("requestId: {e}")))?;
+    Ok(MasterDelegationResponseBodyV1 {
+        version: args.get_u8("version")?,
+        master_anchor: anchor,
+        master_level: args.get_u8("masterLevel")?,
+        request_id,
+        delegations: serde_wasm_bindgen::from_value(args.get_value("delegations")?).map_err(|e|Error::custom(format!("delegations: {e}")))?,
+    })
+});
+
+try_from! ( args: MasterDelegationResponseBodyV1, IMasterDelegationResponse, {
+    let obj = IMasterDelegationResponse::default();
+    obj.set("version", &JsValue::from_f64(args.version as f64))?;
+    obj.set("masterAnchor", &JsValue::from_str(&hex_string(&args.master_anchor)))?;
+    obj.set("masterLevel", &JsValue::from_f64(args.master_level as f64))?;
+    obj.set("requestId", &JsValue::from_str(&hex_string(&args.request_id)))?;
+    obj.set("delegations", &serde_wasm_bindgen::to_value(&args.delegations)?)?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationApplyRequest,
+    r#"
+    /**
+     * Apply signed delegation response.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationApplyRequest {
+        walletSecret: string;
+        request: IMasterDelegationRequest;
+        response: IMasterDelegationResponse;
+        forceNetworkMismatch?: boolean;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationApplyRequest, MasterDelegationApplyRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let request: MasterDelegationRequestBodyV1 =
+        serde_wasm_bindgen::from_value(args.get_value("request")?).map_err(|e|Error::custom(format!("request: {e}")))?;
+    let response: MasterDelegationResponseBodyV1 =
+        serde_wasm_bindgen::from_value(args.get_value("response")?).map_err(|e|Error::custom(format!("response: {e}")))?;
+    let force_network_mismatch = args.try_get_bool("forceNetworkMismatch")?.unwrap_or(false);
+    Ok(MasterDelegationApplyRequest { wallet_secret, request, response, force_network_mismatch })
+});
+
+declare! {
+    IMasterDelegationApplyResponse,
+    r#"
+    /**
+     * Apply result.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationApplyResponse {
+        applied: number;
+        skipped: number;
+        missingAccounts: string[];
+    }
+    "#,
+}
+
+try_from! ( args: MasterDelegationApplyResponse, IMasterDelegationApplyResponse, {
+    let obj = IMasterDelegationApplyResponse::default();
+    obj.set("applied", &JsValue::from_f64(args.applied as f64))?;
+    obj.set("skipped", &JsValue::from_f64(args.skipped as f64))?;
+    let accounts: js_sys::Array = args.missing_accounts.iter().map(|id| JsValue::from_str(&id.to_string())).collect();
+    obj.set("missingAccounts", &accounts.into())?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationSignRequest,
+    r#"
+    /**
+     * Sign delegation request offline using master key.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationSignRequest {
+        walletSecret: string;
+        request: IMasterDelegationRequest;
+        forceNetworkMismatch?: boolean;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationSignRequest, MasterDelegationSignRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let request: MasterDelegationRequestBodyV1 =
+        serde_wasm_bindgen::from_value(args.get_value("request")?).map_err(|e|Error::custom(format!("request: {e}")))?;
+    let force_network_mismatch = args.try_get_bool("forceNetworkMismatch")?.unwrap_or(false);
+    Ok(MasterDelegationSignRequest { wallet_secret, request, force_network_mismatch })
+});
+
+declare! {
+    IMasterDelegationSignResponse,
+    r#"
+    /**
+     * Signed delegation response JSON and parsed body.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationSignResponse {
+        response: IMasterDelegationResponse;
+        responseJson: string;
+    }
+    "#,
+}
+
+try_from! ( args: MasterDelegationSignResponse, IMasterDelegationSignResponse, {
+    let obj = IMasterDelegationSignResponse::default();
+    obj.set("response", &serde_wasm_bindgen::to_value(&args.response)?)?;
+    obj.set("responseJson", &JsValue::from_str(&args.response_json))?;
+    Ok(obj)
+});
+
+// ---
+
 declare! {
     IPrvKeyDataEnumerateRequest,
     r#"
@@ -895,6 +1417,102 @@ try_from! ( _args: PrvKeyDataGetResponse, IPrvKeyDataGetResponse, {
 // ---
 
 declare! {
+    IMasterAnchorListRequest,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterAnchorListRequest { }
+    "#,
+}
+
+try_from!(_args: IMasterAnchorListRequest, MasterAnchorListRequest, {
+    Ok(MasterAnchorListRequest {})
+});
+
+declare! {
+    IMasterAnchorInfo,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterAnchorInfo {
+        id: HexString;
+        anchor?: HexString;
+        level?: number;
+        isEncrypted: boolean;
+    }
+    "#,
+}
+
+declare! {
+    IMasterAnchorListResponse,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterAnchorListResponse {
+        anchors: IMasterAnchorInfo[];
+    }
+    "#,
+}
+
+try_from!(args: MasterAnchorListResponse, IMasterAnchorListResponse, {
+    Ok(to_value(&args)?.into())
+});
+
+// ---
+
+declare! {
+    IMasterSeedExportRequest,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterSeedExportRequest {
+        walletSecret: string;
+        masterId: HexString;
+        confirmation: string;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterSeedExportRequest, MasterSeedExportRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let master_id = args.get_prv_key_data_id("masterId")?;
+    let confirmation = args.get_string("confirmation")?;
+    Ok(MasterSeedExportRequest { wallet_secret, master_id, confirmation })
+});
+
+declare! {
+    IMasterSeedExportResponse,
+    r#"
+    /**
+     * 
+     *  
+     * @category Wallet API
+     */
+    export interface IMasterSeedExportResponse {
+        seedHex: HexString;
+    }
+    "#,
+}
+
+try_from!(args: MasterSeedExportResponse, IMasterSeedExportResponse, {
+    Ok(to_value(&args)?.into())
+});
+
+// ---
+
+declare! {
     IAccountsEnumerateRequest,
     r#"
     /**
@@ -1059,6 +1677,13 @@ declare! {
         prvKeyDataId:string;
         paymentSecret?:string;
         ecdsa?:boolean;
+    } | {
+        walletSecret: string;
+        type: "kaspa-stealth";
+        accountName?:string;
+        accountIndex?:number;
+        prvKeyDataId:string;
+        paymentSecret?:string;
     };
 
     //   |{
@@ -1099,8 +1724,29 @@ try_from! (args: IAccountsCreateRequest, AccountsCreateRequest, {
                 ecdsa: args.get_bool("ecdsa").unwrap_or(false),
             }
         }
+        crate::account::STEALTH_ACCOUNT_KIND => {
+            let prv_key_data_args = PrvKeyDataArgs {
+                prv_key_data_id: args.try_get_prv_key_data_id("prvKeyDataId")?.ok_or(Error::custom("prvKeyDataId is required"))?,
+                payment_secret: args.try_get_secret("paymentSecret")?,
+            };
+            AccountCreateArgs::Stealth {
+                prv_key_data_args,
+                account_name: args.try_get_string("accountName")?,
+                account_index: args.get_u64("accountIndex").ok(),
+            }
+        }
+        crate::account::MLDSA_MASTER_ACCOUNT_KIND => {
+            let prv_key_data_id = args.try_get_prv_key_data_id("prvKeyDataId")?.ok_or(Error::custom("prvKeyDataId is required"))?;
+            let level_raw = args.get_u8("level").unwrap_or(2);
+            let level = MlDsaLevel::from_u8(level_raw).ok_or(Error::custom("invalid MLDSA level"))?;
+            AccountCreateArgs::MldsaMaster {
+                prv_key_data_id,
+                level,
+                account_name: args.try_get_string("accountName")?,
+            }
+        }
         _ => {
-            return Err(Error::custom("only BIP32/kaspa-keypair-standard accounts are currently supported"));
+            return Err(Error::custom("only BIP32/kaspa-keypair-standard/kaspa-stealth/kaspa-mldsa-master accounts are supported"));
         }
     };
 
@@ -1121,11 +1767,207 @@ declare! {
     "#,
 }
 
+declare! {
+    IMasterAccountInfo,
+    r#"
+    /**
+     * Master account descriptor.
+     * @category Wallet API
+     */
+    export interface IMasterAccountInfo {
+        accountId: HexString;
+        anchor: HexString;
+        level: number;
+        status: string;
+    }
+    "#,
+}
+
+declare! {
+    IMasterAccountsListResponse,
+    r#"
+    /**
+     * Master accounts list response.
+     * @category Wallet API
+     */
+    export interface IMasterAccountsListResponse {
+        accounts: IMasterAccountInfo[];
+    }
+    "#,
+}
+
+declare! {
+    ICreateMasterAccountRequest,
+    r#"
+    /**
+     * Create MLDSA master account.
+     * @category Wallet API
+     */
+    export interface ICreateMasterAccountRequest {
+        walletSecret: string;
+        prvKeyDataId: HexString;
+        level: number;
+        accountName?: string;
+    }
+    "#,
+}
+
+declare! {
+    ICreateMasterAccountResponse,
+    r#"
+    /**
+     * Create MLDSA master account response.
+     * @category Wallet API
+     */
+    export interface ICreateMasterAccountResponse {
+        accountDescriptor: IAccountDescriptor;
+    }
+    "#,
+}
+
+declare! {
+    IAttachStealthToMasterRequest,
+    r#"
+    /**
+     * Attach stealth account to master.
+     * @category Wallet API
+     */
+    export interface IAttachStealthToMasterRequest {
+        walletSecret: string;
+        stealthId: HexString;
+        masterId: HexString;
+    }
+    "#,
+}
+
+declare! {
+    IDetachStealthFromMasterRequest,
+    r#"
+    /**
+     * Detach stealth account from master.
+     * @category Wallet API
+     */
+    export interface IDetachStealthFromMasterRequest {
+        walletSecret: string;
+        stealthId: HexString;
+    }
+    "#,
+}
+
 try_from!(args: AccountsCreateResponse, IAccountsCreateResponse, {
     let response = IAccountsCreateResponse::default();
     response.set("accountDescriptor", &IAccountDescriptor::try_from(args.account_descriptor)?.into())?;
     Ok(response)
 });
+
+try_from!(args: crate::wallet::MasterAccountInfo, IMasterAccountInfo, {
+    let response = IMasterAccountInfo::default();
+    response.set("accountId", &args.account_id.into())?;
+    response.set("anchor", &JsValue::from(args.anchor.to_vec().to_hex()))?;
+    response.set("level", &JsValue::from(args.level))?;
+    response.set("status", &JsValue::from(serde_json::to_string(&args.status)?))?;
+    Ok(response)
+});
+
+try_from!(args: Vec<crate::wallet::MasterAccountInfo>, IMasterAccountsListResponse, {
+    let response = IMasterAccountsListResponse::default();
+    let accounts = Array::new();
+    for info in args.into_iter() {
+        accounts.push(&IMasterAccountInfo::try_from(info)?.into());
+    }
+    response.set("accounts", &accounts)?;
+    Ok(response)
+});
+
+// ---
+// STEALTH ACCOUNT OPERATIONS
+// ---
+
+declare! {
+    IStealthAccountUnlockRequest,
+    r#"
+    /**
+     * Request to unlock a stealth account for scanning and spending.
+     * Must be called before scanning for stealth UTXOs or sending from stealth account.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountUnlockRequest {
+        accountId: HexString;
+        walletSecret: string;
+        paymentSecret?: string;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountUnlockResponse,
+    r#"
+    /**
+     * Response from unlocking a stealth account.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountUnlockResponse {
+        stealthAddress: string;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountLockRequest,
+    r#"
+    /**
+     * Request to lock a stealth account (clear keys from memory).
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountLockRequest {
+        accountId: HexString;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountLockResponse,
+    r#"
+    /**
+     * Response from locking a stealth account.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountLockResponse { }
+    "#,
+}
+
+declare! {
+    IStealthAccountScanRequest,
+    r#"
+    /**
+     * Request to scan blockchain for stealth UTXOs belonging to this account.
+     * Account must be unlocked first.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountScanRequest {
+        accountId: HexString;
+    }
+    "#,
+}
+
+declare! {
+    IStealthAccountScanResponse,
+    r#"
+    /**
+     * Response from stealth account scan.
+     *
+     * @category Wallet API
+     */
+    export interface IStealthAccountScanResponse {
+        utxosFound: number;
+    }
+    "#,
+}
 
 // ---
 
@@ -1409,6 +2251,14 @@ declare! {
          */
         priorityFeeSompi? : IFees | bigint;
         /**
+         * Optional minimum randomization offset (sompi) applied to the final priority fee.
+         */
+        feeRandomizationMinSompi?: bigint;
+        /**
+         * Optional maximum randomization offset (sompi) applied to the final priority fee.
+         */
+        feeRandomizationMaxSompi?: bigint;
+        /**
          * 
          */
         payload? : Uint8Array | HexString;
@@ -1426,13 +2276,25 @@ try_from! ( args: IAccountsSendRequest, AccountsSendRequest, {
     let payment_secret = args.try_get_secret("paymentSecret")?;
     let fee_rate = args.get_f64("feeRate").ok();
     let priority_fee_sompi = args.get::<IFees>("priorityFeeSompi")?.try_into()?;
+    let fee_randomization_min = js_value_to_optional_u64(args.get_value("feeRandomizationMinSompi")?, "feeRandomizationMinSompi")?;
+    let fee_randomization_max = js_value_to_optional_u64(args.get_value("feeRandomizationMaxSompi")?, "feeRandomizationMaxSompi")?;
+    let fee_randomization = build_fee_randomization_from_js(fee_randomization_min, fee_randomization_max)?;
     let payload = args.try_get_value("payload")?.map(|v| v.try_as_vec_u8()).transpose()?;
 
     let outputs = args.get_value("destination")?;
     let destination: PaymentDestination =
         if outputs.is_undefined() { PaymentDestination::Change } else { PaymentOutputs::try_owned_from(outputs)?.into() };
 
-    Ok(AccountsSendRequest { account_id, wallet_secret, payment_secret, fee_rate, priority_fee_sompi, destination, payload })
+    Ok(AccountsSendRequest {
+        account_id,
+        wallet_secret,
+        payment_secret,
+        fee_rate,
+        priority_fee_sompi,
+        fee_randomization,
+        destination,
+        payload,
+    })
 });
 
 declare! {
@@ -1711,6 +2573,8 @@ declare! {
         paymentSecret? : string;
         feeRate? : number;
         priorityFeeSompi? : IFees | bigint;
+        feeRandomizationMinSompi?: bigint;
+        feeRandomizationMaxSompi?: bigint;
         transferAmountSompi : bigint;
     }
     "#,
@@ -1724,6 +2588,11 @@ try_from! ( args: IAccountsTransferRequest, AccountsTransferRequest, {
     let fee_rate = args.get_f64("feeRate").ok();
     let priority_fee_sompi = args.try_get::<IFees>("priorityFeeSompi")?.map(Fees::try_from).transpose()?;
     let transfer_amount_sompi = args.get_u64("transferAmountSompi")?;
+    let fee_randomization_min =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMinSompi")?, "feeRandomizationMinSompi")?;
+    let fee_randomization_max =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMaxSompi")?, "feeRandomizationMaxSompi")?;
+    let fee_randomization = build_fee_randomization_from_js(fee_randomization_min, fee_randomization_max)?;
 
     Ok(AccountsTransferRequest {
         source_account_id,
@@ -1733,6 +2602,7 @@ try_from! ( args: IAccountsTransferRequest, AccountsTransferRequest, {
         fee_rate,
         priority_fee_sompi,
         transfer_amount_sompi,
+        fee_randomization,
     })
 });
 
@@ -1773,6 +2643,8 @@ declare! {
         destination : IPaymentOutput[];
         feeRate? : number;
         priorityFeeSompi : IFees | bigint;
+        feeRandomizationMinSompi?: bigint;
+        feeRandomizationMaxSompi?: bigint;
         payload? : Uint8Array | string;
     }
     "#,
@@ -1782,13 +2654,18 @@ try_from! ( args: IAccountsEstimateRequest, AccountsEstimateRequest, {
     let account_id = args.get_account_id("accountId")?;
     let fee_rate = args.get_f64("feeRate").ok();
     let priority_fee_sompi = args.get::<IFees>("priorityFeeSompi")?.try_into()?;
+    let fee_randomization_min =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMinSompi")?, "feeRandomizationMinSompi")?;
+    let fee_randomization_max =
+        js_value_to_optional_u64(args.get_value("feeRandomizationMaxSompi")?, "feeRandomizationMaxSompi")?;
+    let fee_randomization = build_fee_randomization_from_js(fee_randomization_min, fee_randomization_max)?;
     let payload = args.try_get_value("payload")?.map(|v| v.try_as_vec_u8()).transpose()?;
 
     let outputs = args.get_value("destination")?;
     let destination: PaymentDestination =
         if outputs.is_undefined() { PaymentDestination::Change } else { PaymentOutputs::try_owned_from(outputs)?.into() };
 
-    Ok(AccountsEstimateRequest { account_id, fee_rate, priority_fee_sompi, destination, payload })
+    Ok(AccountsEstimateRequest { account_id, fee_rate, priority_fee_sompi, fee_randomization, destination, payload })
 });
 
 declare! {
@@ -2335,3 +3212,46 @@ try_from! ( args: AccountsCommitRevealManualResponse, IAccountsCommitRevealManua
 });
 
 // ---
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+    use js_sys::{Object, Reflect};
+    use wasm_bindgen::{JsCast, JsValue};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn master_anchor_list_response_js_roundtrip() {
+        let anchors = vec![
+            MasterAnchorInfo { id: PrvKeyDataId::new(1), anchor: Some("deadbeef".into()), level: Some(2), is_encrypted: false },
+            MasterAnchorInfo { id: PrvKeyDataId::new(2), anchor: None, level: None, is_encrypted: true },
+        ];
+
+        let rust_response = MasterAnchorListResponse { anchors: anchors.clone() };
+        let js_response = IMasterAnchorListResponse::try_from(rust_response).expect("js response");
+        let decoded: MasterAnchorListResponse = from_value(JsValue::from(js_response)).expect("roundtrip decode");
+
+        assert_eq!(decoded.anchors, anchors);
+    }
+
+    #[wasm_bindgen_test]
+    fn master_seed_export_js_bridge() {
+        let master_id = PrvKeyDataId::new(42);
+        let request_object = Object::new();
+        Reflect::set(&request_object, &JsValue::from_str("walletSecret"), &JsValue::from_str("secret")).expect("walletSecret");
+        Reflect::set(&request_object, &JsValue::from_str("masterId"), &JsValue::from_str(&master_id.to_hex())).expect("masterId");
+        Reflect::set(&request_object, &JsValue::from_str("confirmation"), &JsValue::from_str("EXPORT")).expect("confirmation");
+
+        let js_request: IMasterSeedExportRequest = request_object.unchecked_into();
+        let rust_request = MasterSeedExportRequest::try_from(js_request).expect("request parse");
+
+        assert_eq!(rust_request.master_id, master_id);
+        assert_eq!(rust_request.confirmation, "EXPORT");
+        assert_eq!(rust_request.wallet_secret.as_str().unwrap(), "secret");
+
+        let js_response =
+            IMasterSeedExportResponse::try_from(MasterSeedExportResponse { seed_hex: "cafebabe".into() }).expect("response");
+        let seed_hex_value = Reflect::get(&JsValue::from(js_response), &JsValue::from_str("seedHex")).expect("seedHex");
+        assert_eq!(seed_hex_value.as_string().unwrap(), "cafebabe");
+    }
+}

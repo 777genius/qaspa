@@ -88,6 +88,10 @@ pub enum KaspadPayloadOps {
     GetFeeEstimateExperimental,
     GetCurrentBlockColor,
     GetUtxoReturnAddress,
+    GetUtxosByScriptVersion,
+    GetBlockViewTags,
+    RegisterMldsaAnchor,
+    ListMldsaDelegations,
 
     // Subscription commands for starting/stopping notifications
     NotifyBlockAdded,

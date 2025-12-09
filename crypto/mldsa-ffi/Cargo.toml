@@ -1,0 +1,13 @@
+[package]
+name = "kaspa-mldsa-ffi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Kaspa developers"]
+description = "FFI bindings for kaspa-mldsa (for Go/C integration)"
+license = "ISC"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+kaspa-mldsa = { path = "../mldsa" }

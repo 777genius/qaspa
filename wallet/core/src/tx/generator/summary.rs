@@ -22,6 +22,8 @@ pub struct GeneratorSummary {
     pub number_of_generated_stages: usize,
     pub final_transaction_amount: Option<u64>,
     pub final_transaction_id: Option<TransactionId>,
+    #[serde(default)]
+    pub random_fee_offset: u64,
 }
 
 impl GeneratorSummary {
@@ -35,6 +37,7 @@ impl GeneratorSummary {
             number_of_generated_stages: 0,
             final_transaction_amount: None,
             final_transaction_id: None,
+            random_fee_offset: 0,
         }
     }
 
@@ -72,6 +75,10 @@ impl GeneratorSummary {
 
     pub fn final_transaction_id(&self) -> Option<TransactionId> {
         self.final_transaction_id
+    }
+
+    pub fn random_fee_offset(&self) -> u64 {
+        self.random_fee_offset
     }
 }
 

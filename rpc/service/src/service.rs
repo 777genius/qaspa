@@ -1,6 +1,6 @@
 //! Core server implementation for ClientAPI
 
-use super::collector::{CollectorFromConsensus, CollectorFromIndex};
+use super::collector::{CollectorFromConsensus, StealthAwareIndexCollector};
 use crate::converter::feerate_estimate::{FeeEstimateConverter, FeeEstimateVerboseConverter};
 use crate::converter::{consensus::ConsensusConverter, index::IndexConverter, protocol::ProtocolConverter};
 use async_trait::async_trait;
@@ -36,6 +36,7 @@ use kaspa_index_core::{
     connection::IndexChannelConnection, indexed_utxos::UtxoSetByScriptPublicKey, notification::Notification as IndexNotification,
     notifier::IndexNotifier,
 };
+use kaspa_index_processor::processor::StealthAnchorHintCache;
 use kaspa_mining::feerate::FeeEstimateVerbose;
 use kaspa_mining::model::tx_query::TransactionQuery;
 use kaspa_mining::{manager::MiningManagerProxy, mempool::tx::Orphan};
@@ -55,6 +56,7 @@ use kaspa_p2p_flows::flow_context::FlowContext;
 use kaspa_p2p_lib::common::ProtocolError;
 use kaspa_p2p_mining::rule_engine::MiningRuleEngine;
 use kaspa_perf_monitor::{counters::CountersSnapshot, Monitor as PerfMonitor};
+use kaspa_rpc_core::RpcTransactionId;
 use kaspa_rpc_core::{
     api::{
         connection::DynRpcConnection,
@@ -65,17 +67,18 @@ use kaspa_rpc_core::{
     notify::connection::ChannelConnection,
     Notification, RpcError, RpcResult,
 };
-use kaspa_txscript::{extract_script_pub_key_address, pay_to_address_script};
-use kaspa_utils::expiring_cache::ExpiringCache;
+use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, pay_to_address_script, STEALTH_SCRIPT_VERSION};
 use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
+use kaspa_utils::{expiring_cache::ExpiringCache, hex::ToHex};
 use kaspa_utils_tower::counters::TowerConnectionCounters;
 use kaspa_utxoindex::api::UtxoIndexProxy;
+use log::info;
 use std::time::Duration;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     iter::once,
-    sync::{atomic::Ordering, Arc},
+    sync::{atomic::Ordering, Arc, Mutex},
     vec,
 };
 use tokio::join;
@@ -98,6 +101,17 @@ use workflow_rpc::server::WebSocketCounters as WrpcServerCounters;
 /// from this instance to registered services and backwards should occur
 /// by adding respectively to the registered service a Collector and a
 /// Subscriber.
+struct AnchorInfo {
+    metadata: Option<String>,
+    _registered_at: u64,
+}
+
+#[async_trait]
+pub trait DelegationProvider: Send + Sync {
+    async fn list_by_anchor(&self, anchor: [u8; 32]) -> RpcResult<Vec<RpcDelegationRecord>>;
+    async fn has_masters(&self) -> RpcResult<bool>;
+}
+
 pub struct RpcCoreService {
     consensus_manager: Arc<ConsensusManager>,
     notifier: Arc<Notifier<Notification, ChannelConnection>>,
@@ -121,9 +135,14 @@ pub struct RpcCoreService {
     fee_estimate_cache: ExpiringCache<RpcFeeEstimate>,
     fee_estimate_verbose_cache: ExpiringCache<kaspa_mining::errors::MiningManagerResult<GetFeeEstimateExperimentalResponse>>,
     mining_rule_engine: Arc<MiningRuleEngine>,
+    mldsa_anchors: Mutex<HashMap<[u8; 32], AnchorInfo>>,
+    delegation_provider: Mutex<Option<Arc<dyn DelegationProvider>>>,
+    anchor_hint_cache: Arc<StealthAnchorHintCache>,
 }
 
 const RPC_CORE: &str = "rpc-core";
+const MAX_MLDSA_ANCHORS: usize = 10_000;
+const MAX_MLDSA_METADATA_LEN: usize = 512;
 
 impl RpcCoreService {
     pub const IDENT: &'static str = "rpc-core-service";
@@ -147,6 +166,7 @@ impl RpcCoreService {
         grpc_tower_counters: Arc<TowerConnectionCounters>,
         system_info: SystemInfo,
         mining_rule_engine: Arc<MiningRuleEngine>,
+        anchor_hint_cache: Option<Arc<StealthAnchorHintCache>>,
     ) -> Self {
         // This notifier UTXOs subscription granularity to index-processor or consensus notifier
         let policies = match index_notifier {
@@ -187,8 +207,11 @@ impl RpcCoreService {
             );
 
             let index_events: EventSwitches = [EventType::UtxosChanged, EventType::PruningPointUtxoSetOverride].as_ref().into();
-            let index_collector =
-                Arc::new(CollectorFromIndex::new("rpc-core <= index", index_notify_channel.receiver(), index_converter.clone()));
+            let index_collector = Arc::new(StealthAwareIndexCollector::new(
+                "rpc-core <= index",
+                index_notify_channel.receiver(),
+                index_converter.clone(),
+            ));
             let index_subscriber =
                 Arc::new(Subscriber::new("rpc-core => index", index_events, index_notifier.clone(), index_notify_listener_id));
 
@@ -226,7 +249,20 @@ impl RpcCoreService {
             fee_estimate_cache: ExpiringCache::new(Duration::from_millis(500), Duration::from_millis(1000)),
             fee_estimate_verbose_cache: ExpiringCache::new(Duration::from_millis(500), Duration::from_millis(1000)),
             mining_rule_engine,
+            mldsa_anchors: Mutex::new(HashMap::new()),
+            delegation_provider: Mutex::new(None),
+            anchor_hint_cache: anchor_hint_cache.unwrap_or_else(|| Arc::new(StealthAnchorHintCache::new())),
         }
+    }
+
+    pub fn set_delegation_provider(&self, provider: Arc<dyn DelegationProvider>) {
+        let mut guard = self.delegation_provider.lock().unwrap();
+        *guard = Some(provider);
+    }
+
+    /// External hook (e.g. индексатор) для регистрации anchor_hint по outpoint.
+    pub fn register_anchor_hint(&self, txid: RpcTransactionId, index: u32, anchor_hint: [u8; 4]) {
+        self.anchor_hint_cache.insert(txid, index, anchor_hint);
     }
 
     pub fn start_impl(&self) {
@@ -283,6 +319,36 @@ impl RpcCoreService {
             (false, true) => Ok(TransactionQuery::All),
             (false, false) => Ok(TransactionQuery::TransactionsOnly),
         }
+    }
+
+    /// Extracts stealth outputs from a block for view tag scanning
+    fn extract_stealth_outputs_from_block(&self, block: &Block) -> Vec<RpcStealthOutputInfo> {
+        block
+            .transactions
+            .iter()
+            .flat_map(|tx| {
+                let tx_id = tx.id();
+                let rpc_tx_id: RpcTransactionId = tx_id;
+                let is_coinbase = tx.is_coinbase();
+                tx.outputs.iter().enumerate().filter_map(move |(idx, out)| {
+                    if out.script_public_key.version() != STEALTH_SCRIPT_VERSION {
+                        return None;
+                    }
+                    let eph = extract_stealth_output(&out.script_public_key).ok()?;
+                    let hint = self.anchor_hint_cache.get(&rpc_tx_id, idx as u32);
+                    Some(RpcStealthOutputInfo::new(
+                        rpc_tx_id,
+                        idx as u32,
+                        eph.view_tag,
+                        faster_hex::hex_string(&eph.ephemeral_pubkey.serialize()),
+                        faster_hex::hex_string(&eph.destination_pubkey.serialize()),
+                        out.value,
+                        is_coinbase,
+                        hint,
+                    ))
+                })
+            })
+            .collect()
     }
 }
 
@@ -694,6 +760,68 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         //       (the current impl does not retain an entry order matching the request addresses order)
         let entry_map = self.get_utxo_set_by_script_public_key(request.addresses.iter()).await;
         Ok(GetUtxosByAddressesResponse::new(self.index_converter.get_utxos_by_addresses_entries(&entry_map)))
+    }
+
+    async fn get_utxos_by_script_version_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: GetUtxosByScriptVersionRequest,
+    ) -> RpcResult<GetUtxosByScriptVersionResponse> {
+        if !self.config.unsafe_rpc && request.script_version == STEALTH_SCRIPT_VERSION {
+            warn!("get_utxos_by_script_version(stealth) called while node in safe RPC mode -- ignoring.");
+            return Err(RpcError::UnavailableInSafeMode);
+        }
+        if !self.config.utxoindex {
+            return Err(RpcError::NoUtxoIndex);
+        }
+        let session = self.consensus_manager.consensus().unguarded_session();
+        if session.async_is_consensus_in_transitional_ibd_state().await {
+            return Err(RpcError::ConsensusInTransitionalIbdState);
+        }
+
+        let limit = request.limit.unwrap_or(1000).min(10000) as usize;
+        let fetch_limit = limit.saturating_add(1);
+        let target_version = request.script_version;
+        let cursor_key = request.cursor.as_ref().and_then(|c| if c.cursor_key.is_empty() { None } else { Some(c.cursor_key.clone()) });
+
+        let utxoindex = self.utxoindex.clone().unwrap();
+        let mut raw_entries = utxoindex
+            .get_utxos_by_script_version(target_version, cursor_key, fetch_limit)
+            .await
+            .map_err(|e| RpcError::General(format!("Database error: {}", e)))?;
+
+        let mut next_cursor_raw: Option<(RpcTransactionOutpoint, Vec<u8>)> = None;
+        if raw_entries.len() == fetch_limit {
+            if let Some((_, outpoint, _, raw_key)) = raw_entries.pop() {
+                next_cursor_raw = Some((RpcTransactionOutpoint::from(outpoint), raw_key));
+            }
+        }
+
+        let mut entries = Vec::with_capacity(raw_entries.len());
+        for (script_public_key, outpoint, compact_entry, _) in raw_entries.into_iter() {
+            let rpc_entry =
+                RpcUtxoEntry::new(compact_entry.amount, script_public_key, compact_entry.block_daa_score, compact_entry.is_coinbase);
+            entries.push(RpcUtxosByScriptVersionEntry::new(outpoint.into(), rpc_entry));
+        }
+
+        let next_cursor =
+            next_cursor_raw.map(|(outpoint, raw_key)| RpcScriptVersionCursor::new(outpoint.transaction_id, outpoint.index, raw_key));
+
+        Ok(GetUtxosByScriptVersionResponse::new(entries, next_cursor))
+    }
+
+    async fn get_block_view_tags_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: GetBlockViewTagsRequest,
+    ) -> RpcResult<GetBlockViewTagsResponse> {
+        let session = self.consensus_manager.consensus().session().await;
+        let block = session.async_get_block_even_if_header_only(request.hash).await?;
+        let ghostdag = session.async_get_ghostdag_data(request.hash).await?;
+
+        let stealth_outputs = self.extract_stealth_outputs_from_block(&block);
+
+        Ok(GetBlockViewTagsResponse::new(request.hash, ghostdag.blue_score, stealth_outputs))
     }
 
     async fn get_balance_by_address_call(
@@ -1197,6 +1325,13 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         let sink_daa_score_timestamp = session.async_get_sink_daa_score_timestamp().await;
         let is_synced = self.mining_rule_engine.is_sink_recent_and_connected(sink_daa_score_timestamp);
         let virtual_daa_score = session.get_virtual_daa_score();
+        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        let has_mldsa_master = if let Some(provider) = provider {
+            // If provider errors, fall back to anchor memory set
+            provider.has_masters().await.unwrap_or_else(|_| !self.mldsa_anchors.lock().unwrap().is_empty())
+        } else {
+            !self.mldsa_anchors.lock().unwrap().is_empty()
+        };
 
         Ok(GetServerInfoResponse {
             rpc_api_version: RPC_API_VERSION,
@@ -1206,7 +1341,76 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
             has_utxo_index: self.config.utxoindex,
             is_synced,
             virtual_daa_score,
+            has_stealth_support: true,
+            has_mldsa_master,
         })
+    }
+
+    async fn register_mldsa_anchor_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: RegisterMldsaAnchorRequest,
+    ) -> RpcResult<RegisterMldsaAnchorResponse> {
+        if !self.config.unsafe_rpc {
+            warn!("register_mldsa_anchor called while node in safe RPC mode -- ignoring.");
+            return Err(RpcError::UnavailableInSafeMode);
+        }
+
+        // Basic input validation: anchor must be exactly 32 bytes (Guaranteed by type)
+        // Idempotent insert into in-memory set.
+        let RegisterMldsaAnchorRequest { anchor, metadata } = request;
+        if let Some(ref meta) = metadata {
+            if meta.len() > MAX_MLDSA_METADATA_LEN {
+                return Err(RpcError::General(format!("metadata is too long (max {MAX_MLDSA_METADATA_LEN} bytes)")));
+            }
+        }
+        let anchor_hex = anchor.as_slice().to_hex();
+        let mut anchors = self.mldsa_anchors.lock().unwrap();
+        if anchors.len() >= MAX_MLDSA_ANCHORS && !anchors.contains_key(&anchor) {
+            warn!("register_mldsa_anchor rejected: anchor store is full ({} entries)", MAX_MLDSA_ANCHORS);
+            return Err(RpcError::General("anchor registry capacity exceeded".to_string()));
+        }
+        let accepted = match (anchors.entry(anchor), metadata) {
+            (Entry::Vacant(entry), meta) => {
+                entry.insert(AnchorInfo { metadata: meta, _registered_at: unix_now() });
+                true
+            }
+            (Entry::Occupied(mut entry), meta) => {
+                if entry.get().metadata.is_none() {
+                    entry.get_mut().metadata = meta;
+                }
+                false
+            }
+        };
+        if accepted {
+            info!("mldsa_anchor registered: {}", anchor_hex);
+        } else {
+            info!("mldsa_anchor already registered: {}", anchor_hex);
+        }
+        Ok(RegisterMldsaAnchorResponse { accepted })
+    }
+
+    async fn list_mldsa_delegations_call(
+        &self,
+        _connection: Option<&DynRpcConnection>,
+        request: ListMldsaDelegationsRequest,
+    ) -> RpcResult<ListMldsaDelegationsResponse> {
+        if !self.config.unsafe_rpc {
+            warn!("list_mldsa_delegations called while node in safe RPC mode -- ignoring.");
+            return Err(RpcError::UnavailableInSafeMode);
+        }
+        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        if let Some(provider) = provider {
+            let delegations = provider.list_by_anchor(request.anchor).await?;
+            return Ok(ListMldsaDelegationsResponse { delegations });
+        }
+
+        let anchors = self.mldsa_anchors.lock().unwrap();
+        if !anchors.contains_key(&request.anchor) {
+            return Ok(ListMldsaDelegationsResponse { delegations: vec![] });
+        }
+        // Iteration 4 scope: no delegation indexing in RPC, return empty list for known anchors.
+        Ok(ListMldsaDelegationsResponse { delegations: vec![] })
     }
 
     async fn get_sync_status_call(
@@ -1249,6 +1453,12 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
                 // the whole subscription no matter if blanket or targeting specified addresses.
 
                 warn!("RPC subscription to blanket UtxosChanged called while node in safe RPC mode -- ignoring.");
+                Err(RpcError::UnavailableInSafeMode)
+            }
+            Scope::StealthUtxosChanged(ref _stealth_scope) if !self.config.unsafe_rpc => {
+                // Stealth subscriptions leak view tags/anchors for every stealth UTXO.
+                // В safe-режиме запрещаем их целиком.
+                warn!("RPC subscription to StealthUtxosChanged called while node in safe RPC mode -- ignoring.");
                 Err(RpcError::UnavailableInSafeMode)
             }
             _ => {
@@ -1303,5 +1513,19 @@ impl AsyncService for RpcCoreService {
             trace!("{} stopped", Self::IDENT);
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anchor_hint_cache_roundtrip() {
+        let cache = StealthAnchorHintCache::new();
+        let txid = RpcTransactionId::default();
+        cache.insert(txid, 42, [0xde, 0xad, 0xbe, 0xef]);
+        assert_eq!(cache.get(&RpcTransactionId::default(), 42), Some("efbeadde".to_string()));
+        assert!(cache.get(&RpcTransactionId::default(), 0).is_none());
     }
 }

@@ -235,7 +235,7 @@ jobs:
         continue-on-error: true
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-get install -y clang-15 lldb-15 lld-15 clangd-15 clang-tidy-15 clang-format-15 clang-tools-15 llvm-15-dev lld-15 lldb-15 llvm-15-tools libomp-15-dev libc++-15-dev libc++abi-15-dev libclang-common-15-dev libclang-15-dev libclang-cpp15-dev libunwind-15-dev
+          sudo apt-get install -y clang-15 lldb-15 lld-15 clangd-15 clang-tidy-15 clang-format-15 clang-tools-15 llvm-15-dev lld-15 lldb-15 llvm-15-tools libomp-15-dev libc++-15-dev libc++abi-15-dev libc++-15-dev-wasm32 libc++abi-15-dev-wasm32 libclang-common-15-dev libclang-15-dev libclang-cpp15-dev libunwind-15-dev wasi-libc
           # Make Clang 15 default
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-15/bin/clang++ 100
           sudo update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-15/bin/clang 100
@@ -274,12 +274,18 @@ jobs:
 
       - name: Run cargo check of kaspa-wrpc-wasm for wasm32 target
         run: cargo clippy -p kaspa-wrpc-wasm --target wasm32-unknown-unknown
+        env:
+          WASI_SYSROOT: /usr/share/wasi-sysroot
 
       - name: Run cargo check of kaspa-wallet-cli-wasm for wasm32 target
         run: cargo clippy -p kaspa-wallet-cli-wasm --target wasm32-unknown-unknown
+        env:
+          WASI_SYSROOT: /usr/share/wasi-sysroot
 
       - name: Run cargo check of kaspa-wasm for wasm32 target
         run: cargo clippy -p kaspa-wasm --target wasm32-unknown-unknown
+        env:
+          WASI_SYSROOT: /usr/share/wasi-sysroot
 
   build-wasm32:
     name: Build WASM32 SDK
@@ -302,7 +308,7 @@ jobs:
         continue-on-error: true
         run: |
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-get install -y clang-15 lldb-15 lld-15 clangd-15 clang-tidy-15 clang-format-15 clang-tools-15 llvm-15-dev lld-15 lldb-15 llvm-15-tools libomp-15-dev libc++-15-dev libc++abi-15-dev libclang-common-15-dev libclang-15-dev libclang-cpp15-dev libunwind-15-dev
+          sudo apt-get install -y clang-15 lldb-15 lld-15 clangd-15 clang-tidy-15 clang-format-15 clang-tools-15 llvm-15-dev lld-15 lldb-15 llvm-15-tools libomp-15-dev libc++-15-dev libc++abi-15-dev libc++-15-dev-wasm32 libc++abi-15-dev-wasm32 libclang-common-15-dev libclang-15-dev libclang-cpp15-dev libunwind-15-dev wasi-libc
           # Make Clang 15 default
           sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/lib/llvm-15/bin/clang++ 100
           sudo update-alternatives --install /usr/bin/clang clang /usr/lib/llvm-15/bin/clang 100

@@ -171,7 +171,7 @@ from!(item: RpcResult<&kaspa_rpc_core::GetBlockResponse>, protowire::GetBlockRes
 });
 
 from!(item: &kaspa_rpc_core::NotifyBlockAddedRequest, protowire::NotifyBlockAddedRequestMessage, {
-    Self { command: item.command.into() }
+    Self { command: item.command.into(), include_stealth_outputs: item.include_stealth_outputs }
 });
 from!(RpcResult<&kaspa_rpc_core::NotifyBlockAddedResponse>, protowire::NotifyBlockAddedResponseMessage);
 
@@ -441,6 +441,88 @@ from!(item: RpcResult<&kaspa_rpc_core::GetUtxoReturnAddressResponse>, protowire:
     Self { return_address: item.return_address.address_to_string(), error: None }
 });
 
+// GetBlockViewTags
+from!(item: &kaspa_rpc_core::RpcStealthOutputInfo, protowire::RpcStealthOutputInfo, {
+    Self {
+        transaction_id: item.transaction_id.to_string(),
+        output_index: item.output_index,
+        view_tag: item.view_tag as u32,
+        ephemeral_pubkey: item.ephemeral_pubkey.clone(),
+        destination_pubkey: item.destination_pubkey.clone(),
+        amount: item.amount,
+        is_coinbase: item.is_coinbase,
+        anchor_hint: item.anchor_hint.clone().unwrap_or_default(),
+    }
+});
+from!(item: &kaspa_rpc_core::GetBlockViewTagsRequest, protowire::GetBlockViewTagsRequestMessage, {
+    Self { hash: item.hash.to_string() }
+});
+from!(item: RpcResult<&kaspa_rpc_core::GetBlockViewTagsResponse>, protowire::GetBlockViewTagsResponseMessage, {
+    Self {
+        block_hash: item.block_hash.to_string(),
+        daa_score: item.daa_score,
+        stealth_outputs: item.stealth_outputs.iter().map(|o| o.into()).collect(),
+        error: None,
+    }
+});
+
+// GetUtxosByScriptVersion
+from!(item: &kaspa_rpc_core::RpcScriptVersionCursor, protowire::RpcScriptVersionCursor, {
+    Self {
+        transaction_id: item.transaction_id.to_string(),
+        index: item.index,
+        cursor_key: item.cursor_key.clone(),
+    }
+});
+from!(item: &kaspa_rpc_core::RpcUtxosByScriptVersionEntry, protowire::RpcUtxosByScriptVersionEntry, {
+    Self {
+        outpoint: Some((&item.outpoint).into()),
+        utxo_entry: Some((&item.utxo_entry).into()),
+    }
+});
+from!(item: &kaspa_rpc_core::GetUtxosByScriptVersionRequest, protowire::GetUtxosByScriptVersionRequestMessage, {
+    Self {
+        script_version: item.script_version as u32,
+        cursor: item.cursor.as_ref().map(|c| c.into()),
+        limit: item.limit.unwrap_or(0),
+    }
+});
+from!(item: RpcResult<&kaspa_rpc_core::GetUtxosByScriptVersionResponse>, protowire::GetUtxosByScriptVersionResponseMessage, {
+    Self {
+        entries: item.entries.iter().map(|x| x.into()).collect(),
+        next_cursor: item.next_cursor.as_ref().map(|c| c.into()),
+        error: None,
+    }
+});
+
+// MLDSA delegation (Iteration 4)
+from!(item: &kaspa_rpc_core::RegisterMldsaAnchorRequest, protowire::RegisterMldsaAnchorRequestMessage, {
+    Self { anchor: item.anchor.to_vec(), metadata: item.metadata.clone().unwrap_or_default() }
+});
+from!(item: RpcResult<&kaspa_rpc_core::RegisterMldsaAnchorResponse>, protowire::RegisterMldsaAnchorResponseMessage, {
+    Self { accepted: item.accepted, error: None }
+});
+from!(item: &kaspa_rpc_core::RpcDelegationRecord, protowire::RpcDelegationRecord, {
+    Self {
+        anchor: item.anchor.to_vec(),
+        account_id: item.account_id.clone(),
+        spend_pubkey: item.spend_pubkey.to_vec(),
+        scan_pubkey: item.scan_pubkey.to_vec(),
+        valid_from_daa: item.valid_from_daa,
+        valid_until_daa: item.valid_until_daa.unwrap_or_default(),
+        has_valid_until_daa: item.valid_until_daa.is_some(),
+        nonce: item.nonce,
+        status: item.status.clone(),
+        signature: item.signature.clone(),
+    }
+});
+from!(item: &kaspa_rpc_core::ListMldsaDelegationsRequest, protowire::ListMldsaDelegationsRequestMessage, {
+    Self { anchor: item.anchor.to_vec() }
+});
+from!(item: RpcResult<&kaspa_rpc_core::ListMldsaDelegationsResponse>, protowire::ListMldsaDelegationsResponseMessage, {
+    Self { delegations: item.delegations.iter().map(|d| d.into()).collect(), error: None }
+});
+
 from!(&kaspa_rpc_core::PingRequest, protowire::PingRequestMessage);
 from!(RpcResult<&kaspa_rpc_core::PingResponse>, protowire::PingResponseMessage);
 
@@ -506,6 +588,8 @@ from!(item: RpcResult<&kaspa_rpc_core::GetServerInfoResponse>, protowire::GetSer
         has_utxo_index: item.has_utxo_index,
         is_synced: item.is_synced,
         virtual_daa_score: item.virtual_daa_score,
+        has_stealth_support: item.has_stealth_support,
+        has_mldsa_master: item.has_mldsa_master,
         error: None,
     }
 });
@@ -636,7 +720,7 @@ try_from!(item: &protowire::GetBlockResponseMessage, RpcResult<kaspa_rpc_core::G
 });
 
 try_from!(item: &protowire::NotifyBlockAddedRequestMessage, kaspa_rpc_core::NotifyBlockAddedRequest, {
-    Self { command: item.command.into() }
+    Self { command: item.command.into(), include_stealth_outputs: item.include_stealth_outputs }
 });
 try_from!(&protowire::NotifyBlockAddedResponseMessage, RpcResult<kaspa_rpc_core::NotifyBlockAddedResponse>);
 
@@ -937,6 +1021,102 @@ try_from!(item: &protowire::GetUtxoReturnAddressResponseMessage, RpcResult<kaspa
     Self { return_address: Address::try_from(item.return_address.clone())? }
 });
 
+// GetBlockViewTags
+try_from!(item: &protowire::RpcStealthOutputInfo, kaspa_rpc_core::RpcStealthOutputInfo, {
+    Self {
+        transaction_id: RpcHash::from_str(&item.transaction_id)?,
+        output_index: item.output_index,
+        view_tag: item.view_tag as u8,
+        ephemeral_pubkey: item.ephemeral_pubkey.clone(),
+        destination_pubkey: item.destination_pubkey.clone(),
+        amount: item.amount,
+        is_coinbase: item.is_coinbase,
+        anchor_hint: (!item.anchor_hint.is_empty()).then(|| item.anchor_hint.clone()),
+    }
+});
+try_from!(item: &protowire::GetBlockViewTagsRequestMessage, kaspa_rpc_core::GetBlockViewTagsRequest, {
+    Self { hash: RpcHash::from_str(&item.hash)? }
+});
+try_from!(item: &protowire::GetBlockViewTagsResponseMessage, RpcResult<kaspa_rpc_core::GetBlockViewTagsResponse>, {
+    Self {
+        block_hash: RpcHash::from_str(&item.block_hash)?,
+        daa_score: item.daa_score,
+        stealth_outputs: item.stealth_outputs.iter().map(|o| o.try_into()).collect::<Result<Vec<_>, _>>()?,
+    }
+});
+
+// GetUtxosByScriptVersion
+try_from!(item: &protowire::RpcScriptVersionCursor, kaspa_rpc_core::RpcScriptVersionCursor, {
+    Self {
+        transaction_id: RpcHash::from_str(&item.transaction_id)?,
+        index: item.index,
+        cursor_key: item.cursor_key.clone(),
+    }
+});
+try_from!(item: &protowire::RpcUtxosByScriptVersionEntry, kaspa_rpc_core::RpcUtxosByScriptVersionEntry, {
+    Self {
+        outpoint: item
+            .outpoint
+            .as_ref()
+            .ok_or_else(|| RpcError::MissingRpcFieldError("RpcUtxosByScriptVersionEntry".to_string(), "outpoint".to_string()))?
+            .try_into()?,
+        utxo_entry: item
+            .utxo_entry
+            .as_ref()
+            .ok_or_else(|| RpcError::MissingRpcFieldError("RpcUtxosByScriptVersionEntry".to_string(), "utxo_entry".to_string()))?
+            .try_into()?,
+    }
+});
+try_from!(item: &protowire::GetUtxosByScriptVersionRequestMessage, kaspa_rpc_core::GetUtxosByScriptVersionRequest, {
+    Self {
+        script_version: item.script_version as u16,
+        cursor: item.cursor.as_ref().map(|c| c.try_into()).transpose()?,
+        limit: if item.limit > 0 { Some(item.limit) } else { None },
+    }
+});
+try_from!(item: &protowire::GetUtxosByScriptVersionResponseMessage, RpcResult<kaspa_rpc_core::GetUtxosByScriptVersionResponse>, {
+    Self {
+        entries: item.entries.iter().map(|x| x.try_into()).collect::<Result<Vec<_>, _>>()?,
+        next_cursor: item.next_cursor.as_ref().map(|c| c.try_into()).transpose()?,
+    }
+});
+
+// MLDSA delegation (Iteration 4)
+try_from!(item: &protowire::RegisterMldsaAnchorRequestMessage, kaspa_rpc_core::RegisterMldsaAnchorRequest, {
+    let anchor: [u8; 32] = item.anchor.clone().try_into().map_err(|_| RpcError::General("anchor must be 32 bytes".into()))?;
+    let metadata = if item.metadata.is_empty() { None } else { Some(item.metadata.clone()) };
+    Self { anchor, metadata }
+});
+try_from!(item: &protowire::RegisterMldsaAnchorResponseMessage, RpcResult<kaspa_rpc_core::RegisterMldsaAnchorResponse>, {
+    kaspa_rpc_core::RegisterMldsaAnchorResponse { accepted: item.accepted }
+});
+try_from!(item: &protowire::RpcDelegationRecord, kaspa_rpc_core::RpcDelegationRecord, {
+    Self {
+        anchor: item.anchor.clone().try_into().map_err(|_| RpcError::General("anchor must be 32 bytes".into()))?,
+        account_id: item.account_id.clone(),
+        spend_pubkey: item.spend_pubkey.clone().try_into().map_err(|_| RpcError::General("spend_pubkey must be 32 bytes".into()))?,
+        scan_pubkey: item.scan_pubkey.clone().try_into().map_err(|_| RpcError::General("scan_pubkey must be 32 bytes".into()))?,
+        valid_from_daa: item.valid_from_daa,
+        valid_until_daa: if item.has_valid_until_daa { Some(item.valid_until_daa) } else { None },
+        nonce: item.nonce,
+        status: item.status.clone(),
+        signature: item.signature.clone(),
+    }
+});
+try_from!(item: &protowire::ListMldsaDelegationsRequestMessage, kaspa_rpc_core::ListMldsaDelegationsRequest, {
+    let anchor: [u8; 32] = item.anchor.clone().try_into().map_err(|_| RpcError::General("anchor must be 32 bytes".into()))?;
+    Self { anchor }
+});
+try_from!(item: &protowire::ListMldsaDelegationsResponseMessage, RpcResult<kaspa_rpc_core::ListMldsaDelegationsResponse>, {
+    kaspa_rpc_core::ListMldsaDelegationsResponse {
+        delegations: item
+            .delegations
+            .iter()
+            .map(|d| d.try_into())
+            .collect::<Result<Vec<_>, _>>()?,
+    }
+});
+
 try_from!(&protowire::PingRequestMessage, kaspa_rpc_core::PingRequest);
 try_from!(&protowire::PingResponseMessage, RpcResult<kaspa_rpc_core::PingResponse>);
 
@@ -997,6 +1177,8 @@ try_from!(item: &protowire::GetServerInfoResponseMessage, RpcResult<kaspa_rpc_co
         has_utxo_index: item.has_utxo_index,
         is_synced: item.is_synced,
         virtual_daa_score: item.virtual_daa_score,
+        has_stealth_support: item.has_stealth_support,
+        has_mldsa_master: item.has_mldsa_master,
     }
 });
 
@@ -1069,7 +1251,10 @@ try_from!(&protowire::NotifySinkBlueScoreChangedResponseMessage, RpcResult<kaspa
 
 #[cfg(test)]
 mod tests {
-    use kaspa_rpc_core::{RpcError, RpcResult, SubmitBlockRejectReason, SubmitBlockReport, SubmitBlockResponse};
+    use kaspa_rpc_core::{
+        ListMldsaDelegationsResponse, RegisterMldsaAnchorRequest, RegisterMldsaAnchorResponse, RpcDelegationRecord, RpcError,
+        RpcResult, SubmitBlockRejectReason, SubmitBlockReport, SubmitBlockResponse,
+    };
 
     use crate::protowire::{self, submit_block_response_message::RejectReason, SubmitBlockResponseMessage};
 
@@ -1140,5 +1325,84 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_mldsa_anchor_roundtrip() {
+        let req = RegisterMldsaAnchorRequest { anchor: [1u8; 32], metadata: Some("meta".to_string()) };
+        let proto_req: protowire::RegisterMldsaAnchorRequestMessage = (&req).into();
+        assert_eq!(proto_req.anchor, vec![1u8; 32]);
+        assert_eq!(proto_req.metadata, "meta");
+        let back_req: RegisterMldsaAnchorRequest = (&proto_req).try_into().unwrap();
+        assert_eq!(back_req.anchor, req.anchor);
+        assert_eq!(back_req.metadata, req.metadata);
+
+        // invalid anchor length
+        let mut short_req = proto_req.clone();
+        short_req.anchor = vec![1u8; 31];
+        let err = RegisterMldsaAnchorRequest::try_from(&short_req).unwrap_err();
+        assert!(err.to_string().contains("anchor"));
+
+        let resp = RegisterMldsaAnchorResponse { accepted: true };
+        let proto_resp: protowire::RegisterMldsaAnchorResponseMessage = RpcResult::Ok(&resp).into();
+        assert!(proto_resp.error.is_none());
+        let back_resp: RpcResult<RegisterMldsaAnchorResponse> = (&proto_resp).try_into();
+        assert!(back_resp.is_ok());
+        assert!(back_resp.unwrap().accepted);
+    }
+
+    #[test]
+    fn test_mldsa_delegation_roundtrip() {
+        let record = RpcDelegationRecord {
+            anchor: [2u8; 32],
+            account_id: vec![9u8; 4],
+            spend_pubkey: [3u8; 32],
+            scan_pubkey: [4u8; 32],
+            valid_from_daa: 10,
+            valid_until_daa: Some(20),
+            nonce: 7,
+            status: "Active".to_string(),
+            signature: vec![5u8; 8],
+        };
+
+        let proto_rec: protowire::RpcDelegationRecord = (&record).into();
+        assert_eq!(proto_rec.anchor, record.anchor);
+        assert_eq!(proto_rec.account_id, record.account_id);
+        assert_eq!(proto_rec.valid_from_daa, 10);
+        assert!(proto_rec.has_valid_until_daa);
+        assert_eq!(proto_rec.valid_until_daa, 20);
+
+        let back_rec: RpcDelegationRecord = (&proto_rec).try_into().unwrap();
+        assert_eq!(back_rec.anchor, record.anchor);
+        assert_eq!(back_rec.account_id, record.account_id);
+        assert_eq!(back_rec.spend_pubkey, record.spend_pubkey);
+        assert_eq!(back_rec.scan_pubkey, record.scan_pubkey);
+        assert_eq!(back_rec.valid_from_daa, record.valid_from_daa);
+        assert_eq!(back_rec.valid_until_daa, record.valid_until_daa);
+        assert_eq!(back_rec.nonce, record.nonce);
+        assert_eq!(back_rec.status, record.status);
+        assert_eq!(back_rec.signature, record.signature);
+
+        let list = ListMldsaDelegationsResponse { delegations: vec![record.clone()] };
+        let proto_list: protowire::ListMldsaDelegationsResponseMessage = RpcResult::Ok(&list).into();
+        assert!(proto_list.error.is_none());
+        assert_eq!(proto_list.delegations.len(), 1);
+
+        let back_list: RpcResult<ListMldsaDelegationsResponse> = (&proto_list).try_into();
+        let back_list = back_list.unwrap();
+        assert_eq!(back_list.delegations.len(), 1);
+        assert_eq!(back_list.delegations[0], record);
+
+        // missing valid_until flag
+        let mut proto_rec_no_until = proto_rec.clone();
+        proto_rec_no_until.has_valid_until_daa = false;
+        let back_no_until: RpcDelegationRecord = (&proto_rec_no_until).try_into().unwrap();
+        assert_eq!(back_no_until.valid_until_daa, None);
+
+        // invalid pubkey length
+        let mut bad_rec = proto_rec.clone();
+        bad_rec.spend_pubkey = vec![0u8; 31];
+        let err = RpcDelegationRecord::try_from(&bad_rec).unwrap_err();
+        assert!(err.to_string().contains("spend_pubkey"));
     }
 }

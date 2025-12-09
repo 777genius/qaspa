@@ -6,6 +6,7 @@ use crate::imports::{AccountId, AccountKind, AssocPrvKeyDataIds, PrvKeyDataId};
 use base64::DecodeError;
 use downcast::DowncastError;
 use kaspa_bip32::Error as BIP32Error;
+use kaspa_consensus_core::network::NetworkId;
 use kaspa_consensus_core::sign::Error as CoreSignError;
 use kaspa_rpc_core::RpcError as KaspaRpcError;
 use kaspa_wrpc_client::error::Error as KaspaWorkflowRpcError;
@@ -276,6 +277,42 @@ pub enum Error {
 
     #[error("Transaction exceeds the maximum allowed mass")]
     GeneratorTransactionIsTooHeavy,
+
+    #[error("Stealth change creator is required for stealth change address")]
+    StealthChangeCreatorRequired,
+
+    #[error("Stealth change address cannot be used for batch transactions (too many UTXOs). Please use a regular P2PK change address or consolidate UTXOs first.")]
+    StealthChangeBatchNotSupported,
+
+    #[error("Mixed stealth and legacy inputs are not allowed in a single transaction")]
+    MixedStealthAndLegacyInputsNotAllowed,
+
+    #[error("Account is locked. Please unlock the account first.")]
+    AccountLocked,
+
+    #[error("Ephemeral key not found for outpoint {0}")]
+    EphemeralKeyNotFound(kaspa_consensus_core::tx::TransactionOutpoint),
+
+    #[error("Invalid network prefix for stealth address")]
+    InvalidNetworkPrefix,
+    #[error("Delegation targets list must not be empty")]
+    MasterDelegationEmptyTargets,
+    #[error("Delegation request checksum mismatch (expected {expected}, got {actual})")]
+    MasterDelegationInvalidChecksum { expected: String, actual: String },
+    #[error("Unsupported delegation {context} version {found} (expected {expected})")]
+    MasterDelegationUnsupportedVersion { context: &'static str, expected: u8, found: u8 },
+    #[error("Delegation nonce for account {account_id} must be greater than {current} (got {received})")]
+    MasterDelegationStaleNonce { account_id: AccountId, current: u64, received: u64 },
+    #[error("Delegation with nonce {nonce} for account {account_id} conflicts with an existing record")]
+    MasterDelegationNonceConflict { account_id: AccountId, nonce: u64 },
+    #[error("Delegation request network mismatch (wallet: {expected}, request: {actual})")]
+    MasterDelegationNetworkMismatch { expected: NetworkId, actual: NetworkId },
+
+    #[error("Connected node does not support stealth transactions")]
+    StealthNotSupported,
+
+    #[error("Missing UTXO entry at index {0}")]
+    MissingUtxoEntry(usize),
 
     #[error("Storage mass exceeds maximum")]
     StorageMassExceedsMaximumTransactionMass { storage_mass: u64 },

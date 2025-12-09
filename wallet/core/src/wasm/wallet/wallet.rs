@@ -1,12 +1,25 @@
+use crate::account::descriptor::IAccountDescriptor;
+use crate::api::message::{MasterAnchorListResponse, MasterSeedExportRequest, MasterSeedExportResponse};
+use crate::api::message::{MasterDelegationApplyRequest, MasterDelegationBuildRequest, MasterDelegationSignRequest};
+use crate::api::traits::WalletApi;
 use crate::imports::*;
 use crate::storage::local::interface::LocalStore;
 use crate::storage::WalletDescriptor;
 use crate::wallet as native;
+use crate::wasm::api::extensions::WalletApiObjectExtension;
+use crate::wasm::api::message::{
+    IAttachStealthToMasterRequest, ICreateMasterAccountRequest, ICreateMasterAccountResponse, IDetachStealthFromMasterRequest,
+    IMasterAccountsListResponse, IMasterAnchorListResponse, IMasterDelegationApplyRequest, IMasterDelegationApplyResponse,
+    IMasterDelegationBuildRequest, IMasterDelegationBuildResponse, IMasterDelegationSignRequest, IMasterDelegationSignResponse,
+    IMasterSeedExportRequest, IMasterSeedExportResponse,
+};
 use crate::wasm::notify::{WalletEventTarget, WalletNotificationCallback, WalletNotificationTypeOrCallback};
 use kaspa_consensus_core::network::NetworkIdT;
+use kaspa_mldsa::MlDsaLevel;
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use kaspa_wasm_core::events::{get_event_targets, Sink};
 use kaspa_wrpc_wasm::{IConnectOptions, Resolver, RpcClient, RpcConfig, WrpcEncoding};
+use zeroize::Zeroizing;
 
 declare! {
     IWalletConfig,
@@ -27,6 +40,43 @@ declare! {
         resolver?: Resolver;
     }
     "#,
+}
+
+// Stealth account operation types
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountUnlockRequest")]
+    pub type IStealthAccountUnlockRequest;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountUnlockResponse")]
+    pub type IStealthAccountUnlockResponse;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountLockRequest")]
+    pub type IStealthAccountLockRequest;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountLockResponse")]
+    pub type IStealthAccountLockResponse;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountScanRequest")]
+    pub type IStealthAccountScanRequest;
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys::Object, typescript_type = "IStealthAccountScanResponse")]
+    pub type IStealthAccountScanResponse;
 }
 
 #[derive(Default)]
@@ -270,6 +320,166 @@ impl Wallet {
     pub fn set_network_id(&self, network_id: NetworkIdT) -> Result<()> {
         self.inner.wallet.set_network_id(&network_id.try_into_owned()?)?;
         Ok(())
+    }
+
+    /// Unlock a stealth account for scanning and spending.
+    /// Must be called before scanning for stealth UTXOs or sending from stealth account.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "stealthAccountUnlock")]
+    pub async fn stealth_account_unlock(&self, request: IStealthAccountUnlockRequest) -> Result<IStealthAccountUnlockResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let account_id = request.get_account_id("accountId")?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let payment_secret = request.try_get_secret("paymentSecret")?;
+
+        let stealth_address = self.wallet().stealth_account_unlock(&account_id, &wallet_secret, payment_secret.as_ref()).await?;
+
+        let response = Object::new();
+        response.set("stealthAddress", &JsValue::from_str(&stealth_address))?;
+        Ok(response.unchecked_into())
+    }
+
+    /// Lock a stealth account (clear keys from memory).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "stealthAccountLock")]
+    pub async fn stealth_account_lock(&self, request: IStealthAccountLockRequest) -> Result<IStealthAccountLockResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let account_id = request.get_account_id("accountId")?;
+
+        self.wallet().stealth_account_lock(&account_id).await?;
+
+        Ok(Object::new().unchecked_into())
+    }
+
+    /// Scan blockchain for stealth UTXOs belonging to this account.
+    /// Account must be unlocked first.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "stealthAccountScan")]
+    pub async fn stealth_account_scan(&self, request: IStealthAccountScanRequest) -> Result<IStealthAccountScanResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let account_id = request.get_account_id("accountId")?;
+
+        let utxos_found = self.wallet().stealth_account_scan(&account_id).await?;
+
+        let response = Object::new();
+        response.set("utxosFound", &JsValue::from_f64(utxos_found as f64))?;
+        Ok(response.unchecked_into())
+    }
+
+    /// List stored MLDSA master anchors along with metadata.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "masterAnchors")]
+    pub async fn master_anchors(&self) -> Result<IMasterAnchorListResponse> {
+        let anchors = self.wallet().clone().master_anchor_list().await?;
+        let response = MasterAnchorListResponse { anchors };
+        IMasterAnchorListResponse::try_from(response)
+    }
+
+    /// Export the encrypted MLDSA master seed (requires wallet secret and confirmation phrase).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "exportMasterAnchor")]
+    pub async fn export_master_anchor(&self, request: IMasterSeedExportRequest) -> Result<IMasterSeedExportResponse> {
+        let request = MasterSeedExportRequest::try_from(request)?;
+        let MasterSeedExportRequest { wallet_secret, master_id, confirmation } = request;
+
+        let mut seed_hex =
+            Zeroizing::new(self.wallet().clone().export_master_seed_hex(&wallet_secret, &master_id, confirmation.trim()).await?);
+
+        let response = MasterSeedExportResponse { seed_hex: seed_hex.to_string() };
+        let result = IMasterSeedExportResponse::try_from(response)?;
+        seed_hex.zeroize();
+        Ok(result)
+    }
+
+    /// Create MLDSA master account.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "createMasterAccount")]
+    pub async fn create_master_account(&self, request: ICreateMasterAccountRequest) -> Result<ICreateMasterAccountResponse> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let prv_key_data_id = request.get_prv_key_data_id("prvKeyDataId")?;
+        let level = request.get_u8("level").unwrap_or(2);
+        let account_name = request.try_get_string("accountName")?;
+
+        let level = MlDsaLevel::from_u8(level).ok_or(Error::custom("invalid MLDSA level"))?;
+
+        let account = self.wallet().create_account_mldsa_master(&wallet_secret, prv_key_data_id, level, account_name).await?;
+
+        let descriptor = IAccountDescriptor::try_from(account.descriptor()?)?;
+        let response = Object::new();
+        response.set("accountDescriptor", &descriptor.into())?;
+        Ok(response.unchecked_into())
+    }
+
+    /// List master accounts.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "listMasterAccounts")]
+    pub async fn list_master_accounts(&self) -> Result<IMasterAccountsListResponse> {
+        let masters = self.wallet().list_master_accounts().await?;
+        IMasterAccountsListResponse::try_from(masters)
+    }
+
+    /// Attach stealth account to master.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "attachStealthToMaster")]
+    pub async fn attach_stealth_to_master(&self, request: IAttachStealthToMasterRequest) -> Result<JsValue> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let stealth_id = request.get_account_id("stealthId")?;
+        let master_id = request.get_account_id("masterId")?;
+        let guard = self.wallet().guard();
+        let guard = guard.lock().await;
+        self.wallet().attach_stealth_to_master(&wallet_secret, &stealth_id, &master_id, &guard).await?;
+        Ok(JsValue::UNDEFINED)
+    }
+
+    /// Detach stealth account from master.
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "detachStealthFromMaster")]
+    pub async fn detach_stealth_from_master(&self, request: IDetachStealthFromMasterRequest) -> Result<JsValue> {
+        let request = Object::try_from(&request).ok_or(Error::custom("Invalid request"))?;
+        let wallet_secret = request.get_secret("walletSecret")?;
+        let stealth_id = request.get_account_id("stealthId")?;
+        let guard = self.wallet().guard();
+        let guard = guard.lock().await;
+        self.wallet().detach_stealth_from_master(&wallet_secret, &stealth_id, &guard).await?;
+        Ok(JsValue::UNDEFINED)
+    }
+
+    /// Build master delegation request (offline signable).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "buildMasterDelegationRequest")]
+    pub async fn build_master_delegation_request(
+        &self,
+        request: IMasterDelegationBuildRequest,
+    ) -> Result<IMasterDelegationBuildResponse> {
+        let request = MasterDelegationBuildRequest::try_from(request)?;
+        let response = self.wallet().clone().master_delegation_build_call(request).await?;
+        IMasterDelegationBuildResponse::try_from(response)
+    }
+
+    /// Apply master delegation response (online).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "applyMasterDelegationResponse")]
+    pub async fn apply_master_delegation_response(
+        &self,
+        request: IMasterDelegationApplyRequest,
+    ) -> Result<IMasterDelegationApplyResponse> {
+        let request = MasterDelegationApplyRequest::try_from(request)?;
+        let response = self.wallet().clone().master_delegation_apply_call(request).await?;
+        IMasterDelegationApplyResponse::try_from(response)
+    }
+
+    /// Sign master delegation request (offline).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "signMasterDelegationRequest")]
+    pub async fn sign_master_delegation_request(
+        &self,
+        request: IMasterDelegationSignRequest,
+    ) -> Result<IMasterDelegationSignResponse> {
+        let request = MasterDelegationSignRequest::try_from(request)?;
+        let response = self.wallet().clone().master_delegation_sign_call(request).await?;
+        IMasterDelegationSignResponse::try_from(response)
     }
 }
 

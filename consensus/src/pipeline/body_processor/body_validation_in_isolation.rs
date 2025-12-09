@@ -415,8 +415,22 @@ mod tests {
 
         let mut block = example_block.clone();
         let txs = &mut block.transactions;
-        txs[1].inputs[0].sig_op_count = 255;
-        txs[1].inputs[1].sig_op_count = 255;
+        // With new parameters (mass_per_sig_op: 800, max_block_mass: 2,000,000)
+        // we need to use tx[1] which has 2 inputs (coinbase has no inputs)
+        // Clone input template and create unique inputs by changing previous_outpoint.index
+        let input_template = txs[1].inputs[0].clone();
+        // Add 8 more inputs (2 existing + 8 new = 10 total)
+        // Make each input unique by setting a unique outpoint index
+        for i in 0..8 {
+            let mut new_input = input_template.clone();
+            new_input.previous_outpoint.index = 10 + i as u32; // Set unique index directly
+            txs[1].inputs.push(new_input);
+        }
+        // Set all sig_op_counts to max (255)
+        for input in &mut txs[1].inputs {
+            input.sig_op_count = 255;
+        }
+        // Calculate: 255 × 10 × 800 = 2,040,000 > 2,000,000 ✓
         block.header.hash_merkle_root = calc_hash_merkle_root(txs.iter());
         assert_match!(body_processor.validate_body_in_isolation(&block.to_immutable()), Err(RuleError::ExceedsComputeMassLimit(_, _)));
 

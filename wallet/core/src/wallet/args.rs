@@ -7,7 +7,18 @@ use crate::storage::interface::CreateArgs;
 use crate::storage::{Hint, PrvKeyDataId};
 use crate::wallet::keydata::PrvKeyDataVariantKind;
 use borsh::{BorshDeserialize, BorshSerialize};
+use kaspa_mldsa::MlDsaLevel;
+use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use zeroize::Zeroize;
+
+fn serialize_mldsa_level<W: std::io::Write>(level: &MlDsaLevel, writer: &mut W) -> std::io::Result<()> {
+    borsh::BorshSerialize::serialize(&(*level as u8), writer)
+}
+
+fn deserialize_mldsa_level<R: std::io::Read>(reader: &mut R) -> std::io::Result<MlDsaLevel> {
+    let value = u8::deserialize_reader(reader)?;
+    MlDsaLevel::from_u8(value).ok_or_else(|| IoError::new(IoErrorKind::InvalidData, format!("invalid MlDsaLevel value {value}")))
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,6 +175,17 @@ pub enum AccountCreateArgs {
         account_name: Option<String>,
         ecdsa: bool,
     },
+    Stealth {
+        prv_key_data_args: PrvKeyDataArgs,
+        account_name: Option<String>,
+        account_index: Option<u64>,
+    },
+    MldsaMaster {
+        prv_key_data_id: PrvKeyDataId,
+        #[borsh(serialize_with = "serialize_mldsa_level", deserialize_with = "deserialize_mldsa_level")]
+        level: MlDsaLevel,
+        account_name: Option<String>,
+    },
 }
 
 impl AccountCreateArgs {
@@ -193,5 +215,19 @@ impl AccountCreateArgs {
         minimum_signatures: u16,
     ) -> Self {
         AccountCreateArgs::Multisig { prv_key_data_args, additional_xpub_keys, name, minimum_signatures }
+    }
+
+    pub fn new_stealth(
+        prv_key_data_id: PrvKeyDataId,
+        payment_secret: Option<Secret>,
+        account_name: Option<String>,
+        account_index: Option<u64>,
+    ) -> Self {
+        let prv_key_data_args = PrvKeyDataArgs { prv_key_data_id, payment_secret };
+        AccountCreateArgs::Stealth { prv_key_data_args, account_name, account_index }
+    }
+
+    pub fn new_mldsa_master(prv_key_data_id: PrvKeyDataId, level: MlDsaLevel, account_name: Option<String>) -> Self {
+        AccountCreateArgs::MldsaMaster { prv_key_data_id, level, account_name }
     }
 }

@@ -1,0 +1,34 @@
+[package]
+name = "kaspa-stealth-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+kaspa-stealth = { path = ".." }
+arbitrary = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "parse_ephemeral_output"
+path = "fuzz_targets/parse_ephemeral_output.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_stealth_address"
+path = "fuzz_targets/parse_stealth_address.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stealth_secret_key"
+path = "fuzz_targets/stealth_secret_key.rs"
+test = false
+doc = false
+bench = false

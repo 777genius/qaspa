@@ -59,16 +59,20 @@
 
 use crate::imports::*;
 use crate::result::Result;
+use crate::tx::generator::stealth_change::DynStealthChangeCreator;
 use crate::tx::{
     mass::*, Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, PendingTransactionIterator,
-    PendingTransactionStream,
+    PendingTransactionStream, RandomFeeSettings,
 };
 use crate::utxo::{NetworkParams, UtxoContext, UtxoEntryReference};
+use kaspa_addresses::Version;
 use kaspa_consensus_client::UtxoEntry;
 use kaspa_consensus_core::constants::UNACCEPTED_DAA_SCORE;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspa_consensus_core::tx::{Transaction, TransactionInput, TransactionOutpoint, TransactionOutput};
-use kaspa_txscript::pay_to_address_script;
+use kaspa_stealth::{create_stealth_output, StealthAddress};
+use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
+use rand::{rngs::OsRng, Rng};
 use std::collections::VecDeque;
 
 use super::SignerT;
@@ -310,8 +314,15 @@ struct Inner {
     final_transaction_payload: Vec<u8>,
     // final transaction payload mass
     final_transaction_payload_mass: u64,
+    // Optional stealth change creator for pre-calculating spending keys
+    stealth_change_creator: Option<DynStealthChangeCreator>,
+    // Include delegation id TLV in stealth signatures
+    include_delegation_id: bool,
     // execution context
     context: Mutex<Context>,
+    // random fee configuration
+    random_fee_settings: RandomFeeSettings,
+    random_fee_offset: u64,
 }
 
 impl std::fmt::Debug for Inner {
@@ -335,6 +346,9 @@ impl std::fmt::Debug for Inner {
             .field("final_transaction_outputs_compute_mass", &self.final_transaction_outputs_compute_mass)
             .field("final_transaction_payload", &self.final_transaction_payload)
             .field("final_transaction_payload_mass", &self.final_transaction_payload_mass)
+            .field("include_delegation_id", &self.include_delegation_id)
+            .field("random_fee_settings", &self.random_fee_settings)
+            .field("random_fee_offset", &self.random_fee_offset)
             // .field("context", &self.context)
             .finish()
     }
@@ -365,6 +379,9 @@ impl Generator {
             final_transaction_destination,
             final_transaction_payload,
             destination_utxo_context,
+            stealth_change_creator,
+            random_fee_settings,
+            include_delegation_id,
         } = settings;
 
         let network_type = NetworkType::from(network_id);
@@ -386,7 +403,12 @@ impl Generator {
                 }
 
                 for output in outputs.iter() {
-                    if NetworkType::try_from(output.address.prefix)? != network_type {
+                    let output_network = NetworkType::try_from(output.address.prefix)?;
+                    // Allow StealthTestnet prefix for all test networks (testnet, simnet, devnet)
+                    let is_stealth_on_test_network = output.address.prefix.is_stealth()
+                        && matches!(network_type, NetworkType::Testnet | NetworkType::Simnet | NetworkType::Devnet)
+                        && matches!(output_network, NetworkType::Testnet);
+                    if output_network != network_type && !is_stealth_on_test_network {
                         return Err(Error::GeneratorPaymentOutputNetworkTypeMismatch);
                     }
                     if output.amount == 0 {
@@ -394,27 +416,60 @@ impl Generator {
                     }
                 }
 
-                (
-                    outputs
-                        .iter()
-                        .map(|output| TransactionOutput::new(output.amount, pay_to_address_script(&output.address)))
-                        .collect(),
-                    Some(outputs.iter().map(|output| output.amount).sum()),
-                )
+                // Convert payment outputs to transaction outputs
+                // Stealth addresses require special handling with ephemeral key generation
+                let mut tx_outputs = Vec::with_capacity(outputs.outputs.len());
+                for output in outputs.outputs.iter() {
+                    let script = if output.address.version == Version::Stealth {
+                        // For stealth addresses, extract StealthAddress from payload
+                        // and generate ephemeral output with random ephemeral key
+                        let stealth_addr = StealthAddress::try_from_slice(&output.address.payload)
+                            .map_err(|_| Error::Custom("Invalid stealth address payload".to_string()))?;
+                        let ephemeral_output = create_stealth_output(&stealth_addr, &mut rand::thread_rng())
+                            .map_err(|e| Error::Custom(format!("Failed to create stealth output: {}", e)))?;
+                        pay_to_stealth(&ephemeral_output)
+                    } else {
+                        pay_to_address_script(&output.address)
+                    };
+                    tx_outputs.push(TransactionOutput::new(output.amount, script));
+                }
+
+                (tx_outputs, Some(outputs.outputs.iter().map(|output| output.amount).sum()))
             }
         };
+
+        let (final_transaction_priority_fee, random_fee_offset) =
+            Self::randomize_priority_fee(&random_fee_settings, final_transaction_priority_fee)?;
 
         if final_transaction_outputs.is_empty() && matches!(final_transaction_priority_fee, Fees::ReceiverPays(_)) {
             return Err(Error::GeneratorIncludeFeesRequiresOneOutput);
         }
 
-        // sanity check
-        if NetworkType::try_from(change_address.prefix)? != network_type {
+        // sanity check - allow StealthTestnet prefix for all test networks (testnet, simnet, devnet)
+        let change_network = NetworkType::try_from(change_address.prefix)?;
+        let is_stealth_on_test_network = change_address.prefix.is_stealth()
+            && matches!(network_type, NetworkType::Testnet | NetworkType::Simnet | NetworkType::Devnet)
+            && matches!(change_network, NetworkType::Testnet);
+        if change_network != network_type && !is_stealth_on_test_network {
             return Err(Error::GeneratorChangeAddressNetworkTypeMismatch);
         }
 
-        let standard_change_output_mass = mass_calculator
-            .calc_compute_mass_for_client_transaction_output(&TransactionOutput::new(0, pay_to_address_script(&change_address)));
+        if change_address.version == Version::Stealth && stealth_change_creator.is_none() {
+            return Err(Error::StealthChangeCreatorRequired);
+        }
+
+        // Calculate change output mass - special handling for Stealth addresses
+        // which have a 66-byte script (not compatible with pay_to_address_script)
+        let standard_change_output_mass = if change_address.version == kaspa_addresses::Version::Stealth {
+            // Stealth output: [33B R][1B tag][32B P_dest] = 66 bytes
+            use kaspa_consensus_core::tx::{ScriptPublicKey, ScriptVec};
+            use kaspa_stealth::STEALTH_SCRIPT_VERSION;
+            let dummy_script = ScriptPublicKey::new(STEALTH_SCRIPT_VERSION, ScriptVec::from_slice(&[0u8; 66]));
+            mass_calculator.calc_compute_mass_for_client_transaction_output(&TransactionOutput::new(0, dummy_script))
+        } else {
+            mass_calculator
+                .calc_compute_mass_for_client_transaction_output(&TransactionOutput::new(0, pay_to_address_script(&change_address)))
+        };
         let signature_mass_per_input = mass_calculator.calc_compute_mass_for_signature(minimum_signatures);
         let final_transaction_outputs_compute_mass =
             mass_calculator.calc_compute_mass_for_client_transaction_outputs(&final_transaction_outputs);
@@ -475,7 +530,11 @@ impl Generator {
             final_transaction_outputs_compute_mass,
             final_transaction_payload,
             final_transaction_payload_mass,
+            stealth_change_creator,
+            include_delegation_id,
             destination_utxo_context,
+            random_fee_settings,
+            random_fee_offset,
         };
 
         Ok(Self { inner: Arc::new(inner) })
@@ -520,6 +579,11 @@ impl Generator {
     #[inline(always)]
     pub fn destination_utxo_context(&self) -> &Option<UtxoContext> {
         &self.inner.destination_utxo_context
+    }
+
+    #[inline(always)]
+    pub fn include_delegation_id(&self) -> bool {
+        self.inner.include_delegation_id
     }
 
     /// Core [`Multiplexer<Events>`] (if available)
@@ -627,6 +691,28 @@ impl Generator {
 
     fn calc_fees_from_mass(&self, mass: u64) -> u64 {
         self.inner.mass_calculator.calc_minimum_transaction_fee_from_mass(mass).max(self.calc_fee_rate(mass))
+    }
+
+    fn randomize_priority_fee(random_fee_settings: &RandomFeeSettings, priority_fee: Fees) -> Result<(Fees, u64)> {
+        if !random_fee_settings.is_active() {
+            return Ok((priority_fee, 0));
+        }
+
+        if priority_fee.is_none() {
+            return Err(Error::InvalidArgument("Fee randomization requires a priority fee".to_string()));
+        }
+
+        let (min, max) = random_fee_settings.range().expect("active random fee settings must provide a range");
+
+        let offset = if min == max { min } else { OsRng.gen_range(min..=max) };
+
+        let randomized_fee = match priority_fee {
+            Fees::SenderPays(value) => Fees::SenderPays(value.saturating_add(offset)),
+            Fees::ReceiverPays(value) => Fees::ReceiverPays(value.saturating_add(offset)),
+            Fees::None => Fees::None,
+        };
+
+        Ok((randomized_fee, offset))
     }
 
     /// Main UTXO entry processing loop. This function sources UTXOs from [`Generator::get_utxo_entry()`] and
@@ -960,6 +1046,15 @@ impl Generator {
     /// Generate an `Edge` transaction. This function is called when the transaction
     /// processing has aggregated sufficient inputs to match requested outputs.
     fn generate_edge_transaction(&self, context: &mut Context, stage: &mut Stage, data: &mut Data) -> Result<Option<DataKind>> {
+        // Stealth change addresses cannot be used for batch transactions because:
+        // 1. Each batch output requires a unique ephemeral key (R)
+        // 2. The spending key must be saved for later signing
+        // 3. Batch outputs are consumed in subsequent transactions within the same batch
+        // 4. We cannot sign the next batch transaction without the spending key
+        if self.inner.change_address.version == kaspa_addresses::Version::Stealth {
+            return Err(Error::StealthChangeBatchNotSupported);
+        }
+
         let calc = &self.inner.mass_calculator;
 
         let compute_mass = data.aggregate_mass
@@ -1048,12 +1143,26 @@ impl Generator {
                     }
                 }
 
-                let change_output_index = if change_output_value > 0 {
+                // Create change output - special handling for Stealth addresses
+                let (change_output_index, pending_stealth_change) = if change_output_value > 0 {
                     let change_output_index = Some(final_outputs.len());
-                    final_outputs.push(TransactionOutput::new(change_output_value, pay_to_address_script(&self.inner.change_address)));
-                    change_output_index
+
+                    if self.inner.change_address.version == kaspa_addresses::Version::Stealth {
+                        // Use stealth change creator to pre-calculate spending key
+                        let creator = self.inner.stealth_change_creator.as_ref().ok_or(Error::StealthChangeCreatorRequired)?;
+
+                        let (output, mut pending) = creator.create_change_output(change_output_value)?;
+                        pending.output_index = final_outputs.len();
+                        final_outputs.push(output);
+
+                        (change_output_index, Some(pending))
+                    } else {
+                        final_outputs
+                            .push(TransactionOutput::new(change_output_value, pay_to_address_script(&self.inner.change_address)));
+                        (change_output_index, None)
+                    }
                 } else {
-                    None
+                    (None, None)
                 };
 
                 let aggregate_output_value = final_outputs.iter().map(|output| output.value).sum::<u64>();
@@ -1092,7 +1201,7 @@ impl Generator {
                 context.number_of_stages += 1;
                 context.number_of_transactions += 1;
 
-                Ok(Some(PendingTransaction::try_new(
+                let pending_tx = PendingTransaction::try_new(
                     self,
                     tx,
                     utxo_entry_references,
@@ -1106,7 +1215,16 @@ impl Generator {
                     transaction_mass,
                     transaction_fees,
                     kind,
-                )?))
+                )?;
+
+                pending_tx.enforce_stealth_only_inputs()?;
+
+                // Store pre-calculated stealth change key if present
+                if let Some(stealth_change) = pending_stealth_change {
+                    pending_tx.set_stealth_change(stealth_change);
+                }
+
+                Ok(Some(pending_tx))
             }
             (kind, data) => {
                 let Data {
@@ -1127,8 +1245,18 @@ impl Generator {
                 }
 
                 let output_value = aggregate_input_value.saturating_sub(transaction_fees);
+
+                // Stealth change addresses cannot be used for batch transactions because:
+                // 1. Each batch output requires a unique ephemeral key (R)
+                // 2. The spending key must be saved for signing the next batch transaction
+                // 3. Batch outputs are consumed internally - we can't save the key properly
+                if self.inner.change_address.version == kaspa_addresses::Version::Stealth {
+                    return Err(Error::StealthChangeBatchNotSupported);
+                }
+
                 let script_public_key = pay_to_address_script(&self.inner.change_address);
                 let output = TransactionOutput::new(output_value, script_public_key.clone());
+
                 let tx = Transaction::new(0, inputs, vec![output], 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
 
                 let mut transaction_mass = self.inner.mass_calculator.calc_overall_mass_for_unsigned_consensus_transaction(
@@ -1167,7 +1295,7 @@ impl Generator {
                     _ => unreachable!(),
                 }
 
-                Ok(Some(PendingTransaction::try_new(
+                let pending_tx = PendingTransaction::try_new(
                     self,
                     tx,
                     utxo_entry_references,
@@ -1181,7 +1309,11 @@ impl Generator {
                     transaction_mass,
                     transaction_fees,
                     kind,
-                )?))
+                )?;
+
+                pending_tx.enforce_stealth_only_inputs()?;
+
+                Ok(Some(pending_tx))
             }
         }
     }
@@ -1218,6 +1350,7 @@ impl Generator {
             final_transaction_id: context.final_transaction_id,
             number_of_generated_transactions: context.number_of_transactions,
             number_of_generated_stages: context.number_of_stages,
+            random_fee_offset: self.inner.random_fee_offset,
         }
     }
 }

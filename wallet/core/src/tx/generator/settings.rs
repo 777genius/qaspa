@@ -6,7 +6,8 @@
 use crate::events::Events;
 use crate::imports::*;
 use crate::result::Result;
-use crate::tx::{Fees, PaymentDestination};
+use crate::tx::generator::stealth_change::DynStealthChangeCreator;
+use crate::tx::{Fees, PaymentDestination, RandomFeeSettings};
 use crate::utxo::{UtxoContext, UtxoEntryReference, UtxoIterator};
 use kaspa_addresses::Address;
 use workflow_core::channel::Multiplexer;
@@ -38,6 +39,15 @@ pub struct GeneratorSettings {
     pub final_transaction_payload: Option<Vec<u8>>,
     // transaction is a transfer between accounts
     pub destination_utxo_context: Option<UtxoContext>,
+    /// Optional creator for stealth change outputs.
+    /// Required when `change_address.version == Version::Stealth`.
+    /// This allows pre-calculation of spending keys for change outputs,
+    /// avoiding the need to re-scan the blockchain.
+    pub stealth_change_creator: Option<DynStealthChangeCreator>,
+    /// Optional randomization for final priority fee.
+    pub random_fee_settings: RandomFeeSettings,
+    /// Include delegation id TLV in stealth signatures (Iteration 4).
+    pub include_delegation_id: bool,
 }
 
 // impl std::fmt::Debug for GeneratorSettings {
@@ -65,6 +75,7 @@ impl GeneratorSettings {
         fee_rate: Option<f64>,
         final_priority_fee: Fees,
         final_transaction_payload: Option<Vec<u8>>,
+        random_fee_settings: Option<RandomFeeSettings>,
     ) -> Result<Self> {
         let network_id = account.utxo_context().processor().network_id()?;
         let change_address = account.change_address()?;
@@ -73,6 +84,8 @@ impl GeneratorSettings {
         let minimum_signatures = account.minimum_signatures();
 
         let utxo_iterator = UtxoIterator::new(account.utxo_context());
+        let random_fee_settings = random_fee_settings.unwrap_or_default();
+        random_fee_settings.validate()?;
 
         let settings = GeneratorSettings {
             network_id,
@@ -89,6 +102,9 @@ impl GeneratorSettings {
             final_transaction_destination,
             final_transaction_payload,
             destination_utxo_context: None,
+            stealth_change_creator: None,
+            random_fee_settings,
+            include_delegation_id: true,
         };
 
         Ok(settings)
@@ -105,9 +121,12 @@ impl GeneratorSettings {
         final_priority_fee: Fees,
         final_transaction_payload: Option<Vec<u8>>,
         multiplexer: Option<Multiplexer<Box<Events>>>,
+        random_fee_settings: Option<RandomFeeSettings>,
     ) -> Result<Self> {
         let network_id = utxo_context.processor().network_id()?;
         let utxo_iterator = UtxoIterator::new(&utxo_context);
+        let random_fee_settings = random_fee_settings.unwrap_or_default();
+        random_fee_settings.validate()?;
 
         let settings = GeneratorSettings {
             network_id,
@@ -124,6 +143,9 @@ impl GeneratorSettings {
             final_transaction_destination,
             final_transaction_payload,
             destination_utxo_context: None,
+            stealth_change_creator: None,
+            random_fee_settings,
+            include_delegation_id: true,
         };
 
         Ok(settings)
@@ -142,7 +164,11 @@ impl GeneratorSettings {
         final_priority_fee: Fees,
         final_transaction_payload: Option<Vec<u8>>,
         multiplexer: Option<Multiplexer<Box<Events>>>,
+        random_fee_settings: Option<RandomFeeSettings>,
     ) -> Result<Self> {
+        let random_fee_settings = random_fee_settings.unwrap_or_default();
+        random_fee_settings.validate()?;
+
         let settings = GeneratorSettings {
             network_id,
             multiplexer,
@@ -158,13 +184,37 @@ impl GeneratorSettings {
             final_transaction_destination,
             final_transaction_payload,
             destination_utxo_context: None,
+            stealth_change_creator: None,
+            random_fee_settings,
+            include_delegation_id: true,
         };
 
         Ok(settings)
     }
 
+    /// Sets the stealth change creator for creating change outputs to stealth addresses.
+    ///
+    /// This is required when `change_address` is a stealth address (Version::Stealth).
+    /// The creator pre-calculates the spending key so we don't need to re-scan
+    /// the blockchain to find our own change output.
+    pub fn with_stealth_change_creator(mut self, creator: DynStealthChangeCreator) -> Self {
+        self.stealth_change_creator = Some(creator);
+        self
+    }
+
+    pub fn with_include_delegation_id(mut self, include: bool) -> Self {
+        self.include_delegation_id = include;
+        self
+    }
+
     pub fn utxo_context_transfer(mut self, destination_utxo_context: &UtxoContext) -> Self {
         self.destination_utxo_context = Some(destination_utxo_context.clone());
         self
+    }
+
+    pub fn with_random_fee_settings(mut self, settings: RandomFeeSettings) -> Result<Self> {
+        settings.validate()?;
+        self.random_fee_settings = settings;
+        Ok(self)
     }
 }

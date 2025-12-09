@@ -114,6 +114,18 @@ cfg_if! {
             WalletError = "wallet-error",
             WalletClose = "wallet-close",
             PrvKeyDataCreate = "prv-key-data-create",
+            MasterAnchorCreated = "master-anchor-created",
+            MasterSeedExported = "master-seed-exported",
+            MasterAccountCreated = "master-account-created",
+            MasterAccountRotated = "master-account-rotated",
+            MasterAccountRevoked = "master-account-revoked",
+            StealthAttachedToMaster = "stealth-attached-to-master",
+            StealthDetachedFromMaster = "stealth-detached-from-master",
+            MasterDelegationExpired = "master-delegation-expired",
+            MasterDelegationRevoked = "master-delegation-revoked",
+            MasterDelegationRequestBuilt = "master-delegation-request-built",
+            MasterDelegationResponseApplied = "master-delegation-response-applied",
+            MasterDelegationApplyFailed = "master-delegation-apply-failed",
             AccountActivation = "account-activation",
             AccountDeactivation = "account-deactivation",
             AccountSelection = "account-selection",
@@ -151,6 +163,18 @@ cfg_if! {
             "wallet-error": IWalletErrorEvent,
             "wallet-close": undefined,
             "prv-key-data-create": IPrvKeyDataCreateEvent,
+            "master-anchor-created": IMasterAnchorCreatedEvent,
+            "master-seed-exported": IMasterSeedExportedEvent,
+            "master-account-created": IMasterAccountCreatedEvent,
+            "master-account-rotated": IMasterAccountRotatedEvent,
+            "master-account-revoked": IMasterAccountRevokedEvent,
+            "stealth-attached-to-master": IStealthAttachedToMasterEvent,
+            "stealth-detached-from-master": IStealthDetachedFromMasterEvent,
+            "master-delegation-expired": IMasterDelegationExpiredEvent,
+            "master-delegation-revoked": IMasterDelegationRevokedEvent,
+            "master-delegation-request-built": IMasterDelegationRequestBuiltEvent,
+            "master-delegation-response-applied": IMasterDelegationResponseAppliedEvent,
+            "master-delegation-apply-failed": IMasterDelegationApplyFailedEvent,
             "account-activation": IAccountActivationEvent,
             "account-deactivation": IAccountDeactivationEvent,
             "account-selection": IAccountSelectionEvent,
@@ -234,6 +258,52 @@ declare! {
     export interface IDisconnectEvent {
         networkId : string;
         url? : string;
+    }
+    "#,
+}
+
+declare! {
+    IMasterDelegationRequestBuiltEvent,
+    r#"
+    /**
+     * Emitted when an offline delegation request is built.
+     * @category Wallet Events
+     */
+    export interface IMasterDelegationRequestBuiltEvent {
+        masterAnchor: string;
+        requestId: string;
+        targets: string[];
+    }
+    "#,
+}
+
+declare! {
+    IMasterDelegationResponseAppliedEvent,
+    r#"
+    /**
+     * Emitted when a signed delegation response is applied.
+     * @category Wallet Events
+     */
+    export interface IMasterDelegationResponseAppliedEvent {
+        masterAnchor: string;
+        requestId: string;
+        delegations: number;
+        skipped: number;
+    }
+    "#,
+}
+
+declare! {
+    IMasterDelegationApplyFailedEvent,
+    r#"
+    /**
+     * Emitted when applying a delegation response fails.
+     * @category Wallet Events
+     */
+    export interface IMasterDelegationApplyFailedEvent {
+        masterAnchor: string;
+        requestId: string;
+        reason: string;
     }
     "#,
 }

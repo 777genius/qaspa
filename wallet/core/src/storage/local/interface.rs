@@ -156,7 +156,9 @@ impl LocalStoreInner {
             Store::Resident => {
                 let mut cache = self.cache.write().unwrap();
                 let old_prv_key_data: Decrypted<PrvKeyDataMap> = cache.prv_key_data.decrypt(old_secret)?;
-                let new_prv_key_data = Decrypted::new(old_prv_key_data.unwrap()).encrypt(new_secret, cache.encryption_kind)?;
+                let mut prv_key_map = old_prv_key_data.unwrap();
+                Self::reencrypt_master_payloads(&mut prv_key_map, old_secret, new_secret)?;
+                let new_prv_key_data = Decrypted::new(prv_key_map).encrypt(new_secret, cache.encryption_kind)?;
                 cache.prv_key_data.replace(new_prv_key_data);
 
                 Ok(())
@@ -165,7 +167,9 @@ impl LocalStoreInner {
                 let wallet = {
                     let mut cache = self.cache.write().unwrap();
                     let old_prv_key_data: Decrypted<PrvKeyDataMap> = cache.prv_key_data.decrypt(old_secret)?;
-                    let new_prv_key_data = Decrypted::new(old_prv_key_data.unwrap()).encrypt(new_secret, cache.encryption_kind)?;
+                    let mut prv_key_map = old_prv_key_data.unwrap();
+                    Self::reencrypt_master_payloads(&mut prv_key_map, old_secret, new_secret)?;
+                    let new_prv_key_data = Decrypted::new(prv_key_map).encrypt(new_secret, cache.encryption_kind)?;
                     cache.prv_key_data.replace(new_prv_key_data);
 
                     cache.to_wallet(None, new_secret)?
@@ -175,6 +179,13 @@ impl LocalStoreInner {
                 Ok(())
             }
         }
+    }
+
+    fn reencrypt_master_payloads(map: &mut PrvKeyDataMap, old_secret: &Secret, new_secret: &Secret) -> Result<()> {
+        for prv in map.values_mut() {
+            prv.reencrypt_mldsa_master_seed(old_secret, new_secret)?;
+        }
+        Ok(())
     }
 
     pub async fn update_stored_metadata(&self) -> Result<()> {

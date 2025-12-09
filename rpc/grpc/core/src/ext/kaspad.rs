@@ -20,9 +20,10 @@ impl KaspadRequest {
 impl kaspad_request::Payload {
     pub fn from_notification_type(scope: &Scope, command: Command) -> Self {
         match scope {
-            Scope::BlockAdded(_) => {
-                kaspad_request::Payload::NotifyBlockAddedRequest(NotifyBlockAddedRequestMessage { command: command.into() })
-            }
+            Scope::BlockAdded(ref scope) => kaspad_request::Payload::NotifyBlockAddedRequest(NotifyBlockAddedRequestMessage {
+                command: command.into(),
+                include_stealth_outputs: scope.include_stealth_outputs,
+            }),
             Scope::NewBlockTemplate(_) => {
                 kaspad_request::Payload::NotifyNewBlockTemplateRequest(NotifyNewBlockTemplateRequestMessage {
                     command: command.into(),
@@ -61,6 +62,14 @@ impl kaspad_request::Payload {
             }
             Scope::PruningPointUtxoSetOverride(_) => {
                 kaspad_request::Payload::NotifyPruningPointUtxoSetOverrideRequest(NotifyPruningPointUtxoSetOverrideRequestMessage {
+                    command: command.into(),
+                })
+            }
+            Scope::StealthUtxosChanged(_) => {
+                // TODO: Add protobuf message for StealthUtxosChanged when gRPC support is implemented
+                // For now, use regular UtxosChanged with empty addresses (will be filtered by version)
+                kaspad_request::Payload::NotifyUtxosChangedRequest(NotifyUtxosChangedRequestMessage {
+                    addresses: vec![],
                     command: command.into(),
                 })
             }

@@ -92,6 +92,25 @@ pub trait RpcApi: Sync + Send + AnySync {
         request: GetServerInfoRequest,
     ) -> RpcResult<GetServerInfoResponse>;
 
+    // MLDSA master / delegation (Iteration 4)
+    async fn register_mldsa_anchor(&self, anchor: [u8; 32]) -> RpcResult<bool> {
+        Ok(self.register_mldsa_anchor_call(None, RegisterMldsaAnchorRequest { anchor, metadata: None }).await?.accepted)
+    }
+    async fn register_mldsa_anchor_call(
+        &self,
+        connection: Option<&DynRpcConnection>,
+        request: RegisterMldsaAnchorRequest,
+    ) -> RpcResult<RegisterMldsaAnchorResponse>;
+
+    async fn list_mldsa_delegations(&self, anchor: [u8; 32]) -> RpcResult<Vec<RpcDelegationRecord>> {
+        Ok(self.list_mldsa_delegations_call(None, ListMldsaDelegationsRequest { anchor }).await?.delegations)
+    }
+    async fn list_mldsa_delegations_call(
+        &self,
+        connection: Option<&DynRpcConnection>,
+        request: ListMldsaDelegationsRequest,
+    ) -> RpcResult<ListMldsaDelegationsResponse>;
+
     // Get current sync status of the node (should be converted to a notification subscription)
     async fn get_sync_status(&self) -> RpcResult<bool> {
         Ok(self.get_sync_status_call(None, GetSyncStatusRequest {}).await?.is_synced)
@@ -355,6 +374,38 @@ pub trait RpcApi: Sync + Send + AnySync {
         connection: Option<&DynRpcConnection>,
         request: GetUtxosByAddressesRequest,
     ) -> RpcResult<GetUtxosByAddressesResponse>;
+
+    /// Requests all current UTXOs with the specified script version.
+    ///
+    /// This call is used for stealth address scanning where UTXOs don't have associated addresses.
+    /// This call is only available when this node was started with `--utxoindex`.
+    async fn get_utxos_by_script_version(
+        &self,
+        script_version: u16,
+        cursor: Option<RpcScriptVersionCursor>,
+        limit: Option<u32>,
+    ) -> RpcResult<GetUtxosByScriptVersionResponse> {
+        self.get_utxos_by_script_version_call(None, GetUtxosByScriptVersionRequest::new(script_version, cursor, limit)).await
+    }
+    async fn get_utxos_by_script_version_call(
+        &self,
+        connection: Option<&DynRpcConnection>,
+        request: GetUtxosByScriptVersionRequest,
+    ) -> RpcResult<GetUtxosByScriptVersionResponse>;
+
+    /// Requests stealth outputs (view tags) from a specific block.
+    ///
+    /// This method scans a block for stealth outputs (script version 16) and returns
+    /// the view tags and destination pubkeys needed for wallet scanning.
+    /// Unlike utxoindex-based methods, this reads directly from the block data.
+    async fn get_block_view_tags(&self, hash: RpcHash) -> RpcResult<GetBlockViewTagsResponse> {
+        self.get_block_view_tags_call(None, GetBlockViewTagsRequest::new(hash)).await
+    }
+    async fn get_block_view_tags_call(
+        &self,
+        connection: Option<&DynRpcConnection>,
+        request: GetBlockViewTagsRequest,
+    ) -> RpcResult<GetBlockViewTagsResponse>;
 
     /// Requests the blue score of the current selected parent of the virtual block.
     async fn get_sink_blue_score(&self) -> RpcResult<u64> {

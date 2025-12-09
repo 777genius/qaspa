@@ -32,12 +32,12 @@ macro_rules! from {
         }
     };
 
-    // Structure without field
+    // Structure without field - uses Default to handle structs with default fields
     ($variant:tt) => {
         paste::paste! {
             impl From<[<Notify $variant Request>]> for [<$variant Scope>] {
                 fn from(_: [<Notify $variant Request>]) -> Self {
-                    Self {}
+                    Self::default()
                 }
             }
             into_scope!($variant);
@@ -45,7 +45,9 @@ macro_rules! from {
     };
 }
 
-from!(BlockAdded);
+from!(item: BlockAdded, {
+    Self::new(item.include_stealth_outputs)
+});
 from!(item: VirtualChainChanged, {
     Self::new(item.include_accepted_transaction_ids)
 });

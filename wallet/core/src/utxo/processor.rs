@@ -9,28 +9,87 @@ use crate::imports::*;
 // use futures::pin_mut;
 use kaspa_notify::{
     listener::ListenerId,
-    scope::{Scope, UtxosChangedScope, VirtualDaaScoreChangedScope},
+    scope::{Scope, StealthUtxosChangedScope, UtxosChangedScope, VirtualDaaScoreChangedScope},
 };
 use kaspa_rpc_core::{
     api::{
         ctl::{RpcCtl, RpcState},
         ops::{RPC_API_REVISION, RPC_API_VERSION},
     },
-    message::UtxosChangedNotification,
+    message::{StealthUtxosChangedNotification, UtxosChangedNotification},
     GetServerInfoResponse, RpcFeeEstimate,
 };
+use kaspa_txscript::STEALTH_SCRIPT_VERSION;
 use kaspa_wrpc_client::KaspaRpcClient;
 use workflow_core::channel::{Channel, DuplexChannel, Sender};
 use workflow_core::task::spawn;
 
+use crate::deterministic::AccountId;
 use crate::events::Events;
 use crate::result::Result;
+use crate::utxo::stealth_handler::DynStealthUtxoHandler;
 use crate::utxo::{Maturity, OutgoingTransaction, PendingUtxoEntryReference, SyncMonitor, UtxoContext, UtxoEntryId};
 use crate::wallet::WalletBusMessage;
+use kaspa_consensus_core::tx::TransactionOutpoint;
 use kaspa_rpc_core::{
     notify::connection::{ChannelConnection, ChannelType},
     Notification,
 };
+
+/// Stealth handler storage - separate struct to avoid lifetime issues with DashMap in async contexts
+pub struct StealthHandlerStore {
+    handlers: RwLock<HashMap<AccountId, DynStealthUtxoHandler>>,
+    outpoint_index: RwLock<HashMap<TransactionOutpoint, AccountId>>,
+}
+
+impl StealthHandlerStore {
+    pub fn new() -> Self {
+        Self { handlers: RwLock::new(HashMap::new()), outpoint_index: RwLock::new(HashMap::new()) }
+    }
+
+    pub fn register(&self, account_id: AccountId, handler: DynStealthUtxoHandler) {
+        self.handlers.write().unwrap().insert(account_id, handler);
+    }
+
+    pub fn unregister(&self, account_id: &AccountId) {
+        self.handlers.write().unwrap().remove(account_id);
+        self.outpoint_index.write().unwrap().retain(|_, id| id != account_id);
+    }
+
+    pub fn register_outpoint(&self, outpoint: TransactionOutpoint, account_id: AccountId) {
+        self.outpoint_index.write().unwrap().insert(outpoint, account_id);
+    }
+
+    pub fn unregister_outpoint(&self, outpoint: &TransactionOutpoint) {
+        self.outpoint_index.write().unwrap().remove(outpoint);
+    }
+
+    pub fn get_handler_for_outpoint(&self, outpoint: &TransactionOutpoint) -> Option<DynStealthUtxoHandler> {
+        let index = self.outpoint_index.read().unwrap();
+        let account_id = index.get(outpoint)?;
+        let handlers = self.handlers.read().unwrap();
+        handlers.get(account_id).cloned()
+    }
+
+    pub fn handlers(&self) -> Vec<DynStealthUtxoHandler> {
+        self.handlers.read().unwrap().values().cloned().collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.handlers.read().unwrap().is_empty()
+    }
+
+    pub fn clear(&self) {
+        self.handlers.write().unwrap().clear();
+        self.outpoint_index.write().unwrap().clear();
+    }
+}
+
+impl Default for StealthHandlerStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub struct Inner {
     /// Coinbase UTXOs in stasis
@@ -61,6 +120,8 @@ pub struct Inner {
     connection_signaler: Mutex<Option<Sender<std::result::Result<(), String>>>>,
     fee_rate_task_ctl: DuplexChannel,
     fee_rate_task_is_running: AtomicBool,
+    /// Stealth handler storage
+    stealth_store: StealthHandlerStore,
 }
 
 impl Inner {
@@ -93,6 +154,7 @@ impl Inner {
             connection_signaler: Mutex::new(None),
             fee_rate_task_ctl: DuplexChannel::oneshot(),
             fee_rate_task_is_running: AtomicBool::new(false),
+            stealth_store: StealthHandlerStore::new(),
         }
     }
 }
@@ -246,6 +308,110 @@ impl UtxoProcessor {
         Ok(())
     }
 
+    // ========================================================================
+    // STEALTH HANDLER MANAGEMENT
+    // ========================================================================
+
+    /// Registers a stealth handler for receiving UTXO notifications.
+    /// Stealth handlers are used to process stealth UTXOs which don't have
+    /// a traditional address association.
+    ///
+    /// Automatically subscribes to stealth notifications when the first handler is registered.
+    pub async fn register_stealth_handler(&self, handler: DynStealthUtxoHandler) -> Result<()> {
+        let account_id = *handler.account_id();
+        let was_empty = self.inner.stealth_store.is_empty();
+        self.inner.stealth_store.register(account_id, handler);
+        log_info!("Registered stealth handler for account {}", account_id.to_hex());
+
+        // Subscribe to stealth notifications when first handler is registered
+        if was_empty {
+            self.register_stealth_notifications().await?;
+        }
+        Ok(())
+    }
+
+    /// Unregisters a stealth handler.
+    ///
+    /// Automatically unsubscribes from stealth notifications when the last handler is removed.
+    pub async fn unregister_stealth_handler(&self, account_id: &AccountId) -> Result<()> {
+        self.inner.stealth_store.unregister(account_id);
+        log_info!("Unregistered stealth handler for account {}", account_id.to_hex());
+
+        // Unsubscribe from stealth notifications when last handler is removed
+        if self.inner.stealth_store.is_empty() {
+            self.unregister_stealth_notifications().await?;
+        }
+        Ok(())
+    }
+
+    /// Registers an outpoint in the stealth reverse index
+    pub fn register_stealth_outpoint(&self, outpoint: TransactionOutpoint, account_id: AccountId) {
+        self.inner.stealth_store.register_outpoint(outpoint, account_id);
+    }
+
+    /// Unregisters an outpoint from the stealth reverse index
+    pub fn unregister_stealth_outpoint(&self, outpoint: &TransactionOutpoint) {
+        self.inner.stealth_store.unregister_outpoint(outpoint);
+    }
+
+    /// Gets the handler for an outpoint (if registered)
+    fn get_handler_for_outpoint(&self, outpoint: &TransactionOutpoint) -> Option<DynStealthUtxoHandler> {
+        self.inner.stealth_store.get_handler_for_outpoint(outpoint)
+    }
+
+    /// Returns true if there are any registered stealth handlers
+    pub fn has_stealth_handlers(&self) -> bool {
+        !self.inner.stealth_store.is_empty()
+    }
+
+    /// Returns all registered stealth handlers
+    fn stealth_handlers(&self) -> Vec<DynStealthUtxoHandler> {
+        self.inner.stealth_store.handlers()
+    }
+
+    /// Registers for stealth UTXO notifications with the RPC server.
+    /// Should be called when the first stealth handler is registered.
+    ///
+    /// This method registers for both:
+    /// 1. StealthUtxosChanged notifications (for wRPC which supports it natively)
+    /// 2. Wildcard UtxosChanged notifications (for gRPC which doesn't support StealthUtxosChanged)
+    ///
+    /// The handle_utxo_changed method filters UtxosChanged for stealth UTXOs,
+    /// so stealth UTXOs will be processed regardless of which notification type is used.
+    pub async fn register_stealth_notifications(&self) -> Result<()> {
+        if self.is_connected() {
+            // Subscribe to StealthUtxosChanged (works with wRPC)
+            let stealth_scope = StealthUtxosChangedScope::new(vec![STEALTH_SCRIPT_VERSION]);
+            self.rpc_api().start_notify(self.listener_id()?, stealth_scope.into()).await?;
+            log_info!("Registered for stealth UTXO notifications (script version {})", STEALTH_SCRIPT_VERSION);
+
+            // Also subscribe to wildcard UtxosChanged (needed for gRPC fallback)
+            // gRPC doesn't support StealthUtxosChanged, so it converts to UtxosChanged with empty addresses
+            // But the notification type sent back is still UtxosChanged, so we need to listen for that too
+            let utxos_scope = UtxosChangedScope::new(vec![]); // Empty = wildcard (all UTXOs)
+            self.rpc_api().start_notify(self.listener_id()?, utxos_scope.into()).await?;
+            log_info!("Also registered for wildcard UtxosChanged (gRPC fallback)");
+        }
+        Ok(())
+    }
+
+    /// Unregisters from stealth UTXO notifications.
+    /// Should be called when the last stealth handler is unregistered.
+    pub async fn unregister_stealth_notifications(&self) -> Result<()> {
+        if self.is_connected() {
+            // Unsubscribe from StealthUtxosChanged
+            let stealth_scope = StealthUtxosChangedScope::new(vec![STEALTH_SCRIPT_VERSION]);
+            self.rpc_api().stop_notify(self.listener_id()?, stealth_scope.into()).await?;
+            log_info!("Unregistered from stealth UTXO notifications");
+
+            // Unsubscribe from wildcard UtxosChanged
+            let utxos_scope = UtxosChangedScope::new(vec![]);
+            self.rpc_api().stop_notify(self.listener_id()?, utxos_scope.into()).await?;
+            log_info!("Unregistered from wildcard UtxosChanged");
+        }
+        Ok(())
+    }
+
     pub async fn notify(&self, event: Events) -> Result<()> {
         self.multiplexer()
             .try_broadcast(Box::new(event))
@@ -265,6 +431,11 @@ impl UtxoProcessor {
         self.notify(Events::DaaScoreChange { current_daa_score }).await?;
         self.handle_pending(current_daa_score).await?;
         self.handle_outgoing(current_daa_score).await?;
+
+        // Stealth-specific DAA hooks
+        for handler in self.inner.stealth_store.handlers() {
+            handler.on_daa_score_changed(current_daa_score).await?;
+        }
         Ok(())
     }
 
@@ -276,12 +447,15 @@ impl UtxoProcessor {
             // scan and remove any pending entries that gained maturity
             let mut mature_entries = vec![];
             let pending_entries = &self.inner.pending;
-            pending_entries.retain(|_, pending_entry| match pending_entry.maturity(params, current_daa_score) {
-                Maturity::Confirmed => {
-                    mature_entries.push(pending_entry.clone());
-                    false
+            pending_entries.retain(|_id, pending_entry| {
+                let maturity = pending_entry.maturity(params, current_daa_score);
+                match maturity {
+                    Maturity::Confirmed => {
+                        mature_entries.push(pending_entry.clone());
+                        false
+                    }
+                    _ => true,
                 }
-                _ => true,
             });
 
             // scan and remove any stasis entries that can now become pending
@@ -391,15 +565,96 @@ impl UtxoProcessor {
     }
 
     pub async fn handle_utxo_changed(&self, utxos: UtxosChangedNotification) -> Result<()> {
+        use kaspa_txscript::STEALTH_SCRIPT_VERSION;
+
         let current_daa_score = self.current_daa_score().expect("DAA score expected when handling UTXO Changed notifications");
 
         #[allow(clippy::mutable_key_type)]
         let mut updated_contexts: HashSet<UtxoContext> = HashSet::default();
 
-        let added = (*utxos.added).clone().into_iter().filter_map(|entry| entry.address.clone().map(|address| (address, entry)));
+        // ========================================================================
+        // SPLIT: Entries with address vs without address (stealth)
+        // ========================================================================
+
+        let (added_with_address, added_without_address): (Vec<_>, Vec<_>) =
+            (*utxos.added).clone().into_iter().partition(|entry| entry.address.is_some());
+
+        let (removed_with_address, removed_without_address): (Vec<_>, Vec<_>) =
+            (*utxos.removed).clone().into_iter().partition(|entry| entry.address.is_some());
+
+        // ========================================================================
+        // STEALTH UTXO PROCESSING (without address)
+        // ========================================================================
+
+        // Process added stealth UTXOs
+        for entry in added_without_address {
+            if entry.utxo_entry.script_public_key.version() != STEALTH_SCRIPT_VERSION {
+                continue;
+            }
+
+            let outpoint = TransactionOutpoint::new(entry.outpoint.transaction_id, entry.outpoint.index);
+
+            // First try: lookup in outpoint index (O(1))
+            if let Some(handler) = self.get_handler_for_outpoint(&outpoint) {
+                // Already known outpoint - just update context
+                let context = handler.utxo_context();
+                updated_contexts.insert(context.clone());
+
+                let utxo_ref: UtxoEntryReference = (&entry).into();
+                context.handle_utxo_added(vec![utxo_ref], current_daa_score).await?;
+                continue;
+            }
+
+            // Second try: iterate handlers and try to claim (rare case - first discovery)
+            let handlers = self.stealth_handlers();
+            for handler in handlers {
+                if let Some(context) = handler.try_claim_utxo(&entry).await {
+                    updated_contexts.insert(context.clone());
+
+                    // Register in outpoint index for future lookups
+                    self.register_stealth_outpoint(outpoint, *handler.account_id());
+
+                    let utxo_ref: UtxoEntryReference = (&entry).into();
+                    context.handle_utxo_added(vec![utxo_ref], current_daa_score).await?;
+
+                    break;
+                }
+            }
+        }
+
+        // Process removed stealth UTXOs
+        for entry in removed_without_address {
+            if entry.utxo_entry.script_public_key.version() != STEALTH_SCRIPT_VERSION {
+                continue;
+            }
+
+            let outpoint = TransactionOutpoint::new(entry.outpoint.transaction_id, entry.outpoint.index);
+
+            // Lookup handler by outpoint
+            if let Some(handler) = self.get_handler_for_outpoint(&outpoint) {
+                let context = handler.utxo_context();
+                updated_contexts.insert(context.clone());
+
+                // Remove ephemeral key
+                handler.handle_utxo_removed(&outpoint).await?;
+
+                // Remove from outpoint index
+                self.unregister_stealth_outpoint(&outpoint);
+
+                // Remove from UTXO context
+                let utxo_ref: UtxoEntryReference = (&entry).into();
+                context.handle_utxo_removed(vec![utxo_ref], current_daa_score).await?;
+            }
+        }
+
+        // ========================================================================
+        // STANDARD UTXO PROCESSING (with address)
+        // ========================================================================
+
+        let added = added_with_address.into_iter().filter_map(|entry| entry.address.clone().map(|address| (address, entry)));
         let mut added = HashMap::group_from(added);
 
-        let removed = (*utxos.removed).clone().into_iter().filter_map(|entry| entry.address.clone().map(|address| (address, entry)));
+        let removed = removed_with_address.into_iter().filter_map(|entry| entry.address.clone().map(|address| (address, entry)));
         let mut removed = HashMap::group_from(removed);
 
         // Create separate lists for entries that appear in both added and removed
@@ -487,6 +742,71 @@ impl UtxoProcessor {
         Ok(())
     }
 
+    /// Handles StealthUtxosChanged notifications specifically for stealth UTXOs.
+    /// This is called when we receive notifications filtered by script version.
+    pub async fn handle_stealth_utxo_changed(&self, notification: StealthUtxosChangedNotification) -> Result<()> {
+        let current_daa_score = self.current_daa_score().expect("DAA score expected when handling stealth UTXO notifications");
+
+        #[allow(clippy::mutable_key_type)]
+        let mut updated_contexts: HashSet<UtxoContext> = HashSet::default();
+
+        // Process added stealth UTXOs
+        for entry in notification.added.iter() {
+            let outpoint = TransactionOutpoint::new(entry.outpoint.transaction_id, entry.outpoint.index);
+
+            // First try: lookup in outpoint index (O(1))
+            if let Some(handler) = self.get_handler_for_outpoint(&outpoint) {
+                let context = handler.utxo_context();
+                updated_contexts.insert(context.clone());
+
+                let utxo_ref: UtxoEntryReference = entry.into();
+                context.handle_utxo_added(vec![utxo_ref], current_daa_score).await?;
+                continue;
+            }
+
+            // Second try: iterate handlers and try to claim (first discovery)
+            for handler in self.stealth_handlers() {
+                if let Some(context) = handler.try_claim_utxo(entry).await {
+                    updated_contexts.insert(context.clone());
+
+                    // Register in outpoint index for future lookups
+                    self.register_stealth_outpoint(outpoint, *handler.account_id());
+
+                    let utxo_ref: UtxoEntryReference = entry.into();
+                    context.handle_utxo_added(vec![utxo_ref], current_daa_score).await?;
+                    break;
+                }
+            }
+        }
+
+        // Process removed stealth UTXOs
+        for entry in notification.removed.iter() {
+            let outpoint = TransactionOutpoint::new(entry.outpoint.transaction_id, entry.outpoint.index);
+
+            if let Some(handler) = self.get_handler_for_outpoint(&outpoint) {
+                let context = handler.utxo_context();
+                updated_contexts.insert(context.clone());
+
+                // Remove ephemeral key
+                handler.handle_utxo_removed(&outpoint).await?;
+
+                // Remove from outpoint index
+                self.unregister_stealth_outpoint(&outpoint);
+
+                // Remove from UTXO context
+                let utxo_ref: UtxoEntryReference = entry.into();
+                context.handle_utxo_removed(vec![utxo_ref], current_daa_score).await?;
+            }
+        }
+
+        // Update balances for affected contexts
+        for context in updated_contexts.iter() {
+            context.update_balance().await?;
+        }
+
+        Ok(())
+    }
+
     pub fn is_connected(&self) -> bool {
         self.inner.is_connected.load(Ordering::SeqCst)
     }
@@ -508,6 +828,8 @@ impl UtxoProcessor {
             has_utxo_index,
             is_synced,
             virtual_daa_score,
+            has_stealth_support: _,
+            ..
         } = self.rpc_api().get_server_info().await?;
 
         if rpc_api_version > RPC_API_VERSION {
@@ -611,6 +933,8 @@ impl UtxoProcessor {
         self.inner.stasis.clear();
         self.inner.outgoing.clear();
         self.inner.address_to_utxo_context_map.clear();
+        // Clear stealth structures
+        self.inner.stealth_store.clear();
         Ok(())
     }
 
@@ -648,6 +972,14 @@ impl UtxoProcessor {
                 }
 
                 self.handle_utxo_changed(utxos_changed_notification).await?;
+            }
+
+            Notification::StealthUtxosChanged(stealth_notification) => {
+                if !self.is_synced() {
+                    self.sync_proc().track(true).await?;
+                }
+
+                self.handle_stealth_utxo_changed(stealth_notification).await?;
             }
 
             _ => {

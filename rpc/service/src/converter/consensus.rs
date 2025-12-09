@@ -15,10 +15,10 @@ use kaspa_mining::model::{owner_txs::OwnerTransactions, TransactionIdSet};
 use kaspa_notify::converter::Converter;
 use kaspa_rpc_core::{
     BlockAddedNotification, Notification, RpcAcceptedTransactionIds, RpcBlock, RpcBlockVerboseData, RpcHash, RpcMempoolEntry,
-    RpcMempoolEntryByAddress, RpcResult, RpcTransaction, RpcTransactionInput, RpcTransactionOutput, RpcTransactionOutputVerboseData,
-    RpcTransactionVerboseData,
+    RpcMempoolEntryByAddress, RpcResult, RpcStealthOutputInfo, RpcTransaction, RpcTransactionInput, RpcTransactionOutput,
+    RpcTransactionOutputVerboseData, RpcTransactionVerboseData,
 };
-use kaspa_txscript::{extract_script_pub_key_address, script_class::ScriptClass};
+use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, script_class::ScriptClass, STEALTH_SCRIPT_VERSION};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 /// Conversion of consensus_core to rpc_core structures
@@ -178,6 +178,34 @@ impl ConsensusConverter {
             })
             .collect())
     }
+
+    /// Extract stealth output information from a block
+    pub fn extract_stealth_outputs_from_block(block: &Block) -> Vec<RpcStealthOutputInfo> {
+        block
+            .transactions
+            .iter()
+            .flat_map(|tx| {
+                let tx_id = tx.id();
+                let is_coinbase = tx.is_coinbase();
+                tx.outputs.iter().enumerate().filter_map(move |(idx, out)| {
+                    if out.script_public_key.version() != STEALTH_SCRIPT_VERSION {
+                        return None;
+                    }
+                    let eph = extract_stealth_output(&out.script_public_key).ok()?;
+                    Some(RpcStealthOutputInfo::new(
+                        tx_id,
+                        idx as u32,
+                        eph.view_tag,
+                        faster_hex::hex_string(&eph.ephemeral_pubkey.serialize()),
+                        faster_hex::hex_string(&eph.destination_pubkey.serialize()),
+                        out.value,
+                        is_coinbase,
+                        None,
+                    ))
+                })
+            })
+            .collect()
+    }
 }
 
 #[async_trait]
@@ -191,7 +219,10 @@ impl Converter for ConsensusConverter {
                 let session = self.consensus_manager.consensus().unguarded_session();
                 // If get_block fails, rely on the infallible From implementation which will lack verbose data
                 let block = Arc::new(self.get_block(&session, &msg.block, true, true).await.unwrap_or_else(|_| (&msg.block).into()));
-                Notification::BlockAdded(BlockAddedNotification { block })
+                // Always extract stealth outputs - filtering by subscription happens later
+                let stealth_outputs = Self::extract_stealth_outputs_from_block(&msg.block);
+                let stealth_outputs = if stealth_outputs.is_empty() { None } else { Some(stealth_outputs) };
+                Notification::BlockAdded(BlockAddedNotification { block, stealth_outputs })
             }
             _ => (&incoming).into(),
         }

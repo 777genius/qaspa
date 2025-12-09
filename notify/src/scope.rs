@@ -45,6 +45,8 @@ pub enum Scope {
     VirtualDaaScoreChanged,
     PruningPointUtxoSetOverride,
     NewBlockTemplate,
+    /// Stealth UTXO changes filtered by script version
+    StealthUtxosChanged,
 }
 }
 
@@ -69,20 +71,36 @@ impl Deserializer for Scope {
     }
 }
 
-#[derive(Clone, Display, Debug, Default, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct BlockAddedScope {}
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+pub struct BlockAddedScope {
+    pub include_stealth_outputs: bool,
+}
+
+impl BlockAddedScope {
+    pub fn new(include_stealth_outputs: bool) -> Self {
+        Self { include_stealth_outputs }
+    }
+}
+
+impl std::fmt::Display for BlockAddedScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BlockAddedScope{}", if self.include_stealth_outputs { " with stealth outputs" } else { "" })
+    }
+}
 
 impl Serializer for BlockAddedScope {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &1, writer)?;
+        store!(u16, &2, writer)?;
+        store!(bool, &self.include_stealth_outputs, writer)?;
         Ok(())
     }
 }
 
 impl Deserializer for BlockAddedScope {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let _version = load!(u16, reader)?;
-        Ok(Self {})
+        let version = load!(u16, reader)?;
+        let include_stealth_outputs = if version >= 2 { load!(bool, reader)? } else { false };
+        Ok(Self { include_stealth_outputs })
     }
 }
 
@@ -264,5 +282,57 @@ impl Deserializer for NewBlockTemplateScope {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         let _version = load!(u16, reader)?;
         Ok(Self {})
+    }
+}
+
+/// Scope for stealth UTXO notifications filtered by script version.
+///
+/// This allows clients to subscribe to UTXO changes for specific script versions
+/// (e.g., STEALTH_SCRIPT_VERSION = 16) without needing to know addresses.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+pub struct StealthUtxosChangedScope {
+    /// Script versions to filter by. Empty means subscribe to ALL versions (dangerous!).
+    pub script_versions: Vec<u16>,
+}
+
+impl std::fmt::Display for StealthUtxosChangedScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let versions = match self.script_versions.len() {
+            0 => "all".to_string(),
+            1 => format!("v{}", self.script_versions[0]),
+            n => format!("{} versions", n),
+        };
+        write!(f, "StealthUtxosChangedScope ({})", versions)
+    }
+}
+
+impl PartialEq for StealthUtxosChangedScope {
+    fn eq(&self, other: &Self) -> bool {
+        self.script_versions.len() == other.script_versions.len()
+            && self.script_versions.iter().all(|x| other.script_versions.contains(x))
+    }
+}
+
+impl Eq for StealthUtxosChangedScope {}
+
+impl StealthUtxosChangedScope {
+    pub fn new(script_versions: Vec<u16>) -> Self {
+        Self { script_versions }
+    }
+}
+
+impl Serializer for StealthUtxosChangedScope {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(Vec<u16>, &self.script_versions, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for StealthUtxosChangedScope {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let script_versions = load!(Vec<u16>, reader)?;
+        Ok(Self { script_versions })
     }
 }

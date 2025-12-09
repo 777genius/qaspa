@@ -1,0 +1,47 @@
+# Dockerfile for ML-DSA E2E Testing
+#
+# This Dockerfile creates an environment for running ML-DSA transaction tests
+# with all required dependencies including protoc.
+#
+# Build: docker build -f Dockerfile.test -t kaspa-mldsa-test .
+# Run:   docker run --rm kaspa-mldsa-test
+
+FROM rust:1.85-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    protobuf-compiler \
+    libprotobuf-dev \
+    pkg-config \
+    libssl-dev \
+    build-essential \
+    clang \
+    libclang-dev \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify protoc installation
+RUN protoc --version
+
+# Set working directory
+WORKDIR /app
+
+# Copy the entire project
+COPY . .
+
+# Build kaspad (this will take 5-10 minutes)
+RUN echo "Building kaspad..." && \
+    cargo build --release -p kaspad && \
+    echo "✓ kaspad built successfully" && \
+    ls -lh target/release/kaspad
+
+# Build tests
+RUN echo "Building ML-DSA E2E tests..." && \
+    cargo test -p kaspa-txscript --release --no-run && \
+    echo "✓ Tests built successfully"
+
+# Default: Run ML-DSA transaction E2E test
+CMD ["cargo", "test", "-p", "kaspa-txscript", "--release", \
+     "test_mldsa_transaction_creation_and_mining", \
+     "--", "--ignored", "--nocapture"]

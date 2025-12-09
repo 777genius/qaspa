@@ -9,6 +9,8 @@ pub mod iterator;
 pub mod pending;
 pub mod settings;
 pub mod signer;
+pub mod stealth_change;
+pub mod stealth_signer;
 pub mod stream;
 pub mod summary;
 
@@ -17,6 +19,8 @@ pub use iterator::*;
 pub use pending::*;
 pub use settings::*;
 pub use signer::*;
+pub use stealth_change::*;
+pub use stealth_signer::*;
 pub use stream::*;
 pub use summary::*;
 

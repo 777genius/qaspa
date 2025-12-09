@@ -17,7 +17,7 @@ pub struct Payload {
 
 impl Payload {
     const STORAGE_MAGIC: u32 = 0x41544144;
-    const STORAGE_VERSION: u32 = 0;
+    const STORAGE_VERSION: u32 = 1;
 
     pub fn new(prv_key_data: Vec<PrvKeyData>, accounts: Vec<AccountStorage>, address_book: Vec<AddressBookEntry>) -> Self {
         Self { prv_key_data, accounts, address_book, encrypt_transactions: None }
@@ -68,12 +68,15 @@ impl BorshSerialize for Payload {
 
 impl BorshDeserialize for Payload {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> IoResult<Self> {
-        let StorageHeader { version: _, .. } =
-            StorageHeader::deserialize_reader(reader)?.try_magic(Self::STORAGE_MAGIC)?.try_version(Self::STORAGE_VERSION)?;
+        let header = StorageHeader::deserialize_reader(reader)?;
+        let header = header.try_magic(Self::STORAGE_MAGIC)?;
+        let header = header.try_version(Self::STORAGE_VERSION)?;
+        let version = header.version;
+
         let prv_key_data = BorshDeserialize::deserialize_reader(reader)?;
         let accounts = BorshDeserialize::deserialize_reader(reader)?;
         let address_book = BorshDeserialize::deserialize_reader(reader)?;
-        let encrypt_transactions = BorshDeserialize::deserialize_reader(reader)?;
+        let encrypt_transactions = if version >= 1 { BorshDeserialize::deserialize_reader(reader)? } else { None };
 
         Ok(Self { prv_key_data, accounts, address_book, encrypt_transactions })
     }

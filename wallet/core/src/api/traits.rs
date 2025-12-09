@@ -7,8 +7,10 @@
 //! is implemented by the [`Wallet`] struct.
 //!
 
+use crate::account::delegation::DelegationRecordV1;
 use crate::api::message::*;
 use crate::imports::*;
+use crate::message::{MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
 use crate::storage::{PrvKeyData, PrvKeyDataId, PrvKeyDataInfo, WalletDescriptor};
 use crate::tx::GeneratorSummary;
 use workflow_core::channel::Receiver;
@@ -233,6 +235,79 @@ pub trait WalletApi: Send + Sync + AnySync {
     /// this call.
     async fn wallet_change_secret_call(self: Arc<Self>, request: WalletChangeSecretRequest) -> Result<WalletChangeSecretResponse>;
 
+    // Delegations (Iteration 4)
+    async fn delegation_create(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        master_anchor: String,
+        stealth_account_id: AccountId,
+        valid_for_daa: Option<u64>,
+    ) -> Result<u64> {
+        let req = DelegationCreateRequest { wallet_secret, master_anchor, stealth_account_id, valid_for_daa };
+        Ok(self.delegation_create_call(req).await?.delegation_id)
+    }
+    async fn delegation_create_call(self: Arc<Self>, request: DelegationCreateRequest) -> Result<DelegationCreateResponse>;
+
+    async fn delegation_list(self: Arc<Self>, master_anchor: String) -> Result<Vec<DelegationRecordV1>> {
+        Ok(self.delegation_list_call(DelegationListRequest { master_anchor }).await?.delegations)
+    }
+    async fn delegation_list_call(self: Arc<Self>, request: DelegationListRequest) -> Result<DelegationListResponse>;
+
+    async fn delegation_revoke(self: Arc<Self>, wallet_secret: Secret, delegation_id: u64) -> Result<()> {
+        self.delegation_revoke_call(DelegationRevokeRequest { wallet_secret, delegation_id }).await?;
+        Ok(())
+    }
+    async fn delegation_revoke_call(self: Arc<Self>, request: DelegationRevokeRequest) -> Result<DelegationRevokeResponse>;
+
+    async fn master_delegation_build(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        master_anchor: Option<String>,
+        master_level: Option<u8>,
+        network_id: Option<NetworkId>,
+        targets: Vec<MasterDelegationTarget>,
+        created_at_unixtime: Option<u64>,
+    ) -> Result<MasterDelegationBuildResponse> {
+        let request =
+            MasterDelegationBuildRequest { wallet_secret, master_anchor, master_level, network_id, targets, created_at_unixtime };
+        self.master_delegation_build_call(request).await
+    }
+    async fn master_delegation_build_call(
+        self: Arc<Self>,
+        request: MasterDelegationBuildRequest,
+    ) -> Result<MasterDelegationBuildResponse>;
+
+    async fn master_delegation_sign(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        request: MasterDelegationRequestBodyV1,
+    ) -> Result<MasterDelegationSignResponse> {
+        self.master_delegation_sign_call(MasterDelegationSignRequest { wallet_secret, request, force_network_mismatch: false }).await
+    }
+    async fn master_delegation_sign_call(
+        self: Arc<Self>,
+        request: MasterDelegationSignRequest,
+    ) -> Result<MasterDelegationSignResponse>;
+
+    async fn master_delegation_apply(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        request: MasterDelegationRequestBodyV1,
+        response: MasterDelegationResponseBodyV1,
+    ) -> Result<MasterDelegationApplyResponse> {
+        self.master_delegation_apply_call(MasterDelegationApplyRequest {
+            wallet_secret,
+            request,
+            response,
+            force_network_mismatch: false,
+        })
+        .await
+    }
+    async fn master_delegation_apply_call(
+        self: Arc<Self>,
+        request: MasterDelegationApplyRequest,
+    ) -> Result<MasterDelegationApplyResponse>;
+
     /// Wrapper around [`prv_key_data_enumerate_call()`](Self::prv_key_data_enumerate_call)
     async fn prv_key_data_enumerate(self: Arc<Self>) -> Result<Vec<Arc<PrvKeyDataInfo>>> {
         Ok(self.prv_key_data_enumerate_call(PrvKeyDataEnumerateRequest {}).await?.prv_key_data_list)
@@ -275,6 +350,26 @@ pub trait WalletApi: Send + Sync + AnySync {
     }
     /// Obtain a private key data using [`PrvKeyDataId`].
     async fn prv_key_data_get_call(self: Arc<Self>, request: PrvKeyDataGetRequest) -> Result<PrvKeyDataGetResponse>;
+
+    /// Wrapper around [`master_anchor_list_call()`](Self::master_anchor_list_call)
+    async fn master_anchor_list(self: Arc<Self>) -> Result<Vec<MasterAnchorInfo>> {
+        Ok(self.master_anchor_list_call(MasterAnchorListRequest {}).await?.anchors)
+    }
+    /// List stored MLDSA master anchors.
+    async fn master_anchor_list_call(self: Arc<Self>, request: MasterAnchorListRequest) -> Result<MasterAnchorListResponse>;
+
+    /// Wrapper around [`master_seed_export_call()`](Self::master_seed_export_call)
+    async fn master_seed_export(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        master_id: PrvKeyDataId,
+        confirmation: String,
+    ) -> Result<String> {
+        let request = MasterSeedExportRequest { wallet_secret, master_id, confirmation };
+        Ok(self.master_seed_export_call(request).await?.seed_hex)
+    }
+    /// Export MLDSA master seed (requires confirmation phrase).
+    async fn master_seed_export_call(self: Arc<Self>, request: MasterSeedExportRequest) -> Result<MasterSeedExportResponse>;
 
     /// Wrapper around [`accounts_rename_call()`](Self::accounts_rename_call)
     async fn accounts_rename(self: Arc<Self>, account_id: AccountId, name: Option<String>, wallet_secret: Secret) -> Result<()> {

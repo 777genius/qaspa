@@ -1,3 +1,6 @@
+#![allow(clippy::type_complexity)]
+#![allow(clippy::while_let_on_iterator)]
+
 pub mod core; //all things visible to the outside
 mod index;
 mod stores;

@@ -14,7 +14,9 @@ use crate::utxo::{
     Maturity, NetworkParams, OutgoingTransaction, PendingUtxoEntryReference, UtxoContextBinding, UtxoEntryId, UtxoEntryReference,
     UtxoEntryReferenceExtension, UtxoProcessor,
 };
+use kaspa_consensus_client::TransactionOutpoint as ClientTransactionOutpoint;
 use kaspa_consensus_client::UtxoEntry;
+use kaspa_consensus_core::tx::TransactionOutpoint;
 use kaspa_hashes::Hash;
 use sorted_insert::SortedInsertBinaryByKey;
 
@@ -215,6 +217,12 @@ impl UtxoContext {
         self.context().addresses.clone()
     }
 
+    pub fn contains_outpoint(&self, outpoint: &TransactionOutpoint) -> bool {
+        let client_outpoint = ClientTransactionOutpoint::new(outpoint.transaction_id, outpoint.index);
+        let id = client_outpoint.inner().clone();
+        self.context().map.contains_key(&id)
+    }
+
     pub async fn clear(&self) -> Result<()> {
         let local = self.addresses();
         let addresses = local.iter().map(|v| v.clone()).collect::<Vec<_>>();
@@ -300,7 +308,8 @@ impl UtxoContext {
                 context.mature.sorted_insert_binary_asc_by_key(utxo_entry.clone(), |entry| entry.amount_as_ref());
             } else {
                 let params = NetworkParams::from(self.processor().network_id()?);
-                match utxo_entry.maturity(params, current_daa_score) {
+                let maturity = utxo_entry.maturity(params, current_daa_score);
+                match maturity {
                     Maturity::Stasis => {
                         context.stasis.insert(utxo_entry.id().clone(), utxo_entry.clone());
                         self.processor()

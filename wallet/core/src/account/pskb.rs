@@ -5,8 +5,7 @@
 
 pub use crate::error::Error;
 use crate::imports::*;
-use crate::tx::PaymentOutput;
-use crate::tx::PaymentOutputs;
+use crate::tx::{PaymentOutput, PaymentOutputs, RandomFeeSettings};
 use futures::stream;
 use kaspa_bip32::{DerivationPath, KeyFingerprint, PrivateKey};
 use kaspa_consensus_client::UtxoEntry as ClientUTXO;
@@ -374,6 +373,9 @@ pub fn pskt_to_pending_transaction(
         final_transaction_priority_fee: fee_u.into(),
         final_transaction_destination,
         final_transaction_payload: None,
+        stealth_change_creator: None,
+        random_fee_settings: RandomFeeSettings::default(),
+        include_delegation_id: false,
     };
 
     // Create the Generator
@@ -423,7 +425,7 @@ pub fn pskt_to_pending_transaction(
 // different parameters sets.
 pub enum CommitRevealBatchKind {
     Manual { hop_payment: PaymentDestination, destination_payment: PaymentDestination },
-    Parameterized { address: Address, commit_amount_sompi: u64 },
+    Parameterized { address: Box<Address>, commit_amount_sompi: u64 },
 }
 
 struct BundleCommitRevealConfig {
@@ -483,10 +485,10 @@ pub async fn commit_reveal_batch_bundle(
 
             BundleCommitRevealConfig {
                 address_commit: lock_address.clone(),
-                addresses_reveal: vec![address.clone()],
+                addresses_reveal: vec![(*address).clone()],
                 commit_destination: PaymentDestination::from(PaymentOutput::new(lock_address, commit_amount_sompi)),
                 redeem_script,
-                payment_outputs: PaymentOutputs { outputs: vec![PaymentOutput::new(address.clone(), amt_reveal)] },
+                payment_outputs: PaymentOutputs { outputs: vec![PaymentOutput::new((*address).clone(), amt_reveal)] },
             }
         }
     };
@@ -498,8 +500,11 @@ pub async fn commit_reveal_batch_bundle(
         fee_rate.or(Some(1.0)),
         0u64.into(),
         payload,
+        None,
     )
     .map_err(|e| Error::PSKTGenerationError(e.to_string()))?;
+    let settings =
+        account.clone().ensure_stealth_change_support(settings).await.map_err(|e| Error::PSKTGenerationError(e.to_string()))?;
 
     let signer = Arc::new(PSKBSigner::new(
         account.clone().as_dyn_arc(),

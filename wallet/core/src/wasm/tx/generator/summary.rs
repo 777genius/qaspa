@@ -51,6 +51,11 @@ impl GeneratorSummary {
     pub fn final_transaction_id(&self) -> Option<String> {
         self.inner.final_transaction_id().map(|id| id.to_string())
     }
+
+    #[wasm_bindgen(getter, js_name = randomFeeOffset)]
+    pub fn random_fee_offset(&self) -> BigInt {
+        BigInt::from(self.inner.random_fee_offset())
+    }
 }
 
 impl From<core::GeneratorSummary> for GeneratorSummary {

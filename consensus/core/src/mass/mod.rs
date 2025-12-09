@@ -689,6 +689,99 @@ mod tests {
         assert_eq!(storage_mass, 5000000000);
     }
 
+    #[test]
+    fn test_mldsa_transaction_mass() {
+        use crate::config::params::MAINNET_PARAMS;
+
+        // Create mass calculator with new mainnet params
+        let mc = MassCalculator::new(
+            MAINNET_PARAMS.mass_per_tx_byte,
+            MAINNET_PARAMS.mass_per_script_pub_key_byte,
+            MAINNET_PARAMS.mass_per_sig_op,
+            MAINNET_PARAMS.storage_mass_parameter,
+        );
+
+        // Schnorr transaction (1 input, 1 output)
+        // - Public key: 32 bytes -> script pubkey: 34 bytes
+        // - Signature: 65 bytes (64 + 1 hash type)
+        let schnorr_spk = ScriptPublicKey::from_vec(0, vec![0u8; 34]);
+        let schnorr_sig_script = vec![0u8; 66]; // OpPushData + 65 bytes
+
+        let schnorr_tx = Transaction::new(
+            0,
+            vec![TransactionInput {
+                previous_outpoint: TransactionOutpoint {
+                    transaction_id: TransactionId::from_str("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3")
+                        .unwrap(),
+                    index: 0,
+                },
+                signature_script: schnorr_sig_script,
+                sequence: 0,
+                sig_op_count: 1,
+            }],
+            vec![TransactionOutput { value: 1000, script_public_key: schnorr_spk.clone() }],
+            0,
+            SubnetworkId::from_bytes([0; 20]),
+            0,
+            vec![],
+        );
+
+        let schnorr_masses = mc.calc_non_contextual_masses(&schnorr_tx);
+
+        // ML-DSA transaction (1 input, 1 output)
+        // - Public key: 1312 bytes -> script pubkey: 1316 bytes (OpPushData2 + len + pk + OpCheckSigMLDSA)
+        // - Signature: 2421 bytes (2420 + 1 hash type) -> sig script: 2424 bytes (OpPushData2 + len + sig)
+        let mldsa_spk = ScriptPublicKey::from_vec(0, vec![0u8; 1316]);
+        let mldsa_sig_script = vec![0u8; 2424];
+
+        let mldsa_tx = Transaction::new(
+            0,
+            vec![TransactionInput {
+                previous_outpoint: TransactionOutpoint {
+                    transaction_id: TransactionId::from_str("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3")
+                        .unwrap(),
+                    index: 0,
+                },
+                signature_script: mldsa_sig_script,
+                sequence: 0,
+                sig_op_count: 1,
+            }],
+            vec![TransactionOutput { value: 1000, script_public_key: mldsa_spk.clone() }],
+            0,
+            SubnetworkId::from_bytes([0; 20]),
+            0,
+            vec![],
+        );
+
+        let mldsa_masses = mc.calc_non_contextual_masses(&mldsa_tx);
+
+        // Expected masses with new parameters:
+        // Schnorr: size_mass(~270) + spk_mass(34*2=68) + sigop_mass(800) ≈ 1,138
+        // ML-DSA: size_mass(~3,910) + spk_mass(1316*2=2,632) + sigop_mass(800) ≈ 7,342
+
+        println!("Schnorr transaction mass: {}", schnorr_masses.compute_mass);
+        println!("ML-DSA transaction mass: {}", mldsa_masses.compute_mass);
+
+        // With new parameters (mass_per_script_pub_key_byte=2, mass_per_sig_op=800):
+        // Schnorr should be around 1,100-1,200
+        assert!(schnorr_masses.compute_mass < 1_500, "Schnorr mass too high: {}", schnorr_masses.compute_mass);
+
+        // ML-DSA should be around 7,000-8,000 (acceptable, ~6-7x of Schnorr)
+        assert!(mldsa_masses.compute_mass < 10_000, "ML-DSA mass too high: {}", mldsa_masses.compute_mass);
+
+        // Verify ML-DSA mass is reasonable (not more than 10x Schnorr)
+        let mass_ratio = mldsa_masses.compute_mass as f64 / schnorr_masses.compute_mass as f64;
+        assert!(mass_ratio < 10.0, "ML-DSA/Schnorr mass ratio too high: {:.2}x", mass_ratio);
+
+        // With max_block_mass = 2_000_000, we should fit at least 250 ML-DSA transactions per block
+        let mldsa_txs_per_block = MAINNET_PARAMS.max_block_mass / mldsa_masses.compute_mass;
+        assert!(mldsa_txs_per_block >= 250, "Too few ML-DSA tx per block: {}", mldsa_txs_per_block);
+
+        println!("✓ Schnorr mass: {} (ratio: 1.0x)", schnorr_masses.compute_mass);
+        println!("✓ ML-DSA mass: {} (ratio: {:.2}x)", mldsa_masses.compute_mass, mass_ratio);
+        println!("✓ ML-DSA tx/block: {}", mldsa_txs_per_block);
+    }
+
     fn generate_tx_from_amounts(ins: &[u64], outs: &[u64]) -> MutableTransaction<Transaction> {
         let script_pub_key = ScriptVec::from_slice(&[]);
         let prev_tx_id = TransactionId::from_str("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3").unwrap();

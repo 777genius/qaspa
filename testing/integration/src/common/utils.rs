@@ -5,7 +5,7 @@ use kaspa_consensus_core::{
     constants::TX_VERSION,
     header::Header,
     sign::sign,
-    subnets::SUBNETWORK_ID_NATIVE,
+    subnets::{SUBNETWORK_ID_COINBASE, SUBNETWORK_ID_NATIVE},
     tx::{
         MutableTransaction, ScriptPublicKey, SignableTransaction, Transaction, TransactionId, TransactionInput, TransactionOutpoint,
         TransactionOutput, UtxoEntry,
@@ -17,12 +17,15 @@ use kaspa_consensus_core::{
 };
 use kaspa_core::info;
 use kaspa_grpc_client::GrpcClient;
-use kaspa_rpc_core::{api::rpc::RpcApi, BlockAddedNotification, Notification, RpcUtxoEntry, VirtualDaaScoreChangedNotification};
+use kaspa_rpc_core::{
+    api::rpc::RpcApi, BlockAddedNotification, Notification, RpcHash, RpcUtxoEntry, VirtualDaaScoreChangedNotification,
+};
 use kaspa_txscript::pay_to_address_script;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use secp256k1::Keypair;
 use std::{
     collections::{hash_map::Entry::Occupied, HashMap, HashSet},
+    convert::TryFrom,
     future::Future,
     sync::Arc,
     time::Duration,
@@ -162,8 +165,28 @@ pub async fn fetch_spendable_utxos(
     client: &GrpcClient,
     address: Address,
     coinbase_maturity: u64,
+    target_amount: Option<u64>,
 ) -> Vec<(TransactionOutpoint, UtxoEntry)> {
-    let resp = client.get_utxos_by_addresses(vec![address.clone()]).await.unwrap();
+    match client.get_utxos_by_addresses(vec![address.clone()]).await {
+        Ok(resp) => convert_spendable_entries(resp, client, address, coinbase_maturity, target_amount).await,
+        Err(err) => {
+            let message = err.to_string().to_lowercase();
+            if message.contains("utxo index") || message.contains("utxoindex") {
+                fetch_spendable_utxos_via_blocks(client, address, coinbase_maturity, target_amount).await
+            } else {
+                panic!("Failed to fetch spendable utxos: {err}");
+            }
+        }
+    }
+}
+
+async fn convert_spendable_entries(
+    resp: Vec<kaspa_rpc_core::RpcUtxosByAddressesEntry>,
+    client: &GrpcClient,
+    address: Address,
+    coinbase_maturity: u64,
+    target_amount: Option<u64>,
+) -> Vec<(TransactionOutpoint, UtxoEntry)> {
     let virtual_daa_score = client.get_server_info().await.unwrap().virtual_daa_score;
     let mut utxos = Vec::with_capacity(resp.len());
     for resp_entry in
@@ -173,13 +196,154 @@ pub async fn fetch_spendable_utxos(
         assert_eq!(*resp_entry.address.as_ref().unwrap(), address);
         utxos.push((TransactionOutpoint::from(resp_entry.outpoint), UtxoEntry::from(resp_entry.utxo_entry)));
     }
-    utxos.sort_by(|a, b| b.1.amount.cmp(&a.1.amount));
-    utxos
+    limit_utxos_to_target(utxos, target_amount)
+}
+
+async fn fetch_spendable_utxos_via_blocks(
+    client: &GrpcClient,
+    address: Address,
+    coinbase_maturity: u64,
+    target_amount: Option<u64>,
+) -> Vec<(TransactionOutpoint, UtxoEntry)> {
+    let script = pay_to_address_script(&address);
+    let mut cursor: Option<RpcHash> = None;
+    let mut seen_hashes = HashSet::new();
+    let mut utxo_map: HashMap<TransactionOutpoint, RpcUtxoEntry> = HashMap::new();
+    let server_info = client.get_server_info().await.unwrap();
+    let virtual_daa_score = server_info.virtual_daa_score;
+    let cutoff_margin = coinbase_maturity + 512;
+    let cutoff_daa = virtual_daa_score.saturating_sub(cutoff_margin);
+    let mut processed_blocks: usize = 0;
+    let progress_interval = 500usize;
+    let mut cutoff_hit = false;
+    let mut satisfied_target = false;
+    let mut spendable_acc = 0u64;
+
+    while !cutoff_hit && !satisfied_target {
+        let response = client.get_blocks(cursor, true, true).await.unwrap();
+        if response.block_hashes.is_empty() {
+            break;
+        }
+
+        for (idx, hash) in response.block_hashes.iter().enumerate() {
+            if cursor.is_some() && idx == 0 {
+                continue;
+            }
+            if !seen_hashes.insert(*hash) {
+                continue;
+            }
+
+            if let Some(block) = response.blocks.get(idx) {
+                if block.header.daa_score < cutoff_daa {
+                    cutoff_hit = true;
+                    break;
+                }
+                processed_blocks += 1;
+                if processed_blocks % progress_interval == 0 {
+                    info!(
+                        "fallback miner scan: processed {} blocks (daa {}), collected {} entries",
+                        processed_blocks,
+                        block.header.daa_score,
+                        utxo_map.len()
+                    );
+                }
+
+                let block_daa = block.header.daa_score;
+
+                for (tx_index, tx) in block.transactions.iter().enumerate() {
+                    let tx_id = if let Some(verbose) = tx.verbose_data.as_ref() {
+                        verbose.transaction_id
+                    } else if let Some(block_verbose) = block.verbose_data.as_ref() {
+                        match block_verbose.transaction_ids.get(tx_index) {
+                            Some(id) => *id,
+                            None => continue,
+                        }
+                    } else {
+                        match Transaction::try_from(tx.clone()) {
+                            Ok(cons_tx) => cons_tx.id(),
+                            Err(err) => {
+                                info!("fallback miner scan: failed to derive tx id: {err}");
+                                continue;
+                            }
+                        }
+                    };
+
+                    for (output_index, output) in tx.outputs.iter().enumerate() {
+                        if output.script_public_key == script {
+                            let entry = RpcUtxoEntry::new(
+                                output.value,
+                                output.script_public_key.clone(),
+                                block_daa,
+                                tx.subnetwork_id == SUBNETWORK_ID_COINBASE,
+                            );
+                            let outpoint = TransactionOutpoint::new(tx_id, output_index as u32);
+                            if let Some(replaced) = utxo_map.insert(outpoint, entry.clone()) {
+                                if is_utxo_spendable(&replaced, virtual_daa_score, coinbase_maturity) {
+                                    spendable_acc = spendable_acc.saturating_sub(replaced.amount);
+                                }
+                            }
+                            if is_utxo_spendable(&entry, virtual_daa_score, coinbase_maturity) {
+                                spendable_acc = spendable_acc.saturating_add(entry.amount);
+                            }
+                        }
+                    }
+
+                    for input in tx.inputs.iter() {
+                        let prev = TransactionOutpoint::from(input.previous_outpoint);
+                        if let Some(removed) = utxo_map.remove(&prev) {
+                            if is_utxo_spendable(&removed, virtual_daa_score, coinbase_maturity) {
+                                spendable_acc = spendable_acc.saturating_sub(removed.amount);
+                            }
+                        }
+                    }
+                }
+                if let Some(target) = target_amount {
+                    if spendable_acc >= target {
+                        satisfied_target = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        cursor = response.block_hashes.last().cloned();
+        if cursor.is_none() {
+            break;
+        }
+    }
+
+    let utxos = utxo_map
+        .into_iter()
+        .filter(|(_, entry)| is_utxo_spendable(entry, virtual_daa_score, coinbase_maturity))
+        .map(|(outpoint, entry)| (outpoint, UtxoEntry::from(entry)))
+        .collect_vec();
+    limit_utxos_to_target(utxos, target_amount)
 }
 
 pub fn is_utxo_spendable(entry: &RpcUtxoEntry, virtual_daa_score: u64, coinbase_maturity: u64) -> bool {
     let needed_confirmations = if !entry.is_coinbase { 10 } else { coinbase_maturity };
     entry.block_daa_score + needed_confirmations <= virtual_daa_score
+}
+
+fn limit_utxos_to_target(
+    mut utxos: Vec<(TransactionOutpoint, UtxoEntry)>,
+    target_amount: Option<u64>,
+) -> Vec<(TransactionOutpoint, UtxoEntry)> {
+    utxos.sort_by(|a, b| b.1.amount.cmp(&a.1.amount));
+    if let Some(target) = target_amount {
+        let mut acc = 0u64;
+        let mut limited = Vec::new();
+        for (outpoint, entry) in utxos.into_iter() {
+            acc = acc.saturating_add(entry.amount);
+            limited.push((outpoint, entry));
+            if acc >= target {
+                return limited;
+            }
+        }
+        limited
+    } else {
+        utxos
+    }
 }
 
 pub async fn mine_block(pay_address: Address, submitting_client: &GrpcClient, listening_clients: &[ListeningClient]) {
@@ -199,7 +363,7 @@ pub async fn mine_block(pay_address: Address, submitting_client: &GrpcClient, li
             .unwrap()
             .unwrap()
         {
-            Notification::BlockAdded(BlockAddedNotification { block }) => {
+            Notification::BlockAdded(BlockAddedNotification { block, .. }) => {
                 assert_eq!(block.header.hash, block_hash);
                 block.header.daa_score
             }

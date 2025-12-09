@@ -10,6 +10,7 @@ pub mod derivation_path;
 pub mod error;
 mod imports;
 pub mod keypair;
+pub mod keypair_mldsa;
 pub mod prelude;
 pub mod privatekey;
 pub mod privkeygen;

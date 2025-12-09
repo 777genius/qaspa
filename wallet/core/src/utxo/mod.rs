@@ -12,6 +12,7 @@ pub mod processor;
 pub mod reference;
 pub mod scan;
 pub mod settings;
+pub mod stealth_handler;
 pub mod stream;
 pub mod sync;
 
@@ -26,6 +27,7 @@ pub use processor::UtxoProcessor;
 pub use reference::{Maturity, TryIntoUtxoEntryReferences, UtxoEntryReference, UtxoEntryReferenceExtension};
 pub use scan::{Scan, ScanExtent};
 pub use settings::*;
+pub use stealth_handler::{DynStealthUtxoHandler, StealthUtxoHandler};
 pub use stream::UtxoStream;
 pub use sync::SyncMonitor;
 

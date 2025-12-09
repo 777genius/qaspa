@@ -1,4 +1,5 @@
 use kaspa_consensus_core::{config::params::ForkedParam, constants::TX_VERSION};
+use std::env;
 
 pub(crate) const DEFAULT_MAXIMUM_TRANSACTION_COUNT: usize = 1_000_000;
 pub(crate) const DEFAULT_MEMPOOL_SIZE_LIMIT: usize = 1_000_000_000;
@@ -46,6 +47,8 @@ pub struct Config {
     pub minimum_standard_transaction_version: u16,
     pub maximum_standard_transaction_version: u16,
     pub network_blocks_per_second: ForkedParam<u64>,
+    pub stealth_only_inputs: bool,
+    pub stealth_only_outputs: bool,
 }
 
 impl Config {
@@ -91,6 +94,8 @@ impl Config {
             minimum_standard_transaction_version,
             maximum_standard_transaction_version,
             network_blocks_per_second,
+            stealth_only_inputs: false,
+            stealth_only_outputs: false,
         }
     }
 
@@ -101,6 +106,8 @@ impl Config {
         relay_non_std_transactions: bool,
         max_block_mass: u64,
     ) -> Self {
+        let disable_stealth_policy =
+            env::var("KASPA_DISABLE_STEALTH_POLICY").map(|value| matches!(value.as_str(), "1" | "true" | "TRUE")).unwrap_or(false);
         Self {
             maximum_transaction_count: DEFAULT_MAXIMUM_TRANSACTION_COUNT,
             mempool_size_limit: DEFAULT_MEMPOOL_SIZE_LIMIT,
@@ -126,6 +133,8 @@ impl Config {
             minimum_standard_transaction_version: DEFAULT_MINIMUM_STANDARD_TRANSACTION_VERSION,
             maximum_standard_transaction_version: DEFAULT_MAXIMUM_STANDARD_TRANSACTION_VERSION,
             network_blocks_per_second: target_milliseconds_per_block.map(|v| 1000 / v),
+            stealth_only_inputs: !disable_stealth_policy,
+            stealth_only_outputs: !disable_stealth_policy,
         }
     }
 

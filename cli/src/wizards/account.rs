@@ -2,6 +2,7 @@ use crate::cli::KaspaCli;
 use crate::imports::*;
 use crate::result::Result;
 use kaspa_bip32::{Language, Mnemonic, WordCount};
+use kaspa_mldsa::MlDsaLevel;
 use kaspa_wallet_core::account::MULTISIG_ACCOUNT_KIND;
 use kaspa_wallet_core::storage::keydata::PrvKeyDataVariantKind;
 // use kaspa_wallet_core::runtime::wallet::AccountCreateArgsBip32;
@@ -30,13 +31,13 @@ pub(crate) async fn create(
         return create_multisig(ctx, name, word_count).await;
     }
 
-    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
     if wallet_secret.as_ref().is_empty() {
         return Err(Error::WalletSecretRequired);
     }
 
     let payment_secret = if prv_key_data_info.is_encrypted() {
-        let payment_secret = Secret::new(term.ask(true, "Enter payment password: ").await?.trim().as_bytes().to_vec());
+        let payment_secret = helpers::string_to_secret(term.ask(true, "Enter payment password: ").await?);
         if payment_secret.as_ref().is_empty() {
             return Err(Error::PaymentSecretRequired);
         } else {
@@ -101,7 +102,7 @@ pub(crate) async fn bip32_watch(ctx: &Arc<KaspaCli>, name: Option<&str>) -> Resu
     let xpub_key = term.ask(false, "Enter extended public key: ").await?;
     xpub_keys.push(xpub_key.trim().to_owned());
 
-    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
     if wallet_secret.as_ref().is_empty() {
         return Err(Error::WalletSecretRequired);
     }
@@ -142,6 +143,76 @@ pub(crate) async fn multisig_watch(ctx: &Arc<KaspaCli>, name: Option<&str>) -> R
         wallet.create_account_multisig(&wallet_secret, prv_key_data_args, xpub_keys, account_name, minimum_signatures).await?;
 
     tprintln!(ctx, "\naccount created: {}\n", account.get_list_string()?);
+    wallet.select(Some(&account)).await?;
+    Ok(())
+}
+
+/// Creates a new stealth account for privacy-preserving transactions.
+pub(crate) async fn create_stealth(ctx: &Arc<KaspaCli>, prv_key_data_info: Arc<PrvKeyDataInfo>, name: Option<&str>) -> Result<()> {
+    let term = ctx.term();
+    let wallet = ctx.wallet();
+
+    let name = if let Some(name) = name {
+        Some(name.to_string())
+    } else {
+        Some(term.ask(false, "Please enter account name (optional, press <enter> to skip): ").await?.trim().to_string())
+    };
+
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
+    if wallet_secret.as_ref().is_empty() {
+        return Err(Error::WalletSecretRequired);
+    }
+
+    let payment_secret = if prv_key_data_info.is_encrypted() {
+        let payment_secret = helpers::string_to_secret(term.ask(true, "Enter payment password: ").await?);
+        if payment_secret.as_ref().is_empty() {
+            return Err(Error::PaymentSecretRequired);
+        } else {
+            Some(payment_secret)
+        }
+    } else {
+        None
+    };
+
+    let account = wallet.create_account_stealth(&wallet_secret, prv_key_data_info.id, payment_secret.as_ref(), name, None).await?;
+
+    tprintln!(ctx, "\nStealth account created: {}\n", account.get_list_string()?);
+    if let Ok(address) = account.receive_address() {
+        tprintln!(ctx, "Stealth address (share with senders): {}\n", address);
+    }
+    wallet.select(Some(&account)).await?;
+    Ok(())
+}
+
+pub(crate) async fn create_mldsa_master(
+    ctx: &Arc<KaspaCli>,
+    prv_key_data_info: Arc<PrvKeyDataInfo>,
+    name: Option<&str>,
+) -> Result<()> {
+    let term = ctx.term();
+    let wallet = ctx.wallet();
+
+    let name = if let Some(name) = name {
+        Some(name.to_string())
+    } else {
+        Some(term.ask(false, "Please enter account name (optional, press <enter> to skip): ").await?.trim().to_string())
+    };
+
+    let level_input = term.ask(false, "Enter MLDSA level (2/3/5, default 2): ").await?;
+    let level = match level_input.trim() {
+        "3" => MlDsaLevel::Level3,
+        "5" => MlDsaLevel::Level5,
+        _ => MlDsaLevel::Level2,
+    };
+
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
+    if wallet_secret.as_ref().is_empty() {
+        return Err(Error::WalletSecretRequired);
+    }
+
+    let account = wallet.create_account_mldsa_master(&wallet_secret, prv_key_data_info.id, level, name).await?;
+
+    tprintln!(ctx, "\nMLDSA master account created: {}\n", account.get_list_string()?);
     wallet.select(Some(&account)).await?;
     Ok(())
 }

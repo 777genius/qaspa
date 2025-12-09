@@ -4,9 +4,9 @@
 //! produced by the client RPC and the Kaspa node monitoring subsystems.
 //!
 
-use crate::api::message::FeeRateEstimateBucket;
+use crate::api::message::{FeeRateEstimateBucket, MasterAnchorInfo};
 use crate::imports::*;
-use crate::storage::{Hint, PrvKeyDataInfo, StorageDescriptor, TransactionRecord, WalletDescriptor};
+use crate::storage::{Hint, PrvKeyDataId, PrvKeyDataInfo, StorageDescriptor, TransactionRecord, WalletDescriptor};
 use crate::utxo::context::UtxoContextId;
 use transaction::TransactionRecordNotification;
 
@@ -119,6 +119,80 @@ pub enum Events {
     PrvKeyDataCreate {
         prv_key_data_info: PrvKeyDataInfo,
     },
+    #[serde(rename_all = "camelCase")]
+    MasterAnchorCreated {
+        info: MasterAnchorInfo,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterSeedExported {
+        master_id: PrvKeyDataId,
+        anchor: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAccountCreated {
+        account_id: AccountId,
+        anchor: [u8; 32],
+        level: u8,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAccountRotated {
+        account_id: AccountId,
+        old_anchor: [u8; 32],
+        new_anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAccountRevoked {
+        account_id: AccountId,
+        anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    StealthAttachedToMaster {
+        stealth_id: AccountId,
+        master_id: AccountId,
+        anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    StealthDetachedFromMaster {
+        stealth_id: AccountId,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationExpired {
+        account_id: AccountId,
+        delegation_id: u64,
+        anchor: [u8; 32],
+        valid_until_daa: u64,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationRevoked {
+        account_id: AccountId,
+        delegation_id: u64,
+        anchor: [u8; 32],
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationRequestBuilt {
+        master_anchor: [u8; 32],
+        request_id: [u8; 32],
+        targets: Vec<AccountId>,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationResponseApplied {
+        master_anchor: [u8; 32],
+        request_id: [u8; 32],
+        delegations: usize,
+        skipped: usize,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationApplyFailed {
+        master_anchor: [u8; 32],
+        request_id: [u8; 32],
+        reason: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterAnchorMismatch {
+        account_id: AccountId,
+        expected_anchor: [u8; 32],
+        actual_anchor: [u8; 32],
+    },
     /// Accounts have been activated
     AccountActivation {
         ids: Vec<AccountId>,
@@ -222,6 +296,13 @@ pub enum Events {
         /// contain a developer-assigned internal id.
         id: UtxoContextId,
     },
+    #[serde(rename_all = "camelCase")]
+    StealthScanProgress {
+        account_id: AccountId,
+        processed_blocks: u64,
+        last_daa_score: u64,
+        claimed: u64,
+    },
     /// Periodic metrics updates (on-request)
     #[serde(rename_all = "camelCase")]
     Metrics {
@@ -282,6 +363,19 @@ pub enum EventKind {
     WalletError,
     WalletClose,
     PrvKeyDataCreate,
+    MasterAnchorCreated,
+    MasterSeedExported,
+    MasterAccountCreated,
+    MasterAccountRotated,
+    MasterAccountRevoked,
+    StealthAttachedToMaster,
+    StealthDetachedFromMaster,
+    MasterDelegationExpired,
+    MasterDelegationRevoked,
+    MasterDelegationRequestBuilt,
+    MasterDelegationResponseApplied,
+    MasterDelegationApplyFailed,
+    MasterAnchorMismatch,
     AccountActivation,
     AccountDeactivation,
     AccountSelection,
@@ -298,6 +392,7 @@ pub enum EventKind {
     Maturity,
     Discovery,
     Balance,
+    StealthScanProgress,
     Metrics,
     FeeRate,
     Error,
@@ -320,6 +415,19 @@ impl From<&Events> for EventKind {
             Events::WalletError { .. } => EventKind::WalletError,
             Events::WalletClose => EventKind::WalletClose,
             Events::PrvKeyDataCreate { .. } => EventKind::PrvKeyDataCreate,
+            Events::MasterAnchorCreated { .. } => EventKind::MasterAnchorCreated,
+            Events::MasterSeedExported { .. } => EventKind::MasterSeedExported,
+            Events::MasterAccountCreated { .. } => EventKind::MasterAccountCreated,
+            Events::MasterAccountRotated { .. } => EventKind::MasterAccountRotated,
+            Events::MasterAccountRevoked { .. } => EventKind::MasterAccountRevoked,
+            Events::StealthAttachedToMaster { .. } => EventKind::StealthAttachedToMaster,
+            Events::StealthDetachedFromMaster { .. } => EventKind::StealthDetachedFromMaster,
+            Events::MasterDelegationExpired { .. } => EventKind::MasterDelegationExpired,
+            Events::MasterDelegationRevoked { .. } => EventKind::MasterDelegationRevoked,
+            Events::MasterDelegationRequestBuilt { .. } => EventKind::MasterDelegationRequestBuilt,
+            Events::MasterDelegationResponseApplied { .. } => EventKind::MasterDelegationResponseApplied,
+            Events::MasterDelegationApplyFailed { .. } => EventKind::MasterDelegationApplyFailed,
+            Events::MasterAnchorMismatch { .. } => EventKind::MasterAnchorMismatch,
             Events::AccountActivation { .. } => EventKind::AccountActivation,
             Events::AccountDeactivation { .. } => EventKind::AccountDeactivation,
             Events::AccountSelection { .. } => EventKind::AccountSelection,
@@ -336,6 +444,7 @@ impl From<&Events> for EventKind {
             Events::Maturity { .. } => EventKind::Maturity,
             Events::Discovery { .. } => EventKind::Discovery,
             Events::Balance { .. } => EventKind::Balance,
+            Events::StealthScanProgress { .. } => EventKind::StealthScanProgress,
             Events::Metrics { .. } => EventKind::Metrics,
             Events::FeeRate { .. } => EventKind::FeeRate,
             Events::Error { .. } => EventKind::Error,
@@ -361,6 +470,19 @@ impl FromStr for EventKind {
             "wallet-error" => Ok(EventKind::WalletError),
             "wallet-close" => Ok(EventKind::WalletClose),
             "prv-key-data-create" => Ok(EventKind::PrvKeyDataCreate),
+            "master-anchor-created" => Ok(EventKind::MasterAnchorCreated),
+            "master-seed-exported" => Ok(EventKind::MasterSeedExported),
+            "master-account-created" => Ok(EventKind::MasterAccountCreated),
+            "master-account-rotated" => Ok(EventKind::MasterAccountRotated),
+            "master-account-revoked" => Ok(EventKind::MasterAccountRevoked),
+            "stealth-attached-to-master" => Ok(EventKind::StealthAttachedToMaster),
+            "stealth-detached-from-master" => Ok(EventKind::StealthDetachedFromMaster),
+            "master-delegation-expired" => Ok(EventKind::MasterDelegationExpired),
+            "master-delegation-revoked" => Ok(EventKind::MasterDelegationRevoked),
+            "master-delegation-request-built" => Ok(EventKind::MasterDelegationRequestBuilt),
+            "master-delegation-response-applied" => Ok(EventKind::MasterDelegationResponseApplied),
+            "master-delegation-apply-failed" => Ok(EventKind::MasterDelegationApplyFailed),
+            "master-anchor-mismatch" => Ok(EventKind::MasterAnchorMismatch),
             "account-activation" => Ok(EventKind::AccountActivation),
             "account-deactivation" => Ok(EventKind::AccountDeactivation),
             "account-selection" => Ok(EventKind::AccountSelection),
@@ -377,6 +499,7 @@ impl FromStr for EventKind {
             "maturity" => Ok(EventKind::Maturity),
             "discovery" => Ok(EventKind::Discovery),
             "balance" => Ok(EventKind::Balance),
+            "stealth-scan-progress" => Ok(EventKind::StealthScanProgress),
             "metrics" => Ok(EventKind::Metrics),
             "fee-rate" => Ok(EventKind::FeeRate),
             "error" => Ok(EventKind::Error),
@@ -410,6 +533,19 @@ impl std::fmt::Display for EventKind {
             EventKind::WalletError => "wallet-error",
             EventKind::WalletClose => "wallet-close",
             EventKind::PrvKeyDataCreate => "prv-key-data-create",
+            EventKind::MasterAnchorCreated => "master-anchor-created",
+            EventKind::MasterSeedExported => "master-seed-exported",
+            EventKind::MasterAccountCreated => "master-account-created",
+            EventKind::MasterAccountRotated => "master-account-rotated",
+            EventKind::MasterAccountRevoked => "master-account-revoked",
+            EventKind::StealthAttachedToMaster => "stealth-attached-to-master",
+            EventKind::StealthDetachedFromMaster => "stealth-detached-from-master",
+            EventKind::MasterDelegationExpired => "master-delegation-expired",
+            EventKind::MasterDelegationRevoked => "master-delegation-revoked",
+            EventKind::MasterDelegationRequestBuilt => "master-delegation-request-built",
+            EventKind::MasterDelegationResponseApplied => "master-delegation-response-applied",
+            EventKind::MasterDelegationApplyFailed => "master-delegation-apply-failed",
+            EventKind::MasterAnchorMismatch => "master-anchor-mismatch",
             EventKind::AccountActivation => "account-activation",
             EventKind::AccountDeactivation => "account-deactivation",
             EventKind::AccountSelection => "account-selection",
@@ -426,6 +562,7 @@ impl std::fmt::Display for EventKind {
             EventKind::Maturity => "maturity",
             EventKind::Discovery => "discovery",
             EventKind::Balance => "balance",
+            EventKind::StealthScanProgress => "stealth-scan-progress",
             EventKind::Metrics => "metrics",
             EventKind::FeeRate => "fee-rate",
             EventKind::Error => "error",

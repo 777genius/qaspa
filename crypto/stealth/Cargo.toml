@@ -1,0 +1,53 @@
+[package]
+name = "kaspa-stealth"
+description = "Stealth Addresses cryptographic primitives for Qaspa"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+# Elliptic curve cryptography
+secp256k1.workspace = true
+
+# Hashing with domain separation
+kaspa-hashes.workspace = true
+blake2b_simd.workspace = true
+
+# Hex encoding for debug output
+faster-hex.workspace = true
+
+# Random number generation (MUST use OsRng only!)
+rand.workspace = true
+rand_core.workspace = true
+getrandom.workspace = true
+
+# Serialization
+borsh = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+
+# Error handling
+thiserror.workspace = true
+
+# Security: zeroize secrets on drop
+zeroize = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+criterion.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+proptest = "1.4"
+regex = "1"
+
+[features]
+default = []
+wasm = []
+
+[[bench]]
+name = "stealth_bench"
+harness = false
+

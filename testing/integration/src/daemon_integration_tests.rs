@@ -131,6 +131,8 @@ async fn daemon_utxos_propagation_test() {
     kaspa_core::log::try_init_logger(
         "INFO,kaspa_testing_integration=trace,kaspa_notify=debug,kaspa_rpc_core=debug,kaspa_grpc_client=debug",
     );
+    // Disable stealth-only mempool policy for legacy UTXO propagation test
+    std::env::set_var("KASPA_DISABLE_STEALTH_POLICY", "1");
 
     let args = Args {
         simnet: true,
@@ -245,7 +247,7 @@ async fn daemon_utxos_propagation_test() {
 
     // ...and subscribe each to some notifications
     for x in clients.iter_mut() {
-        x.start_notify(BlockAddedScope {}.into()).await.unwrap();
+        x.start_notify(BlockAddedScope::default().into()).await.unwrap();
         x.start_notify(UtxosChangedScope::new(vec![miner_address.clone(), user_address.clone()]).into()).await.unwrap();
         x.start_notify(VirtualDaaScoreChangedScope {}.into()).await.unwrap();
     }
@@ -263,7 +265,7 @@ async fn daemon_utxos_propagation_test() {
     assert_eq!(miner_balance, initial_blocks * SIMNET_PARAMS.pre_deflationary_phase_base_subsidy);
 
     // Get the miner UTXOs
-    let utxos = fetch_spendable_utxos(&rpc_client1, miner_address.clone(), coinbase_maturity).await;
+    let utxos = fetch_spendable_utxos(&rpc_client1, miner_address.clone(), coinbase_maturity, None).await;
     assert_eq!(utxos.len(), EXTRA_BLOCKS - 1);
     for utxo in utxos.iter() {
         assert!(utxo.1.is_coinbase);

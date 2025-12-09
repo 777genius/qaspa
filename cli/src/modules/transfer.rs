@@ -37,6 +37,7 @@ impl Transfer {
                 fee_rate,
                 priority_fee_sompi.into(),
                 None,
+                None,
                 wallet_secret,
                 payment_secret,
                 &abortable,
