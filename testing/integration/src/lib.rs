@@ -31,3 +31,6 @@ pub mod stealth_flow;
 
 #[cfg(test)]
 pub mod mldsa_master;
+
+#[cfg(test)]
+pub mod airgap_mldsa;

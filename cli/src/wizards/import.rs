@@ -48,7 +48,7 @@ pub(crate) async fn import_with_mnemonic(ctx: &Arc<KaspaCli>, account_kind: Acco
     let term = ctx.term();
 
     tprintln!(ctx);
-    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
     tprintln!(ctx);
     let mnemonic = prompt_for_mnemonic(&term).await?;
     tprintln!(ctx);
@@ -82,11 +82,7 @@ pub(crate) async fn import_with_mnemonic(ctx: &Arc<KaspaCli>, account_kind: Acco
         );
 
         let payment_secret = term.ask(true, "Enter payment password (optional): ").await?;
-        if payment_secret.trim().is_empty() {
-            None
-        } else {
-            Some(Secret::new(payment_secret.trim().as_bytes().to_vec()))
-        }
+        helpers::string_to_optional_secret(payment_secret)
     };
 
     let mnemonic = mnemonic.join(" ");
@@ -104,7 +100,7 @@ pub(crate) async fn import_with_mnemonic(ctx: &Arc<KaspaCli>, account_kind: Acco
             let mnemonic = prompt_for_mnemonic(&term).await?;
             tprintln!(ctx);
             let payment_secret = term.ask(true, "Enter payment password (optional): ").await?;
-            let payment_secret = payment_secret.trim().is_not_empty().then(|| Secret::new(payment_secret.trim().as_bytes().to_vec()));
+            let payment_secret = helpers::string_to_optional_secret(payment_secret);
             let mnemonic = mnemonic.join(" ");
             let mnemonic = Mnemonic::new(mnemonic.trim(), Language::English)?;
 

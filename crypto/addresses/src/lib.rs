@@ -273,7 +273,9 @@ impl std::fmt::Debug for Address {
 
 impl Address {
     pub fn new(prefix: Prefix, version: Version, payload: &[u8]) -> Self {
-        if !prefix.is_test() {
+        // MLDSA публичные ключи должны иметь строго корректную длину независимо от сети,
+        // иначе последующие операции со скриптом приведут к панике.
+        if version == Version::PubKeyMLDSA || !prefix.is_test() {
             assert_eq!(payload.len(), version.public_key_len());
         }
         Self { prefix, payload: PayloadVec::from_slice(payload), version }

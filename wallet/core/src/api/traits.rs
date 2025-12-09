@@ -10,6 +10,7 @@
 use crate::account::delegation::DelegationRecordV1;
 use crate::api::message::*;
 use crate::imports::*;
+use crate::message::{MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
 use crate::storage::{PrvKeyData, PrvKeyDataId, PrvKeyDataInfo, WalletDescriptor};
 use crate::tx::GeneratorSummary;
 use workflow_core::channel::Receiver;
@@ -257,6 +258,55 @@ pub trait WalletApi: Send + Sync + AnySync {
         Ok(())
     }
     async fn delegation_revoke_call(self: Arc<Self>, request: DelegationRevokeRequest) -> Result<DelegationRevokeResponse>;
+
+    async fn master_delegation_build(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        master_anchor: Option<String>,
+        master_level: Option<u8>,
+        network_id: Option<NetworkId>,
+        targets: Vec<MasterDelegationTarget>,
+        created_at_unixtime: Option<u64>,
+    ) -> Result<MasterDelegationBuildResponse> {
+        let request =
+            MasterDelegationBuildRequest { wallet_secret, master_anchor, master_level, network_id, targets, created_at_unixtime };
+        self.master_delegation_build_call(request).await
+    }
+    async fn master_delegation_build_call(
+        self: Arc<Self>,
+        request: MasterDelegationBuildRequest,
+    ) -> Result<MasterDelegationBuildResponse>;
+
+    async fn master_delegation_sign(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        request: MasterDelegationRequestBodyV1,
+    ) -> Result<MasterDelegationSignResponse> {
+        self.master_delegation_sign_call(MasterDelegationSignRequest { wallet_secret, request, force_network_mismatch: false }).await
+    }
+    async fn master_delegation_sign_call(
+        self: Arc<Self>,
+        request: MasterDelegationSignRequest,
+    ) -> Result<MasterDelegationSignResponse>;
+
+    async fn master_delegation_apply(
+        self: Arc<Self>,
+        wallet_secret: Secret,
+        request: MasterDelegationRequestBodyV1,
+        response: MasterDelegationResponseBodyV1,
+    ) -> Result<MasterDelegationApplyResponse> {
+        self.master_delegation_apply_call(MasterDelegationApplyRequest {
+            wallet_secret,
+            request,
+            response,
+            force_network_mismatch: false,
+        })
+        .await
+    }
+    async fn master_delegation_apply_call(
+        self: Arc<Self>,
+        request: MasterDelegationApplyRequest,
+    ) -> Result<MasterDelegationApplyResponse>;
 
     /// Wrapper around [`prv_key_data_enumerate_call()`](Self::prv_key_data_enumerate_call)
     async fn prv_key_data_enumerate(self: Arc<Self>) -> Result<Vec<Arc<PrvKeyDataInfo>>> {

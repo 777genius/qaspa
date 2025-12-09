@@ -5,7 +5,7 @@ use crate::serializer::StorageHeader;
 use crate::storage::account::{AccountSettings, AccountStorable, AccountStorage};
 use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use kaspa_addresses::{Address, Version};
-use kaspa_mldsa::{sign as mldsa_sign, MasterSeed, MlDsaLevel, Signature as MlDsaSignature};
+use kaspa_mldsa::{sign as mldsa_sign, MasterSeed, MlDsaLevel, Signature as MlDsaSignature, MASTER_SIGN_DOMAIN_DELEGATION};
 use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use std::borrow::Cow;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
@@ -380,7 +380,7 @@ impl MasterSignDomain {
     fn tag(&self) -> Cow<'static, [u8]> {
         match self {
             MasterSignDomain::AnchorExport => Cow::Borrowed(b"mldsa.master.anchor-export"),
-            MasterSignDomain::Delegation => Cow::Borrowed(b"mldsa.master.delegation"),
+            MasterSignDomain::Delegation => Cow::Borrowed(MASTER_SIGN_DOMAIN_DELEGATION),
             MasterSignDomain::Custom(custom) => {
                 let mut prefix = b"mldsa.master.custom:".to_vec();
                 prefix.extend_from_slice(custom.as_bytes());

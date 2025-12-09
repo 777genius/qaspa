@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-**Status:** ✅ **All Critical Tasks Complete**
+**Status:** ✅ **Phase 2 / Iteration 6 (Airgap UX) завершена**
 
-The ML-DSA (CRYSTALS-Dilithium) post-quantum signature implementation for QUBIC blockchain is **production-ready**. All planned phases have been completed with comprehensive testing, documentation, and performance optimization.
+Core задачи ML-DSA выполнены; идёт доведение оффлайн-потока делегаций (build → sign offline → apply) и документации.
 
 **Completed:** ✅ *Phase 2 / Iteration 1 (MLDSA master root)*
 - Дет. master seed (HKDF-SHA3) добавлен в `kaspa-mldsa`.
@@ -26,13 +26,20 @@ The ML-DSA (CRYSTALS-Dilithium) post-quantum signature implementation for QUBIC 
 - Storage: stealth payload мигрирован на v1 (`master_anchor`, `delegation_id`), backward‑compatible чтение v0.
 
 **In Progress:** 🚧 *Phase 2 / Iteration 4 (Delegations, TLV, RPC smoke)*
+
+**Completed:** ✅ *Phase 2 / Iteration 6 (Airgap offline delegation)*
+- Форматы `MasterDelegationRequest/Response` и `calc_request_id` реализованы; CLI `wallet master sign-delegation` / `apply-delegation` покрывают оффлайн подпись и онлайн импорт.
+- wasm/native биндинги и FFI summary-функции для JSON запросов/ответов добавлены; WASM API включает `signMasterDelegationRequest`, FFI — `kaspa_wallet_mldsa_delegation_sign[_ex]/apply[_ex]` (версии `_ex` принимают `force_network_mismatch`).
+- Интеграционный тест `testing/integration/src/airgap_mldsa.rs` проверяет поток online → offline → online (делегации применяются, `delegation_id` попадает в эфемерные ключи).
+- CI: `.github/workflows/mldsa-tests.yml` гоняет `cargo test -p kaspa-testing-integration airgap_mldsa` вместе с MLDSA unit/integration/E2E наборами.
+- Гайд по оффлайн сценарию: `docs/guides/master_cold_storage.md`.
 - Wallet core хранит `DelegationRecordV1` и проверяет подписи мастером (`wallet/core/src/account/delegation.rs` unit suite).
 - `EphemeralKeyEntry` и `StealthSigner` поддерживают TLV `0xA1 || delegation_id`, есть property-тесты генератора.
 - RPC-service expose `register_mldsa_anchor` и `list_mldsa_delegations`; `rpc_tests::sanity_test` теперь гоняет новые методы.
 - Интеграционный тест `testing/integration/mldsa_master.rs` покрывает master → delegation → stealth spend (требует `KASPA_DISABLE_STEALTH_POLICY=1`).
 
-**Date:** 2025-11-23
-**Branch:** `claude/kaspa-rust-quantum-01GbScjmf7uqkVZddjhQaGhr`
+**Date:** 2025-12-07
+**Branch:** `main` (airgap iteration)
 
 ## Completed Phases
 

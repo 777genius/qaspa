@@ -31,13 +31,13 @@ pub(crate) async fn create(
         return create_multisig(ctx, name, word_count).await;
     }
 
-    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
     if wallet_secret.as_ref().is_empty() {
         return Err(Error::WalletSecretRequired);
     }
 
     let payment_secret = if prv_key_data_info.is_encrypted() {
-        let payment_secret = Secret::new(term.ask(true, "Enter payment password: ").await?.trim().as_bytes().to_vec());
+        let payment_secret = helpers::string_to_secret(term.ask(true, "Enter payment password: ").await?);
         if payment_secret.as_ref().is_empty() {
             return Err(Error::PaymentSecretRequired);
         } else {
@@ -102,7 +102,7 @@ pub(crate) async fn bip32_watch(ctx: &Arc<KaspaCli>, name: Option<&str>) -> Resu
     let xpub_key = term.ask(false, "Enter extended public key: ").await?;
     xpub_keys.push(xpub_key.trim().to_owned());
 
-    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
     if wallet_secret.as_ref().is_empty() {
         return Err(Error::WalletSecretRequired);
     }
@@ -158,13 +158,13 @@ pub(crate) async fn create_stealth(ctx: &Arc<KaspaCli>, prv_key_data_info: Arc<P
         Some(term.ask(false, "Please enter account name (optional, press <enter> to skip): ").await?.trim().to_string())
     };
 
-    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
     if wallet_secret.as_ref().is_empty() {
         return Err(Error::WalletSecretRequired);
     }
 
     let payment_secret = if prv_key_data_info.is_encrypted() {
-        let payment_secret = Secret::new(term.ask(true, "Enter payment password: ").await?.trim().as_bytes().to_vec());
+        let payment_secret = helpers::string_to_secret(term.ask(true, "Enter payment password: ").await?);
         if payment_secret.as_ref().is_empty() {
             return Err(Error::PaymentSecretRequired);
         } else {
@@ -205,7 +205,7 @@ pub(crate) async fn create_mldsa_master(
         _ => MlDsaLevel::Level2,
     };
 
-    let wallet_secret = Secret::new(term.ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+    let wallet_secret = helpers::string_to_secret(term.ask(true, "Enter wallet password: ").await?);
     if wallet_secret.as_ref().is_empty() {
         return Err(Error::WalletSecretRequired);
     }

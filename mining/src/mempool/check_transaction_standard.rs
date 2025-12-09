@@ -15,23 +15,11 @@ use kaspa_txscript::{get_sig_op_count_upper_bound, is_unspendable, script_class:
 const MAX_STANDARD_P2SH_SIG_OPS: u8 = 15;
 
 /// MAXIMUM_STANDARD_SIGNATURE_SCRIPT_SIZE is the maximum size allowed for a
-/// transaction input signature script to be considered standard. This
-/// value allows for a 15-of-15 CHECKMULTISIG pay-to-script-hash with
-/// compressed keys.
-///
-/// The form of the overall script is: OP_0 <15 signatures> OP_PUSHDATA2
-/// <2 bytes len> [OP_15 <15 pubkeys> OP_15 OP_CHECKMULTISIG]
-///
-/// For the p2sh script portion, each of the 15 compressed pubkeys are
-/// 33 bytes (plus one for the OP_DATA_33 opcode), and the thus it totals
-/// to (15*34)+3 = 513 bytes. Next, each of the 15 signatures is a max
-/// of 73 bytes (plus one for the OP_DATA_73 opcode). Also, there is one
-/// extra byte for the initial extra OP_0 push and 3 bytes for the
-/// OP_PUSHDATA2 needed to specify the 513 bytes for the script push.
-/// That brings the total to 1+(15*74)+3+513 = 1627. This value also
-/// adds a few extra bytes to provide a little buffer.
-/// (1 + 15*74 + 3) + (15*34 + 3) + 23 = 1650
-const MAXIMUM_STANDARD_SIGNATURE_SCRIPT_SIZE: u64 = 1650;
+/// transaction input signature script to be considered standard. Legacy
+/// multisig cases fit well below 2 KB, but ML-DSA signatures require ~2424
+/// bytes (plus opcode overhead). We therefore align the limit with the script
+/// element cap so post-quantum inputs remain relayable.
+const MAXIMUM_STANDARD_SIGNATURE_SCRIPT_SIZE: u64 = kaspa_txscript::MAX_SCRIPT_ELEMENT_SIZE as u64;
 
 /// MAXIMUM_STANDARD_TRANSACTION_MASS is the maximum mass allowed for transactions that
 /// are considered standard and will therefore be relayed and considered for mining.
@@ -72,9 +60,6 @@ impl Mempool {
         for (i, input) in transaction.tx.inputs.iter().enumerate() {
             // Each transaction input signature script must not exceed the
             // maximum size allowed for a standard transaction.
-            //
-            // See the comment on MAXIMUM_STANDARD_SIGNATURE_SCRIPT_SIZE for
-            // more details.
             let signature_script_len = input.signature_script.len() as u64;
             if signature_script_len > MAXIMUM_STANDARD_SIGNATURE_SCRIPT_SIZE {
                 return Err(NonStandardError::RejectSignatureScriptSize(
@@ -140,23 +125,19 @@ impl Mempool {
         }
 
         // The total serialized size consists of the output and the associated
-        // input script to redeem it. Since there is no input script
-        // to redeem it yet, use the minimum size of a typical input script.
-        //
-        // Pay-to-pubkey bytes breakdown:
-        //
-        //  Output to pubkey (43 bytes):
-        //   8 value, 1 script len, 34 script [1 OP_DATA_32,
-        //   32 pubkey, 1 OP_CHECKSIG]
-        //
-        //  Input (105 bytes):
-        //   36 prev outpoint, 1 script len, 64 script [1 OP_DATA_64,
-        //   64 sig], 4 sequence
-        //
-        // The most common scripts are pay-to-pubkey, and as per the above
-        // breakdown, the minimum size of a p2pk input script is 148 bytes. So
-        // that figure is used.
-        let total_serialized_size = mass::transaction_output_estimated_serialized_size(transaction_output) + 148;
+        // input script to redeem it. Since there is no input script yet, we estimate
+        // its size based on the script class. ML-DSA signatures are ~2424 bytes, so
+        // their spend cost is much higher than Schnorr/ECDSA.
+        let input_estimate = match ScriptClass::from_script(&transaction_output.script_public_key) {
+            ScriptClass::PubKeyMLDSA => {
+                // 36 prevout + 1 script len + (2424 sig + 1 push opcode) + 4 sequence
+                // = 36 + 1 + 2425 + 4 = 2466 bytes
+                2466
+            }
+            _ => 148, // legacy p2pk estimate
+        };
+
+        let total_serialized_size = mass::transaction_output_estimated_serialized_size(transaction_output) + input_estimate;
 
         // The output is considered dust if the cost to the network to spend the
         // coins is more than 1/3 of the minimum free transaction relay fee.

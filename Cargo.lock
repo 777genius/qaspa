@@ -3507,6 +3507,7 @@ dependencies = [
  "async-trait",
  "faster-hex",
  "kaspa-cli",
+ "kaspa-consensus-core",
  "kaspa-utils",
  "kaspa-wallet-core",
  "serde",

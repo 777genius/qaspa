@@ -56,6 +56,17 @@ impl KaspaMasterAnchorInfo {
     }
 }
 
+/// Summary of a master delegation request/response used in FFI helpers.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct KaspaMasterDelegationSummary {
+    pub master_anchor: [u8; MASTER_ANCHOR_LEN],
+    pub request_id: [u8; 32],
+    pub master_level: u8,
+    pub delegations: u32,
+    pub reserved: [u8; 3],
+}
+
 fn decode_id(id: PrvKeyDataId) -> [u8; PRV_KEY_DATA_ID_LEN] {
     let hex = id.to_hex();
     let mut bytes = [0u8; PRV_KEY_DATA_ID_LEN];

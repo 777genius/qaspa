@@ -14,10 +14,32 @@ use workflow_store::fs;
 const STORAGE_MAGIC: u32 = 0x444C4754; // "DLGT"
 const STORAGE_VERSION: u32 = 0;
 
-#[derive(BorshSerialize, BorshDeserialize)]
 struct StoredDelegation {
     id: u64,
     record: DelegationRecordV1,
+    request_id: Option<[u8; 32]>,
+}
+
+impl BorshSerialize for StoredDelegation {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.id, writer)?;
+        BorshSerialize::serialize(&self.record, writer)?;
+        BorshSerialize::serialize(&self.request_id, writer)?;
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for StoredDelegation {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let id = BorshDeserialize::deserialize_reader(reader)?;
+        let record = BorshDeserialize::deserialize_reader(reader)?;
+        let request_id = match Option::<[u8; 32]>::deserialize_reader(reader) {
+            Ok(value) => value,
+            Err(err) if err.kind() == std::io::ErrorKind::UnexpectedEof => None,
+            Err(err) => return Err(err),
+        };
+        Ok(Self { id, record, request_id })
+    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -33,9 +55,22 @@ impl FileEnvelope {
     }
 }
 
+#[derive(Clone)]
+struct DelegationEntry {
+    record: DelegationRecordV1,
+    request_id: Option<[u8; 32]>,
+}
+
+impl DelegationEntry {
+    fn new(record: DelegationRecordV1, request_id: Option<[u8; 32]>) -> Self {
+        Self { record, request_id }
+    }
+}
+
 pub struct DelegationStore {
-    by_id: DashMap<DelegationId, DelegationRecordV1>,
+    by_id: DashMap<DelegationId, DelegationEntry>,
     by_anchor_account: DashMap<([u8; 32], AccountId), Vec<DelegationId>>,
+    request_index: DashMap<[u8; 32], Vec<DelegationId>>,
     next_id: AtomicU64,
 }
 
@@ -47,30 +82,39 @@ impl Default for DelegationStore {
 
 impl DelegationStore {
     pub fn new() -> Self {
-        Self { by_id: DashMap::new(), by_anchor_account: DashMap::new(), next_id: AtomicU64::new(0) }
+        Self { by_id: DashMap::new(), by_anchor_account: DashMap::new(), request_index: DashMap::new(), next_id: AtomicU64::new(0) }
     }
 
-    pub fn upsert(&self, record: DelegationRecordV1) -> Result<DelegationId> {
+    pub fn upsert(&self, record: DelegationRecordV1, request_id: Option<[u8; 32]>) -> Result<DelegationId> {
         let key = (record.anchor, record.account_id);
         let mut list = self.by_anchor_account.entry(key).or_default();
 
         if let Some(last_id) = list.last() {
             if let Some(prev) = self.by_id.get(last_id) {
-                if record.nonce != prev.nonce + 1 {
-                    return Err(Error::Custom("delegation nonce must be monotonic".to_string()));
+                if record.nonce <= prev.record.nonce {
+                    return Err(Error::MasterDelegationStaleNonce {
+                        account_id: record.account_id,
+                        current: prev.record.nonce,
+                        received: record.nonce,
+                    });
                 }
             }
         }
 
         let id_val = self.next_id.fetch_add(1, Ordering::SeqCst);
         let id = DelegationId(id_val);
-        self.by_id.insert(id, record);
+        self.by_id.insert(id, DelegationEntry::new(record.clone(), request_id));
         list.push(id);
+
+        if let Some(rid) = request_id {
+            self.request_index.entry(rid).or_default().push(id);
+        }
+
         Ok(id)
     }
 
     pub fn by_id(&self, id: DelegationId) -> Option<DelegationRecordV1> {
-        self.by_id.get(&id).map(|r| r.value().clone())
+        self.by_id.get(&id).map(|r| r.record.clone())
     }
 
     pub fn by_anchor(&self, anchor: &[u8; 32]) -> Vec<(DelegationId, DelegationRecordV1)> {
@@ -95,14 +139,40 @@ impl DelegationStore {
         })
     }
 
+    pub fn latest_nonce(&self, anchor: &[u8; 32], account_id: &AccountId) -> Option<u64> {
+        let key = (*anchor, *account_id);
+        self.by_anchor_account.get(&key).and_then(|ids| ids.iter().filter_map(|id| self.by_id(*id).map(|rec| rec.nonce)).max())
+    }
+
+    pub fn find_by_anchor_account_nonce(&self, anchor: &[u8; 32], account_id: &AccountId, nonce: u64) -> Option<DelegationRecordV1> {
+        let key = (*anchor, *account_id);
+        self.by_anchor_account.get(&key).and_then(|ids| {
+            ids.iter().find_map(|id| self.by_id(*id).and_then(|rec| if rec.nonce == nonce { Some(rec.clone()) } else { None }))
+        })
+    }
+
+    pub fn has_request(&self, request_id: &[u8; 32]) -> bool {
+        self.request_index.contains_key(request_id)
+    }
+
+    pub fn records_for_request(&self, request_id: &[u8; 32]) -> Vec<DelegationRecordV1> {
+        self.request_index
+            .get(request_id)
+            .map(|ids| ids.iter().filter_map(|id| self.by_id(*id)).collect::<Vec<_>>())
+            .unwrap_or_default()
+    }
+
     pub async fn save_to_storage(&self, wallet_folder: &str, network_id: NetworkId, wallet_secret: &Secret) -> Result<()> {
         let path = Self::storage_path(wallet_folder, network_id);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await?;
         }
 
-        let entries: Vec<StoredDelegation> =
-            self.by_id.iter().map(|r| StoredDelegation { id: r.key().0, record: r.value().clone() }).collect();
+        let entries: Vec<StoredDelegation> = self
+            .by_id
+            .iter()
+            .map(|r| StoredDelegation { id: r.key().0, record: r.record.clone(), request_id: r.request_id })
+            .collect();
 
         let envelope = FileEnvelope::new(entries);
         let decrypted = Decrypted::new(envelope);
@@ -131,11 +201,14 @@ impl DelegationStore {
         }
 
         let mut max_id = 0u64;
-        for StoredDelegation { id, record } in envelope.entries {
+        for StoredDelegation { id, record, request_id } in envelope.entries {
             max_id = max_id.max(id);
             let key = (record.anchor, record.account_id);
-            self.by_id.insert(DelegationId(id), record.clone());
+            self.by_id.insert(DelegationId(id), DelegationEntry::new(record.clone(), request_id));
             self.by_anchor_account.entry(key).or_default().push(DelegationId(id));
+            if let Some(rid) = request_id {
+                self.request_index.entry(rid).or_default().push(DelegationId(id));
+            }
         }
         self.next_id.store(max_id + 1, Ordering::SeqCst);
         Ok(self.by_id.len())

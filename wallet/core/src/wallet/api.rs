@@ -234,6 +234,30 @@ impl WalletApi for super::Wallet {
         Ok(DelegationRevokeResponse {})
     }
 
+    async fn master_delegation_build_call(
+        self: Arc<Self>,
+        request: MasterDelegationBuildRequest,
+    ) -> Result<MasterDelegationBuildResponse> {
+        let wallet_secret = request.wallet_secret.clone();
+        self.build_master_delegation_request(&wallet_secret, request).await
+    }
+
+    async fn master_delegation_sign_call(
+        self: Arc<Self>,
+        request: MasterDelegationSignRequest,
+    ) -> Result<MasterDelegationSignResponse> {
+        let MasterDelegationSignRequest { wallet_secret, request, force_network_mismatch } = request;
+        self.sign_master_delegation_request(&wallet_secret, request, force_network_mismatch).await
+    }
+
+    async fn master_delegation_apply_call(
+        self: Arc<Self>,
+        request: MasterDelegationApplyRequest,
+    ) -> Result<MasterDelegationApplyResponse> {
+        let MasterDelegationApplyRequest { wallet_secret, request, response, force_network_mismatch } = request;
+        self.apply_master_delegation_response(&wallet_secret, request, response, force_network_mismatch).await
+    }
+
     async fn wallet_export_call(self: Arc<Self>, request: WalletExportRequest) -> Result<WalletExportResponse> {
         let WalletExportRequest { wallet_secret, include_transactions } = request;
 

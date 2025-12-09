@@ -29,5 +29,8 @@ serde.workspace = true
 serde_json.workspace = true
 faster-hex.workspace = true
 
+[dev-dependencies]
+kaspa-consensus-core.workspace = true
+
 [lints]
 workspace = true

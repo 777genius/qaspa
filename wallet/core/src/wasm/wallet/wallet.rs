@@ -1,5 +1,6 @@
 use crate::account::descriptor::IAccountDescriptor;
 use crate::api::message::{MasterAnchorListResponse, MasterSeedExportRequest, MasterSeedExportResponse};
+use crate::api::message::{MasterDelegationApplyRequest, MasterDelegationBuildRequest, MasterDelegationSignRequest};
 use crate::api::traits::WalletApi;
 use crate::imports::*;
 use crate::storage::local::interface::LocalStore;
@@ -8,7 +9,9 @@ use crate::wallet as native;
 use crate::wasm::api::extensions::WalletApiObjectExtension;
 use crate::wasm::api::message::{
     IAttachStealthToMasterRequest, ICreateMasterAccountRequest, ICreateMasterAccountResponse, IDetachStealthFromMasterRequest,
-    IMasterAccountsListResponse, IMasterAnchorListResponse, IMasterSeedExportRequest, IMasterSeedExportResponse,
+    IMasterAccountsListResponse, IMasterAnchorListResponse, IMasterDelegationApplyRequest, IMasterDelegationApplyResponse,
+    IMasterDelegationBuildRequest, IMasterDelegationBuildResponse, IMasterDelegationSignRequest, IMasterDelegationSignResponse,
+    IMasterSeedExportRequest, IMasterSeedExportResponse,
 };
 use crate::wasm::notify::{WalletEventTarget, WalletNotificationCallback, WalletNotificationTypeOrCallback};
 use kaspa_consensus_core::network::NetworkIdT;
@@ -441,6 +444,42 @@ impl Wallet {
         let guard = guard.lock().await;
         self.wallet().detach_stealth_from_master(&wallet_secret, &stealth_id, &guard).await?;
         Ok(JsValue::UNDEFINED)
+    }
+
+    /// Build master delegation request (offline signable).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "buildMasterDelegationRequest")]
+    pub async fn build_master_delegation_request(
+        &self,
+        request: IMasterDelegationBuildRequest,
+    ) -> Result<IMasterDelegationBuildResponse> {
+        let request = MasterDelegationBuildRequest::try_from(request)?;
+        let response = self.wallet().clone().master_delegation_build_call(request).await?;
+        IMasterDelegationBuildResponse::try_from(response)
+    }
+
+    /// Apply master delegation response (online).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "applyMasterDelegationResponse")]
+    pub async fn apply_master_delegation_response(
+        &self,
+        request: IMasterDelegationApplyRequest,
+    ) -> Result<IMasterDelegationApplyResponse> {
+        let request = MasterDelegationApplyRequest::try_from(request)?;
+        let response = self.wallet().clone().master_delegation_apply_call(request).await?;
+        IMasterDelegationApplyResponse::try_from(response)
+    }
+
+    /// Sign master delegation request (offline).
+    /// @category Wallet API
+    #[wasm_bindgen(js_name = "signMasterDelegationRequest")]
+    pub async fn sign_master_delegation_request(
+        &self,
+        request: IMasterDelegationSignRequest,
+    ) -> Result<IMasterDelegationSignResponse> {
+        let request = MasterDelegationSignRequest::try_from(request)?;
+        let response = self.wallet().clone().master_delegation_sign_call(request).await?;
+        IMasterDelegationSignResponse::try_from(response)
     }
 }
 

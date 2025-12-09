@@ -169,6 +169,25 @@ pub enum Events {
         anchor: [u8; 32],
     },
     #[serde(rename_all = "camelCase")]
+    MasterDelegationRequestBuilt {
+        master_anchor: [u8; 32],
+        request_id: [u8; 32],
+        targets: Vec<AccountId>,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationResponseApplied {
+        master_anchor: [u8; 32],
+        request_id: [u8; 32],
+        delegations: usize,
+        skipped: usize,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterDelegationApplyFailed {
+        master_anchor: [u8; 32],
+        request_id: [u8; 32],
+        reason: String,
+    },
+    #[serde(rename_all = "camelCase")]
     MasterAnchorMismatch {
         account_id: AccountId,
         expected_anchor: [u8; 32],
@@ -353,6 +372,9 @@ pub enum EventKind {
     StealthDetachedFromMaster,
     MasterDelegationExpired,
     MasterDelegationRevoked,
+    MasterDelegationRequestBuilt,
+    MasterDelegationResponseApplied,
+    MasterDelegationApplyFailed,
     MasterAnchorMismatch,
     AccountActivation,
     AccountDeactivation,
@@ -402,6 +424,9 @@ impl From<&Events> for EventKind {
             Events::StealthDetachedFromMaster { .. } => EventKind::StealthDetachedFromMaster,
             Events::MasterDelegationExpired { .. } => EventKind::MasterDelegationExpired,
             Events::MasterDelegationRevoked { .. } => EventKind::MasterDelegationRevoked,
+            Events::MasterDelegationRequestBuilt { .. } => EventKind::MasterDelegationRequestBuilt,
+            Events::MasterDelegationResponseApplied { .. } => EventKind::MasterDelegationResponseApplied,
+            Events::MasterDelegationApplyFailed { .. } => EventKind::MasterDelegationApplyFailed,
             Events::MasterAnchorMismatch { .. } => EventKind::MasterAnchorMismatch,
             Events::AccountActivation { .. } => EventKind::AccountActivation,
             Events::AccountDeactivation { .. } => EventKind::AccountDeactivation,
@@ -454,6 +479,9 @@ impl FromStr for EventKind {
             "stealth-detached-from-master" => Ok(EventKind::StealthDetachedFromMaster),
             "master-delegation-expired" => Ok(EventKind::MasterDelegationExpired),
             "master-delegation-revoked" => Ok(EventKind::MasterDelegationRevoked),
+            "master-delegation-request-built" => Ok(EventKind::MasterDelegationRequestBuilt),
+            "master-delegation-response-applied" => Ok(EventKind::MasterDelegationResponseApplied),
+            "master-delegation-apply-failed" => Ok(EventKind::MasterDelegationApplyFailed),
             "master-anchor-mismatch" => Ok(EventKind::MasterAnchorMismatch),
             "account-activation" => Ok(EventKind::AccountActivation),
             "account-deactivation" => Ok(EventKind::AccountDeactivation),
@@ -514,6 +542,9 @@ impl std::fmt::Display for EventKind {
             EventKind::StealthDetachedFromMaster => "stealth-detached-from-master",
             EventKind::MasterDelegationExpired => "master-delegation-expired",
             EventKind::MasterDelegationRevoked => "master-delegation-revoked",
+            EventKind::MasterDelegationRequestBuilt => "master-delegation-request-built",
+            EventKind::MasterDelegationResponseApplied => "master-delegation-response-applied",
+            EventKind::MasterDelegationApplyFailed => "master-delegation-apply-failed",
             EventKind::MasterAnchorMismatch => "master-anchor-mismatch",
             EventKind::AccountActivation => "account-activation",
             EventKind::AccountDeactivation => "account-deactivation",

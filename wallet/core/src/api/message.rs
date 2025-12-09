@@ -5,8 +5,9 @@
 //! `XxxRequest` and `XxxResponse` message.
 //!
 
-use crate::account::delegation::DelegationRecordV1;
+use crate::account::delegation::{DelegationRecordV1, DelegationStatus};
 use crate::imports::*;
+use crate::message::{MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
 use crate::tx::{Fees, GeneratorSummary, PaymentDestination, RandomFeeSettings};
 use kaspa_addresses::Address;
 use kaspa_consensus_client::{TransactionOutpoint, UtxoEntry};
@@ -283,6 +284,83 @@ pub struct DelegationRevokeRequest {
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegationRevokeResponse {}
+
+// ----------------------------------------------------------------
+// Master delegation (Iteration 6)
+// ----------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationTarget {
+    pub account_id: AccountId,
+    pub valid_from_daa: Option<u64>,
+    pub valid_until_daa: Option<u64>,
+    pub nonce_hint: Option<u64>,
+    #[serde(default)]
+    pub status: Option<DelegationStatus>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationBuildRequest {
+    pub wallet_secret: Secret,
+    pub master_anchor: Option<String>,
+    pub master_level: Option<u8>,
+    pub network_id: Option<NetworkId>,
+    pub targets: Vec<MasterDelegationTarget>,
+    pub created_at_unixtime: Option<u64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationBuildResponse {
+    pub request: MasterDelegationRequestBodyV1,
+    pub request_json: String,
+}
+
+// Алиасы для совместимости с транспортными макросами (они ожидают типы `<Op>Request`/`<Op>Response`)
+pub type MasterDelegationBuildRequestRequest = MasterDelegationBuildRequest;
+pub type MasterDelegationBuildRequestResponse = MasterDelegationBuildResponse;
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationSignRequest {
+    pub wallet_secret: Secret,
+    pub request: MasterDelegationRequestBodyV1,
+    #[serde(default)]
+    pub force_network_mismatch: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationSignResponse {
+    pub response: MasterDelegationResponseBodyV1,
+    pub response_json: String,
+}
+
+pub type MasterDelegationSignRequestRequest = MasterDelegationSignRequest;
+pub type MasterDelegationSignRequestResponse = MasterDelegationSignResponse;
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationApplyRequest {
+    pub wallet_secret: Secret,
+    pub request: MasterDelegationRequestBodyV1,
+    pub response: MasterDelegationResponseBodyV1,
+    #[serde(default)]
+    pub force_network_mismatch: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationApplyResponse {
+    pub applied: usize,
+    pub skipped: usize,
+    pub missing_accounts: Vec<AccountId>,
+}
+
+pub type MasterDelegationApplyRequestRequest = MasterDelegationApplyRequest;
+pub type MasterDelegationApplyRequestResponse = MasterDelegationApplyResponse;
 
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(rename_all = "camelCase")]

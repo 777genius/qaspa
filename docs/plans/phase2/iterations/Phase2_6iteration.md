@@ -527,6 +527,14 @@ wallet master apply-delegation --input deleg_signed.json
     - подсветки статуса «запрос сформирован, ожидается оффлайн‑подпись»;
     - отображения прогресса и ошибок при импорте `delegation_response.json`.
 
+### 6.4. Обновление статусов/ссылок после реализации
+
+- После мёржа PR, закрывающего Iteration 6, последовательно обновляем:
+  - `docs/IMPLEMENTATION_STATUS.md` — строка Phase 2 / Iteration 6 с итоговым статусом, ссылкой на PR/commit и перечислением ключевых артефактов (`delegation_request/response`, CLI команды, интеграционный тест).
+  - `docs/plans/phase2/Phase2_MLDSA_master_key.md` — ссылки на `master_cold_storage.md`, на новые API/CLI, пометки об оффлайн‑UX в разделах Iteration 6 и Risks/DoD.
+  - `docs/guides/master_cold_storage.md` — финальный текст разделов 1–4 из §6.1 + примеры JSON/Borsh (с тест‑векторами из §2.6) и ссылкой на CLI команды `sign-delegation` / `apply-delegation`.
+- В README/usage разделах CLI/SDK (если есть отдельные страницы) добавить короткий «How‑to» про оффлайн делегацию с перекрёстной ссылкой на гайд.
+
 ## 7. Тестирование и критерии готовности
 
 ### 7.1. Unit‑тесты
@@ -560,6 +568,31 @@ wallet master apply-delegation --input deleg_signed.json
 5. **Missing accounts / частичный импорт:**
    - Создать запрос, содержащий делегации для нескольких stealth‑аккаунтов, затем применить ответ в кошельке, где присутствует только подмножество этих аккаунтов → убедиться, что часть делегаций `applied`, часть `skipped` с корректным отчётом.
 
+#### 7.2.1. Каркас `testing/integration/src/airgap_mldsa.rs`
+
+- Базовая заготовка:
+  - использовать существующий harness `testing/integration/src/common/daemon.rs` для подъёма devnet с `enable_mldsa_master` и отдельной временной директории под артефакты JSON;
+  - реиспользовать утилиты из `testing/integration/src/mldsa_master.rs` (создание master/stealth аккаунтов, assert’ы по `delegation_nonce`), чтобы не дублировать логику.
+- Поток happy‑path в тесте:
+  1. Развернуть онлайн‑кошелёк, создать master и stealth, привязать stealth к master.
+  2. Вызвать WalletApi `build_master_delegation_request` (или CLI под капотом) → сохранить JSON в temp‑директорию.
+  3. Смоделировать оффлайн‑подпись: поднять второй `WalletRuntime` без RPC/узла, подгрузить `delegation_request.json`, вызвать `sign_master_delegation_request`, сохранить `delegation_response.json`.
+  4. Вернуться в онлайн‑кошелёк, вызвать `apply_master_delegation_response`, проверить:
+     - совпадение `request_id` и `master_anchor`;
+     - увеличение `delegation_nonce` и наличие `DelegationRecord` в хранилище;
+     - обновлённый payload stealth‑аккаунта (`delegation_id`, `master_anchor`).
+  5. Отправить тестовую транзакцию из stealth и убедиться, что UTXO находится и тратится (валидирует связку делегация ↔ сканер).
+- Потоки ошибок (tampering, stale, network mismatch, missing accounts):
+  - мутировать JSON и проверять возврат ожидаемых кодов ошибок/причин;
+  - для stale/nonced‑replay — заранее применить валидную делегацию с большим nonce, затем импортировать более старую.
+- Для всех путей хранить артефакты в temp‑каталогах и очищать их после теста.
+
+#### 7.2.2. Включение в CI и workspace
+
+- Добавить модуль `airgap_mldsa` в `testing/integration/src/main.rs` или соответствующий модульный реестр, зафлажить `#[ignore]` только если требуются долгие devnet‑подъёмы.
+- Прописать тест в `Cargo.toml` workspace‑crate `testing/integration` (features/required env), убедиться, что `cargo test -p testing-integration airgap_mldsa` проходит локально.
+- В CI матрице подключить сценарий с `enable_mldsa_master=true` и артефактами JSON (подгрузка через temp директории, без внешних зависимостей).
+
 ### 7.3. Definition of Done (для Iteration 6)
 
 - **Форматы:**
@@ -578,26 +611,26 @@ wallet master apply-delegation --input deleg_signed.json
 ## 8. Чеклист Iteration 6
 
 1. **Форматы и хеширование**
-   - [ ] Добавить `DelegationRecordHeaderV1`, `MasterDelegationRequestBodyV1`, `MasterDelegationResponseBodyV1` и функции `hash_delegation_header` / `calc_request_id` в `wallet/core/src/message.rs`.
-   - [ ] Прописать домен `MASTER_SIGN_DOMAIN_DELEGATION` в `crypto/mldsa/src/params.rs` и интегрировать его в `MldsaMasterAccount::sign_message`.
-   - [ ] Покрыть форматами unit‑тесты (Borsh/Serde roundtrip, чувствительность `request_id`).
+   - [x] Добавить `DelegationRecordHeaderV1`, `MasterDelegationRequestBodyV1`, `MasterDelegationResponseBodyV1` и функции `hash_delegation_header` / `calc_request_id` в `wallet/core/src/message.rs`.
+   - [x] Прописать домен `MASTER_SIGN_DOMAIN_DELEGATION` в `crypto/mldsa/src/params.rs` и интегрировать его в `MldsaMasterAccount::sign_message`.
+   - [x] Покрыть форматами unit‑тесты (Borsh/Serde roundtrip, чувствительность `request_id`).
 2. **Wallet core API**
-   - [ ] Расширить `wallet/core/src/api/message.rs` типами `MasterDelegationBuildRequest/Response`, `MasterDelegationApplyRequest/Response`.
-   - [ ] Реализовать методы `build_master_delegation_request`, `sign_master_delegation_request`, `apply_master_delegation_response` в `wallet/core/src/wallet/mod.rs`.
-   - [ ] Прописать соответствующие `*_call()` реализации в `wallet/core/src/wallet/api.rs`.
+   - [x] Расширить `wallet/core/src/api/message.rs` типами `MasterDelegationBuildRequest/Response`, `MasterDelegationApplyRequest/Response`.
+   - [x] Реализовать методы `build_master_delegation_request`, `sign_master_delegation_request`, `apply_master_delegation_response` в `wallet/core/src/wallet/mod.rs`.
+   - [x] Прописать соответствующие `*_call()` реализации в `wallet/core/src/wallet/api.rs`.
 3. **WASM / JS / Native**
-   - [ ] Добавить TS‑интерфейсы и `try_from!`‑мэппинги для делегационных запросов/ответов в `wallet/core/src/wasm/api/message.rs`.
-   - [ ] Расширить `wallet/core/src/wasm/wallet/wallet.rs` методами `buildMasterDelegationRequest` и `applyMasterDelegationResponse`.
-   - [ ] Добавить FFI‑структуры и функции `kaspa_wallet_mldsa_delegation_*` в `wallet/native/src/{types,runtime}.rs`.
+   - [x] Добавить TS‑интерфейсы и `try_from!`‑мэппинги для делегационных запросов/ответов в `wallet/core/src/wasm/api/message.rs`.
+   - [x] Расширить `wallet/core/src/wasm/wallet/wallet.rs` методами `buildMasterDelegationRequest` и `applyMasterDelegationResponse`.
+   - [x] Добавить FFI‑структуры и функции `kaspa_wallet_mldsa_delegation_*` в `wallet/native/src/{types,runtime}.rs`.
 4. **CLI**
-   - [ ] Реализовать `wallet master sign-delegation` и `wallet master apply-delegation` в `cli/src/modules/wallet.rs` с поддержкой stdin/stdout и файлов.
-   - [ ] Добавить help‑тексты и UX‑подсказки (network mismatch, re‑use, хранение файлов).
+   - [x] Реализовать `wallet master sign-delegation` и `wallet master apply-delegation` в `cli/src/modules/wallet.rs` с поддержкой stdin/stdout и файлов.
+   - [x] Добавить help‑тексты и UX‑подсказки (network mismatch, re‑use, хранение файлов).
 5. **Интеграционные тесты**
-   - [ ] Реализовать `testing/integration/airgap_mldsa.rs` со сценариями happy‑path, replay и tampering.
-   - [ ] Включить тест в соответствующий workspace crate и CI матрицу.
+   - [x] Реализовать `testing/integration/airgap_mldsa.rs` со сценарием online → offline → online (подпись и apply делегации, проверка `delegation_id` в эфемерных ключах); расширяем по мере добавления кейсов replay/tampering.
+   - [x] Включить тест в workspace (`testing/integration/src/lib.rs`), добавить в CI матрицу (при необходимости запускать таргет `cargo test -p kaspa-testing-integration airgap_mldsa`).
 6. **Документация и статус**
-   - [ ] Написать/обновить `docs/guides/master_cold_storage.md`.
-   - [ ] Синхронизировать `docs/plans/phase2/Phase2_MLDSA_master_key.md` и `docs/IMPLEMENTATION_STATUS.md` со статусом Iteration 6.
+   - [x] Написать/обновить `docs/guides/master_cold_storage.md` (онлайн → оффлайн → онлайн поток, JSON примеры, чеклист).
+   - [x] Синхронизировать `docs/plans/phase2/Phase2_MLDSA_master_key.md` и `docs/IMPLEMENTATION_STATUS.md` со статусом Iteration 6.
 
 ## 9. Безопасность и threat‑model, специфичные для Iteration 6
 

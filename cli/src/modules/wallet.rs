@@ -1,5 +1,8 @@
 use crate::imports::*;
 use crate::wizards;
+use kaspa_utils::hex::ToHex;
+use kaspa_wallet_core::api::message::{MasterDelegationApplyRequest, MasterDelegationSignRequest};
+use kaspa_wallet_core::message::{MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
 use kaspa_wallet_core::storage::PrvKeyDataId;
 #[cfg(not(target_arch = "wasm32"))]
 use qrcode::{render::unicode, QrCode};
@@ -146,6 +149,8 @@ impl Wallet {
                 let anchor = argv.into_iter().next();
                 self.master_verify_anchor(ctx, anchor).await
             }
+            "sign-delegation" => self.master_sign_delegation(ctx, argv).await,
+            "apply-delegation" => self.master_apply_delegation(ctx, argv).await,
             "enable" => self.set_master_flag(ctx, true).await,
             "disable" => self.set_master_flag(ctx, false).await,
             "help" => self.display_master_help(ctx).await,
@@ -326,10 +331,178 @@ impl Wallet {
                 ("list", "List stored MLDSA master anchors"),
                 ("export <id> [--format plain|json|qr]", "Export encrypted master seed"),
                 ("verify-anchor <hex>", "Check whether anchor exists locally"),
+                (
+                    "sign-delegation --input <path|-> --out <path|-> [--force-network-mismatch] [--summary-only] [--no-confirm]",
+                    "Sign offline delegation request JSON",
+                ),
+                (
+                    "apply-delegation [--request <path>] --response <path> [--force-network-mismatch]",
+                    "Apply signed delegation response JSON (request optional if cached)",
+                ),
                 ("enable|disable", "Toggle automatic master creation"),
             ],
             Some("master"),
         )?;
+        Ok(())
+    }
+
+    async fn master_sign_delegation(self: Arc<Self>, ctx: Arc<KaspaCli>, argv: Vec<String>) -> Result<()> {
+        Self::ensure_wallet_open(&ctx)?;
+        if argv.is_empty() {
+            tprintln!(
+                ctx,
+                "Usage: wallet master sign-delegation --input <path|-> --out <path|-> [--force-network-mismatch] [--summary-only] [--no-confirm]"
+            );
+            return Ok(());
+        }
+
+        let mut input: Option<String> = None;
+        let mut output: Option<String> = None;
+        let mut force_network_mismatch = false;
+        let mut summary_only = false;
+        let mut no_confirm = false;
+        let mut idx = 0;
+        while idx < argv.len() {
+            match argv[idx].as_str() {
+                "--input" => {
+                    input = argv.get(idx + 1).cloned();
+                    idx += 2;
+                }
+                "--out" => {
+                    output = argv.get(idx + 1).cloned();
+                    idx += 2;
+                }
+                "--force-network-mismatch" => {
+                    force_network_mismatch = true;
+                    idx += 1;
+                }
+                "--summary-only" => {
+                    summary_only = true;
+                    idx += 1;
+                }
+                "--no-confirm" => {
+                    no_confirm = true;
+                    idx += 1;
+                }
+                other => return Err(Error::custom(format!("Unknown argument {other}"))),
+            }
+        }
+
+        let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+        let json = if input.as_deref() == Some("-") {
+            use std::io::Read;
+            let mut buf = String::new();
+            std::io::stdin().read_to_string(&mut buf)?;
+            buf
+        } else {
+            let path = input.ok_or_else(|| Error::custom("missing --input"))?;
+            std::fs::read_to_string(&path)?
+        };
+
+        let request: MasterDelegationRequestBodyV1 =
+            serde_json::from_str(&json).map_err(|e| Error::custom(format!("invalid request json: {e}")))?;
+
+        if !no_confirm {
+            print_delegation_summary(&ctx, &request, "Request");
+            let anchor_hex = request.master_anchor.to_vec().to_hex();
+            let request_hex = request.request_id.to_vec().to_hex();
+            let anchor_short = anchor_hex.get(0..12).unwrap_or(&anchor_hex);
+            let request_short = request_hex.get(0..12).unwrap_or(&request_hex);
+            let prompt =
+                format!("Type 'DELEGATE' to sign (anchor {anchor_short}, request {request_short}) or anything else to abort: ");
+            let answer = ctx.term().ask(false, &prompt).await?;
+            if answer.trim() != "DELEGATE" {
+                tprintln!(ctx, "Aborted by user.");
+                return Ok(());
+            }
+        }
+
+        let response = ctx
+            .wallet()
+            .master_delegation_sign_call(MasterDelegationSignRequest {
+                wallet_secret,
+                request: request.clone(),
+                force_network_mismatch,
+            })
+            .await?;
+
+        let out_json = response.response_json;
+        if !summary_only && (output.as_deref() == Some("-") || output.is_none()) {
+            tprintln!(ctx, "{out_json}");
+        } else if let Some(path) = output {
+            std::fs::write(path, out_json)?;
+        }
+
+        print_delegation_summary(&ctx, &request, "Request");
+        tprintln!(
+            ctx,
+            "Signed delegations: {} | anchor: {} | requestId: {}",
+            response.response.delegations.len(),
+            response.response.master_anchor.to_vec().to_hex(),
+            response.response.request_id.to_vec().to_hex()
+        );
+        Ok(())
+    }
+
+    async fn master_apply_delegation(self: Arc<Self>, ctx: Arc<KaspaCli>, argv: Vec<String>) -> Result<()> {
+        Self::ensure_wallet_open(&ctx)?;
+        if argv.is_empty() {
+            tprintln!(
+                ctx,
+                "Usage: wallet master apply-delegation [--request <path>] --response <path> [--force-network-mismatch]"
+            );
+            return Ok(());
+        }
+
+        let mut request_path: Option<String> = None;
+        let mut response_path: Option<String> = None;
+        let mut force_network_mismatch = false;
+        let mut idx = 0;
+        while idx < argv.len() {
+            match argv[idx].as_str() {
+                "--request" => {
+                    request_path = argv.get(idx + 1).cloned();
+                    idx += 2;
+                }
+                "--response" => {
+                    response_path = argv.get(idx + 1).cloned();
+                    idx += 2;
+                }
+                "--force-network-mismatch" => {
+                    force_network_mismatch = true;
+                    idx += 1;
+                }
+                other => return Err(Error::custom(format!("Unknown argument {other}"))),
+            }
+        }
+
+        let response_json = std::fs::read_to_string(response_path.ok_or_else(|| Error::custom("missing --response"))?)?;
+        let response: MasterDelegationResponseBodyV1 =
+            serde_json::from_str(&response_json).map_err(|e| Error::custom(format!("invalid response json: {e}")))?;
+
+        let request = if let Some(path) = request_path {
+            let request_json = std::fs::read_to_string(path)?;
+            Some(serde_json::from_str(&request_json).map_err(|e| Error::custom(format!("invalid request json: {e}")))?)
+        } else {
+            ctx.wallet()
+                .load_cached_master_delegation_request(&response.request_id)
+                .await?
+        };
+
+        let request =
+            request.ok_or_else(|| Error::custom("missing --request and cached delegation_request.json not found for requestId"))?;
+
+        let (wallet_secret, _) = ctx.ask_wallet_secret(None).await?;
+        let result = ctx
+            .wallet()
+            .master_delegation_apply_call(MasterDelegationApplyRequest { wallet_secret, request, response, force_network_mismatch })
+            .await?;
+
+        tprintln!(ctx, "Applied: {}, skipped: {}", result.applied, result.skipped);
+        if !result.missing_accounts.is_empty() {
+            let missing = result.missing_accounts.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(", ");
+            tprintln!(ctx, "Missing accounts: {missing}");
+        }
         Ok(())
     }
 
@@ -344,6 +517,27 @@ impl Wallet {
     fn is_master_enabled(ctx: &Arc<KaspaCli>) -> bool {
         ctx.wallet().settings().get::<bool>(WalletSettings::EnableMldsaMaster).unwrap_or(true)
     }
+}
+
+fn print_delegation_summary(ctx: &Arc<KaspaCli>, request: &MasterDelegationRequestBodyV1, label: &str) {
+    if request.delegations.is_empty() {
+        tprintln!(ctx, "{label} summary → no delegations in request");
+        return;
+    }
+    let min_from = request.delegations.iter().map(|d| d.valid_from_daa).min().unwrap_or(0);
+    let max_until = request.delegations.iter().filter_map(|d| d.valid_until_daa).max();
+    let window = match max_until {
+        Some(until) => format!("{min_from}..{until}"),
+        None => format!("{min_from}..(open)"),
+    };
+    tprintln!(
+        ctx,
+        "{label} summary → delegations: {} | DAA window: {} | network: {} | requestId: {}",
+        request.delegations.len(),
+        window,
+        request.network_id,
+        request.request_id.to_vec().to_hex()
+    );
 }
 
 enum MasterExportFormat {

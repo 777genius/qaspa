@@ -58,7 +58,7 @@ pub unsafe extern "C" fn kaspa_mldsa_verify(
     }
 
     // Length validation
-    if message_len == 0 || signature_len == 0 || public_key_len == 0 {
+    if signature_len == 0 || public_key_len == 0 {
         return false;
     }
 

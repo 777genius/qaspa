@@ -141,6 +141,8 @@ pub struct RpcCoreService {
 }
 
 const RPC_CORE: &str = "rpc-core";
+const MAX_MLDSA_ANCHORS: usize = 10_000;
+const MAX_MLDSA_METADATA_LEN: usize = 512;
 
 impl RpcCoreService {
     pub const IDENT: &'static str = "rpc-core-service";
@@ -765,6 +767,10 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         _connection: Option<&DynRpcConnection>,
         request: GetUtxosByScriptVersionRequest,
     ) -> RpcResult<GetUtxosByScriptVersionResponse> {
+        if !self.config.unsafe_rpc && request.script_version == STEALTH_SCRIPT_VERSION {
+            warn!("get_utxos_by_script_version(stealth) called while node in safe RPC mode -- ignoring.");
+            return Err(RpcError::UnavailableInSafeMode);
+        }
         if !self.config.utxoindex {
             return Err(RpcError::NoUtxoIndex);
         }
@@ -1345,11 +1351,25 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         _connection: Option<&DynRpcConnection>,
         request: RegisterMldsaAnchorRequest,
     ) -> RpcResult<RegisterMldsaAnchorResponse> {
+        if !self.config.unsafe_rpc {
+            warn!("register_mldsa_anchor called while node in safe RPC mode -- ignoring.");
+            return Err(RpcError::UnavailableInSafeMode);
+        }
+
         // Basic input validation: anchor must be exactly 32 bytes (Guaranteed by type)
         // Idempotent insert into in-memory set.
         let RegisterMldsaAnchorRequest { anchor, metadata } = request;
+        if let Some(ref meta) = metadata {
+            if meta.len() > MAX_MLDSA_METADATA_LEN {
+                return Err(RpcError::General(format!("metadata is too long (max {MAX_MLDSA_METADATA_LEN} bytes)")));
+            }
+        }
         let anchor_hex = anchor.as_slice().to_hex();
         let mut anchors = self.mldsa_anchors.lock().unwrap();
+        if anchors.len() >= MAX_MLDSA_ANCHORS && !anchors.contains_key(&anchor) {
+            warn!("register_mldsa_anchor rejected: anchor store is full ({} entries)", MAX_MLDSA_ANCHORS);
+            return Err(RpcError::General("anchor registry capacity exceeded".to_string()));
+        }
         let accepted = match (anchors.entry(anchor), metadata) {
             (Entry::Vacant(entry), meta) => {
                 entry.insert(AnchorInfo { metadata: meta, _registered_at: unix_now() });
@@ -1375,6 +1395,10 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         _connection: Option<&DynRpcConnection>,
         request: ListMldsaDelegationsRequest,
     ) -> RpcResult<ListMldsaDelegationsResponse> {
+        if !self.config.unsafe_rpc {
+            warn!("list_mldsa_delegations called while node in safe RPC mode -- ignoring.");
+            return Err(RpcError::UnavailableInSafeMode);
+        }
         let provider = { self.delegation_provider.lock().unwrap().clone() };
         if let Some(provider) = provider {
             let delegations = provider.list_by_anchor(request.anchor).await?;
@@ -1383,7 +1407,6 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
 
         let anchors = self.mldsa_anchors.lock().unwrap();
         if !anchors.contains_key(&request.anchor) {
-            warn!("list_mldsa_delegations called for unknown anchor {}", request.anchor.as_slice().to_hex());
             return Ok(ListMldsaDelegationsResponse { delegations: vec![] });
         }
         // Iteration 4 scope: no delegation indexing in RPC, return empty list for known anchors.
@@ -1432,12 +1455,10 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
                 warn!("RPC subscription to blanket UtxosChanged called while node in safe RPC mode -- ignoring.");
                 Err(RpcError::UnavailableInSafeMode)
             }
-            Scope::StealthUtxosChanged(ref stealth_scope) if !self.config.unsafe_rpc && stealth_scope.script_versions.is_empty() => {
-                // The subscription to blanket StealthUtxosChanged (all script versions)
-                // is restricted to unsafe mode only since it could be resource intensive.
-                //
-                // Specific script versions (e.g., [16] for stealth) are always allowed.
-                warn!("RPC subscription to blanket StealthUtxosChanged called while node in safe RPC mode -- ignoring.");
+            Scope::StealthUtxosChanged(ref _stealth_scope) if !self.config.unsafe_rpc => {
+                // Stealth subscriptions leak view tags/anchors for every stealth UTXO.
+                // В safe-режиме запрещаем их целиком.
+                warn!("RPC subscription to StealthUtxosChanged called while node in safe RPC mode -- ignoring.");
                 Err(RpcError::UnavailableInSafeMode)
             }
             _ => {

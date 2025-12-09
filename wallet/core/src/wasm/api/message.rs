@@ -3,11 +3,17 @@
 use super::extensions::*;
 use crate::account::descriptor::IAccountDescriptor;
 use crate::api::message::*;
+use crate::api::message::{
+    MasterDelegationApplyRequest, MasterDelegationApplyResponse, MasterDelegationBuildRequest, MasterDelegationBuildResponse,
+    MasterDelegationSignRequest, MasterDelegationSignResponse, MasterDelegationTarget,
+};
 use crate::imports::*;
+use crate::message::{DelegationRecordHeaderV1, MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
 use crate::tx::{Fees, PaymentDestination, PaymentOutputs, RandomFeeSettings};
 use crate::wasm::api::keydata::PrvKeyDataVariantKind;
 use crate::wasm::tx::fees::IFees;
 use crate::wasm::tx::GeneratorSummary;
+use faster_hex::{hex_decode, hex_string};
 use js_sys::Array;
 use kaspa_mldsa::MlDsaLevel;
 use kaspa_utils::hex::ToHex;
@@ -843,6 +849,365 @@ declare! {
 
 try_from! ( _args: DelegationRevokeResponse, IDelegationRevokeResponse, {
     Ok(IDelegationRevokeResponse::default())
+});
+
+// ---
+// Master delegation (Iteration 6)
+
+declare! {
+    IMasterDelegationHeader,
+    r#"
+    /**
+     * Signable delegation header (no signature).
+     * @category Wallet API
+     */
+    export interface IMasterDelegationHeader {
+        version: number;
+        level: number;
+        anchor: HexString;
+        accountId: string;
+        spendPubkey: HexString;
+        scanPubkey: HexString;
+        validFromDaa: number;
+        validUntilDaa?: number;
+        nonce: number;
+        status: any;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationHeader, DelegationRecordHeaderV1, {
+    let anchor_hex = args.get_string("anchor")?;
+    let spend_hex = args.get_string("spendPubkey")?;
+    let scan_hex = args.get_string("scanPubkey")?;
+    let anchor = {
+        let mut out = [0u8; 32];
+        hex_decode(anchor_hex.as_bytes(), &mut out).map_err(|e|Error::custom(format!("anchor: {e}")))?;
+        out
+    };
+    let spend_pubkey = {
+        let mut out = [0u8; 32];
+        hex_decode(spend_hex.as_bytes(), &mut out).map_err(|e|Error::custom(format!("spendPubkey: {e}")))?;
+        out
+    };
+    let scan_pubkey = {
+        let mut out = [0u8; 32];
+        hex_decode(scan_hex.as_bytes(), &mut out).map_err(|e|Error::custom(format!("scanPubkey: {e}")))?;
+        out
+    };
+    Ok(DelegationRecordHeaderV1 {
+        version: args.get_u8("version").unwrap_or(1),
+        level: args.get_u8("level").unwrap_or(2),
+        anchor,
+        account_id: args.get_account_id("accountId")?,
+        spend_pubkey,
+        scan_pubkey,
+        valid_from_daa: args.get_u64("validFromDaa")?,
+        valid_until_daa: args.try_get_value("validUntilDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        nonce: args.get_u64("nonce")?,
+        status: serde_wasm_bindgen::from_value(args.get_value("status")?).map_err(|e|Error::custom(format!("status: {e}")))?,
+    })
+});
+
+try_from! ( args: DelegationRecordHeaderV1, IMasterDelegationHeader, {
+    let obj = IMasterDelegationHeader::default();
+    obj.set("version", &JsValue::from_f64(args.version as f64))?;
+    obj.set("level", &JsValue::from_f64(args.level as f64))?;
+    obj.set("anchor", &JsValue::from_str(&hex_string(&args.anchor)))?;
+    obj.set("accountId", &JsValue::from_str(&args.account_id.to_string()))?;
+    obj.set("spendPubkey", &JsValue::from_str(&hex_string(&args.spend_pubkey)))?;
+    obj.set("scanPubkey", &JsValue::from_str(&hex_string(&args.scan_pubkey)))?;
+    obj.set("validFromDaa", &JsValue::from_f64(args.valid_from_daa as f64))?;
+    if let Some(v) = args.valid_until_daa {
+        obj.set("validUntilDaa", &JsValue::from_f64(v as f64))?;
+    }
+    obj.set("nonce", &JsValue::from_f64(args.nonce as f64))?;
+    obj.set("status", &serde_wasm_bindgen::to_value(&args.status)?)?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationTarget,
+    r#"
+    /**
+     * Delegation target descriptor for offline builders.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationTarget {
+        accountId: string;
+        validFromDaa?: number;
+        validUntilDaa?: number;
+        nonceHint?: number;
+        status?: any;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationTarget, MasterDelegationTarget, {
+    Ok(MasterDelegationTarget {
+        account_id: args.get_account_id("accountId")?,
+        valid_from_daa: args.try_get_value("validFromDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        valid_until_daa: args.try_get_value("validUntilDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        nonce_hint: args.try_get_value("nonceHint")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        status: args
+            .try_get_value("status")?
+            .and_then(|v| serde_wasm_bindgen::from_value(v).ok()),
+    })
+});
+
+try_from! ( args: MasterDelegationTarget, IMasterDelegationTarget, {
+    let obj = IMasterDelegationTarget::default();
+    obj.set("accountId", &JsValue::from_str(&args.account_id.to_string()))?;
+    if let Some(v) = args.valid_from_daa {
+        obj.set("validFromDaa", &JsValue::from_f64(v as f64))?;
+    }
+    if let Some(v) = args.valid_until_daa {
+        obj.set("validUntilDaa", &JsValue::from_f64(v as f64))?;
+    }
+    if let Some(v) = args.nonce_hint {
+        obj.set("nonceHint", &JsValue::from_f64(v as f64))?;
+    }
+    if let Some(status) = args.status.as_ref() {
+        obj.set("status", &serde_wasm_bindgen::to_value(status)?)?;
+    }
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationBuildRequest,
+    r#"
+    /**
+     * Build offline delegation request (signable).
+     * @category Wallet API
+     */
+    export interface IMasterDelegationBuildRequest {
+        walletSecret: string;
+        masterAnchor?: HexString;
+        masterLevel?: number;
+        networkId?: NetworkId | string;
+        targets: IMasterDelegationTarget[];
+        createdAtUnixtime?: number;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationBuildRequest, MasterDelegationBuildRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let master_anchor = args.try_get_string("masterAnchor")?;
+    let master_level = args.try_get_value("masterLevel")?.and_then(|v| v.as_f64()).map(|v| v as u8);
+    let network_id = args.try_get::<NetworkId>("networkId")?;
+    let targets: Vec<MasterDelegationTarget> =
+        serde_wasm_bindgen::from_value(args.get_value("targets")?).map_err(|e|Error::custom(format!("targets: {e}")))?;
+    let created_at_unixtime = args.try_get_value("createdAtUnixtime")?.and_then(|v| v.as_f64()).map(|v| v as u64);
+    Ok(MasterDelegationBuildRequest { wallet_secret, master_anchor, master_level, network_id, targets, created_at_unixtime })
+});
+
+declare! {
+    IMasterDelegationBuildResponse,
+    r#"
+    /**
+     * Built delegation request body plus JSON representation.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationBuildResponse {
+        request: IMasterDelegationRequest;
+        requestJson: string;
+    }
+    "#,
+}
+
+try_from! ( args: MasterDelegationBuildResponse, IMasterDelegationBuildResponse, {
+    let obj = IMasterDelegationBuildResponse::default();
+    obj.set("request", &serde_wasm_bindgen::to_value(&args.request)?)?;
+    obj.set("requestJson", &JsValue::from_str(&args.request_json))?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationRequest,
+    r#"
+    /**
+     * Delegation request body (signable).
+     * @category Wallet API
+     */
+    export interface IMasterDelegationRequest {
+        version: number;
+        masterAnchor: HexString;
+        masterLevel: number;
+        networkId: NetworkId | string;
+        delegations: IMasterDelegationHeader[];
+        createdAtUnixtime: number;
+        requestId: HexString;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationRequest, MasterDelegationRequestBodyV1, {
+    let anchor_hex = args.get_string("masterAnchor")?;
+    let request_id_hex = args.get_string("requestId")?;
+    let mut anchor = [0u8; 32];
+    hex_decode(anchor_hex.as_bytes(), &mut anchor).map_err(|e|Error::custom(format!("masterAnchor: {e}")))?;
+    let mut request_id = [0u8; 32];
+    hex_decode(request_id_hex.as_bytes(), &mut request_id).map_err(|e|Error::custom(format!("requestId: {e}")))?;
+    Ok(MasterDelegationRequestBodyV1 {
+        version: args.get_u8("version")?,
+        master_anchor: anchor,
+        master_level: args.get_u8("masterLevel")?,
+        network_id: args.get_network_id("networkId")?,
+        delegations: serde_wasm_bindgen::from_value(args.get_value("delegations")?)
+            .map_err(|e|Error::custom(format!("delegations: {e}")))?,
+        created_at_unixtime: args.get_u64("createdAtUnixtime")?,
+        request_id,
+    })
+});
+
+try_from! ( args: MasterDelegationRequestBodyV1, IMasterDelegationRequest, {
+    let obj = IMasterDelegationRequest::default();
+    obj.set("version", &JsValue::from_f64(args.version as f64))?;
+    obj.set("masterAnchor", &JsValue::from_str(&hex_string(&args.master_anchor)))?;
+    obj.set("masterLevel", &JsValue::from_f64(args.master_level as f64))?;
+    obj.set("networkId", &args.network_id.into())?;
+    obj.set("delegations", &serde_wasm_bindgen::to_value(&args.delegations)?)?;
+    obj.set("createdAtUnixtime", &JsValue::from_f64(args.created_at_unixtime as f64))?;
+    obj.set("requestId", &JsValue::from_str(&hex_string(&args.request_id)))?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationResponse,
+    r#"
+    /**
+     * Signed delegation response body.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationResponse {
+        version: number;
+        masterAnchor: HexString;
+        masterLevel: number;
+        requestId: HexString;
+        delegations: any[];
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationResponse, MasterDelegationResponseBodyV1, {
+    let anchor_hex = args.get_string("masterAnchor")?;
+    let request_hex = args.get_string("requestId")?;
+    let mut anchor = [0u8; 32];
+    hex_decode(anchor_hex.as_bytes(), &mut anchor).map_err(|e|Error::custom(format!("masterAnchor: {e}")))?;
+    let mut request_id = [0u8; 32];
+    hex_decode(request_hex.as_bytes(), &mut request_id).map_err(|e|Error::custom(format!("requestId: {e}")))?;
+    Ok(MasterDelegationResponseBodyV1 {
+        version: args.get_u8("version")?,
+        master_anchor: anchor,
+        master_level: args.get_u8("masterLevel")?,
+        request_id,
+        delegations: serde_wasm_bindgen::from_value(args.get_value("delegations")?).map_err(|e|Error::custom(format!("delegations: {e}")))?,
+    })
+});
+
+try_from! ( args: MasterDelegationResponseBodyV1, IMasterDelegationResponse, {
+    let obj = IMasterDelegationResponse::default();
+    obj.set("version", &JsValue::from_f64(args.version as f64))?;
+    obj.set("masterAnchor", &JsValue::from_str(&hex_string(&args.master_anchor)))?;
+    obj.set("masterLevel", &JsValue::from_f64(args.master_level as f64))?;
+    obj.set("requestId", &JsValue::from_str(&hex_string(&args.request_id)))?;
+    obj.set("delegations", &serde_wasm_bindgen::to_value(&args.delegations)?)?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationApplyRequest,
+    r#"
+    /**
+     * Apply signed delegation response.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationApplyRequest {
+        walletSecret: string;
+        request: IMasterDelegationRequest;
+        response: IMasterDelegationResponse;
+        forceNetworkMismatch?: boolean;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationApplyRequest, MasterDelegationApplyRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let request: MasterDelegationRequestBodyV1 =
+        serde_wasm_bindgen::from_value(args.get_value("request")?).map_err(|e|Error::custom(format!("request: {e}")))?;
+    let response: MasterDelegationResponseBodyV1 =
+        serde_wasm_bindgen::from_value(args.get_value("response")?).map_err(|e|Error::custom(format!("response: {e}")))?;
+    let force_network_mismatch = args.try_get_bool("forceNetworkMismatch")?.unwrap_or(false);
+    Ok(MasterDelegationApplyRequest { wallet_secret, request, response, force_network_mismatch })
+});
+
+declare! {
+    IMasterDelegationApplyResponse,
+    r#"
+    /**
+     * Apply result.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationApplyResponse {
+        applied: number;
+        skipped: number;
+        missingAccounts: string[];
+    }
+    "#,
+}
+
+try_from! ( args: MasterDelegationApplyResponse, IMasterDelegationApplyResponse, {
+    let obj = IMasterDelegationApplyResponse::default();
+    obj.set("applied", &JsValue::from_f64(args.applied as f64))?;
+    obj.set("skipped", &JsValue::from_f64(args.skipped as f64))?;
+    let accounts: js_sys::Array = args.missing_accounts.iter().map(|id| JsValue::from_str(&id.to_string())).collect();
+    obj.set("missingAccounts", &accounts.into())?;
+    Ok(obj)
+});
+
+declare! {
+    IMasterDelegationSignRequest,
+    r#"
+    /**
+     * Sign delegation request offline using master key.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationSignRequest {
+        walletSecret: string;
+        request: IMasterDelegationRequest;
+        forceNetworkMismatch?: boolean;
+    }
+    "#,
+}
+
+try_from! ( args: IMasterDelegationSignRequest, MasterDelegationSignRequest, {
+    let wallet_secret = args.get_secret("walletSecret")?;
+    let request: MasterDelegationRequestBodyV1 =
+        serde_wasm_bindgen::from_value(args.get_value("request")?).map_err(|e|Error::custom(format!("request: {e}")))?;
+    let force_network_mismatch = args.try_get_bool("forceNetworkMismatch")?.unwrap_or(false);
+    Ok(MasterDelegationSignRequest { wallet_secret, request, force_network_mismatch })
+});
+
+declare! {
+    IMasterDelegationSignResponse,
+    r#"
+    /**
+     * Signed delegation response JSON and parsed body.
+     * @category Wallet API
+     */
+    export interface IMasterDelegationSignResponse {
+        response: IMasterDelegationResponse;
+        responseJson: string;
+    }
+    "#,
+}
+
+try_from! ( args: MasterDelegationSignResponse, IMasterDelegationSignResponse, {
+    let obj = IMasterDelegationSignResponse::default();
+    obj.set("response", &serde_wasm_bindgen::to_value(&args.response)?)?;
+    obj.set("responseJson", &JsValue::from_str(&args.response_json))?;
+    Ok(obj)
 });
 
 // ---

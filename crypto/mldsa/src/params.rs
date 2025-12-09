@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Domain tag used for ML-DSA master delegation signatures.
+pub const MASTER_SIGN_DOMAIN_DELEGATION: &[u8] = b"mldsa.master.delegation";
+
 /// ML-DSA security levels as defined in NIST FIPS 204
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]

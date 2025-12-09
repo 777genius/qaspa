@@ -537,11 +537,11 @@ impl KaspaCli {
     /// Asks uses for a wallet secret, checks the supplied account's private key info
     /// and if it requires a payment secret, asks for it as well.
     pub(crate) async fn ask_wallet_secret(&self, account: Option<&Arc<dyn Account>>) -> Result<(Secret, Option<Secret>)> {
-        let wallet_secret = Secret::new(self.term().ask(true, "Enter wallet password: ").await?.trim().as_bytes().to_vec());
+        let wallet_secret = helpers::string_to_secret(self.term().ask(true, "Enter wallet password: ").await?);
 
         let payment_secret = if let Some(account) = account {
             if self.wallet().is_account_key_encrypted(account).await?.is_some_and(|f| f) {
-                Some(Secret::new(self.term().ask(true, "Enter payment password: ").await?.trim().as_bytes().to_vec()))
+                Some(helpers::string_to_secret(self.term().ask(true, "Enter payment password: ").await?))
             } else {
                 None
             }

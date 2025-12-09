@@ -1,6 +1,10 @@
 #!/bin/sh
 set -euo pipefail
 
+if [ -d "${HOME}/.cargo/bin" ]; then
+  PATH="${HOME}/.cargo/bin:${PATH}"
+fi
+
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 

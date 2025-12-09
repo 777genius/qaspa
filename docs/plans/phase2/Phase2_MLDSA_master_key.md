@@ -32,6 +32,14 @@
 - RPC сегодня отдаёт `has_stealth_support`, `get_utxos_by_script_version` и `get_block_view_tags`, но нет API для регистрации anchor. Будем расширять `kaspa_rpc_core::{api, message}` и `rpc/service`.
 - Kasplex L2 документация (`docs/KASPLEX_INTEGRATION_GUIDE.md`, `docs/KASPLEX_L2_COMPATIBILITY.md`) ожидает, что MLDSA ключи уже умеют детерминироваться и экспортироваться из кошелька → важно синхронизировать формат анкера/подписи между L1 и L2.
 
+### 0.2. Быстрая сводка по Iteration 6 (Airgap UX)
+
+- Форматы `MasterDelegationRequest/Response`, `calc_request_id` и домен Delegation заведены; CLI команды `wallet master sign-delegation` / `apply-delegation` покрывают оффлайн подпись и онлайн применение.
+- wasm/native: биндинги и FFI summary-функции для JSON запросов/ответов готовы.
+- Интеграционный тест `testing/integration/src/airgap_mldsa.rs` проверяет поток online → offline → online и наличие `delegation_id` в эфемерных ключах после apply.
+- CI (`.github/workflows/mldsa-tests.yml`) запускает `cargo test -p kaspa-testing-integration airgap_mldsa` вместе с MLDSA unit/integration наборами.
+- Гайд: `docs/guides/master_cold_storage.md` описывает шаги, JSON примеры и чеклист безопасности.
+
 ## 1. Целевая архитектура MLDSA-root
 
 1. **Deterministic master generation.** Из одного BIP39 сид-а вычисляется MLDSA-ключ (FIPS-204 KDF + HKDF(SHA3) для domain separation). Ручной RNG не нужен при восстановлении.

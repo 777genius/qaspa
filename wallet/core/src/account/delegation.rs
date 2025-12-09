@@ -39,18 +39,22 @@ pub enum DelegationStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DelegationRecordV1 {
     pub version: u8,
     pub level: u8,
+    #[serde(with = "crate::message::serde_hex_array_32")]
     pub anchor: [u8; 32],
     pub account_id: AccountId,
+    #[serde(with = "crate::message::serde_hex_array_32")]
     pub spend_pubkey: [u8; 32],
+    #[serde(with = "crate::message::serde_hex_array_32")]
     pub scan_pubkey: [u8; 32],
     pub valid_from_daa: u64,
     pub valid_until_daa: Option<u64>,
     pub nonce: u64,
     pub status: DelegationStatus,
-    #[serde(with = "kaspa_utils::serde_bytes")]
+    #[serde(with = "crate::message::serde_base64_bytes")]
     pub signature: Vec<u8>,
 }
 

@@ -16,14 +16,20 @@ pub use args::*;
 
 use crate::account::delegation::{delegation_message_hash, DelegationId, DelegationRecordV1, DelegationStatus};
 use crate::account::variants::mldsa_master::{MasterStatus, MldsaMasterAccount, MldsaMasterAccountPayloadV1};
-use crate::account::{AccountKind, ScanNotifier};
-use crate::api::message::MasterAnchorInfo;
+use crate::account::{Account, AccountKind, ScanNotifier};
+use crate::api::message::{
+    MasterAnchorInfo, MasterDelegationApplyResponse, MasterDelegationBuildRequest, MasterDelegationBuildResponse,
+    MasterDelegationSignResponse,
+};
 use crate::api::traits::WalletApi;
 use crate::compat::gen1::decrypt_mnemonic;
 use crate::encryption::{encrypt_xchacha20poly1305, Decrypted};
-use crate::error::Error::Custom;
+use crate::error::Error::{self, Custom};
 use crate::factory::try_load_account;
 use crate::imports::*;
+use crate::message::{
+    calc_request_id, hash_delegation_header, DelegationRecordHeaderV1, MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1,
+};
 use crate::settings::{SettingsStore, WalletSettings};
 use crate::storage::interface::{OpenArgs, StorageDescriptor};
 use crate::storage::keydata::MlDsaMasterPayload;
@@ -39,11 +45,13 @@ use kaspa_notify::{
     listener::ListenerId,
     scope::{Scope, VirtualDaaScoreChangedScope},
 };
-use kaspa_utils::hex::ToHex;
+use kaspa_utils::hex::{FromHex, ToHex};
 use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use kaspa_wallet_keys::xpub::NetworkTaggedXpub;
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
+use std::path::PathBuf;
 use workflow_core::task::spawn;
+use workflow_store::fs;
 use zeroize::Zeroizing;
 
 pub type WalletGuard<'l> = AsyncMutexGuard<'l, ()>;
@@ -254,6 +262,358 @@ impl Wallet {
         &self.inner.delegations
     }
 
+    pub async fn build_master_delegation_request(
+        self: &Arc<Self>,
+        _wallet_secret: &Secret,
+        request: MasterDelegationBuildRequest,
+    ) -> Result<MasterDelegationBuildResponse> {
+        let MasterDelegationBuildRequest { master_anchor, master_level, network_id, targets, created_at_unixtime, .. } = request;
+
+        if targets.is_empty() {
+            return Err(Error::MasterDelegationEmptyTargets);
+        }
+
+        let wallet_network = self.network_id()?;
+        let resolved_network = match network_id {
+            Some(id) if id != wallet_network => {
+                return Err(Error::MasterDelegationNetworkMismatch { expected: wallet_network, actual: id });
+            }
+            Some(id) => id,
+            None => wallet_network,
+        };
+
+        let mut current_daa = self.current_daa_score();
+        if current_daa.is_none() {
+            if let Ok(info) = self.rpc_api().get_server_info().await {
+                current_daa = Some(info.virtual_daa_score);
+            }
+        }
+        let current_daa = current_daa.ok_or(Error::MissingDaaScore("build_master_delegation_request"))?;
+
+        let guard_handle = self.guard();
+        let guard = guard_handle.lock().await;
+        let anchors = self.list_master_accounts().await?;
+        let anchor_bytes = if let Some(hex) = master_anchor {
+            let bytes = Vec::from_hex(&hex).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
+            let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
+            anchor
+        } else if let Some(info) = anchors.first() {
+            info.anchor
+        } else {
+            return Err(Error::Custom("no master anchors in wallet".to_string()));
+        };
+
+        let master_info = anchors
+            .into_iter()
+            .find(|info| info.anchor == anchor_bytes)
+            .ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
+        let level = master_level.unwrap_or(master_info.level);
+
+        let delegation_store = self.delegation_store().clone();
+        let mut delegations = Vec::with_capacity(targets.len());
+        for target in targets {
+            let account =
+                self.get_account_by_id(&target.account_id, &guard).await?.ok_or(Error::AccountNotFound(target.account_id))?;
+            let stealth_account = account
+                .clone()
+                .as_stealth_account()
+                .map_err(|_| Error::Custom("delegation targets must be stealth accounts".to_string()))?;
+            let Some(linked_anchor) = stealth_account.master_anchor() else {
+                return Err(Error::Custom("stealth account is not attached to a master anchor".to_string()));
+            };
+            if linked_anchor != anchor_bytes {
+                return Err(Error::Custom(format!("stealth account {} is linked to a different master anchor", target.account_id)));
+            }
+
+            let mut header = DelegationRecordHeaderV1 {
+                version: 1,
+                level,
+                anchor: anchor_bytes,
+                account_id: target.account_id,
+                spend_pubkey: stealth_account.spend_pubkey()?.serialize(),
+                scan_pubkey: stealth_account.scan_pubkey()?.serialize(),
+                valid_from_daa: target.valid_from_daa.unwrap_or(current_daa),
+                valid_until_daa: target.valid_until_daa,
+                nonce: 0,
+                status: target.status.unwrap_or(DelegationStatus::Active),
+            };
+
+            if let Some(until) = header.valid_until_daa {
+                if until <= header.valid_from_daa {
+                    return Err(Error::InvalidRange(header.valid_from_daa, until));
+                }
+            }
+
+            let previous_nonce = delegation_store.latest_nonce(&anchor_bytes, &header.account_id).unwrap_or(0);
+            header.nonce = target.nonce_hint.unwrap_or(previous_nonce + 1);
+            if header.nonce <= previous_nonce {
+                return Err(Error::MasterDelegationStaleNonce {
+                    account_id: header.account_id,
+                    current: previous_nonce,
+                    received: header.nonce,
+                });
+            }
+
+            delegations.push(header);
+        }
+        drop(guard);
+
+        let created_at_unixtime = created_at_unixtime
+            .unwrap_or_else(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs());
+
+        let mut body = MasterDelegationRequestBodyV1 {
+            version: 1,
+            master_anchor: anchor_bytes,
+            master_level: level,
+            network_id: resolved_network,
+            delegations,
+            created_at_unixtime,
+            request_id: [0u8; 32],
+        };
+        let request_id = calc_request_id(&body)?;
+        body.request_id = request_id;
+
+        let request_json = serde_json::to_string_pretty(&body).map_err(|e| Error::Custom(format!("serialize request: {e}")))?;
+
+        self.save_delegation_request(&body).await?;
+
+        self.notify(Events::MasterDelegationRequestBuilt {
+            master_anchor: anchor_bytes,
+            request_id,
+            targets: body.delegations.iter().map(|header| header.account_id).collect(),
+        })
+        .await?;
+
+        Ok(MasterDelegationBuildResponse { request: body, request_json })
+    }
+
+    pub async fn sign_master_delegation_request(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        request: MasterDelegationRequestBodyV1,
+        force_network_mismatch: bool,
+    ) -> Result<MasterDelegationSignResponse> {
+        ensure_request_versions(&request)?;
+        let checksum = calc_request_id(&request)?;
+        if checksum != request.request_id {
+            return Err(Error::MasterDelegationInvalidChecksum {
+                expected: request.request_id.to_vec().to_hex(),
+                actual: checksum.to_vec().to_hex(),
+            });
+        }
+
+        if !force_network_mismatch {
+            let wallet_network = self.network_id()?;
+            if wallet_network != request.network_id {
+                return Err(Error::MasterDelegationNetworkMismatch { expected: wallet_network, actual: request.network_id });
+            }
+        }
+
+        let anchor = MasterAnchor::new(request.master_anchor);
+        let master = self.find_active_master_by_anchor(&anchor).ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
+
+        if master.level() as u8 != request.master_level {
+            return Err(Error::Custom("master level mismatch".to_string()));
+        }
+
+        let prv_store = self.inner.store.as_prv_key_data_store()?;
+        let prv_key_data_id = *master.prv_key_data_id()?;
+        let prv_key_data = prv_store
+            .load_key_data(wallet_secret, &prv_key_data_id)
+            .await?
+            .ok_or_else(|| Error::PrivateKeyNotFound(prv_key_data_id))?;
+
+        let payload = prv_key_data
+            .as_mldsa_master(None)?
+            .ok_or_else(|| Error::Custom("Specified key is not an MLDSA master record".to_string()))?;
+        let master_seed = MasterSeed::from_slice(&payload.decrypt_seed(wallet_secret)?)
+            .map_err(|err| Error::Custom(format!("invalid master seed: {err}")))?;
+        master.unlock_with_master_seed(&master_seed, master.level()).await?;
+
+        let mut signed = Vec::with_capacity(request.delegations.len());
+        for header in request.delegations.iter() {
+            if header.anchor != *anchor.as_bytes() {
+                return Err(Error::Custom("delegation anchor mismatch".to_string()));
+            }
+            if header.level != request.master_level {
+                return Err(Error::Custom("delegation level mismatch".to_string()));
+            }
+            let hash = hash_delegation_header(header)?;
+            let sig = master.sign_delegation_hash(&hash).await?;
+            let mut record = DelegationRecordV1::from(header);
+            record.signature = sig.as_bytes().to_vec();
+            signed.push(record);
+        }
+
+        master.lock().await;
+
+        let response_body = MasterDelegationResponseBodyV1 {
+            version: 1,
+            master_anchor: request.master_anchor,
+            master_level: request.master_level,
+            request_id: request.request_id,
+            delegations: signed,
+        };
+
+        let response_json =
+            serde_json::to_string_pretty(&response_body).map_err(|e| Error::Custom(format!("serialize response: {e}")))?;
+
+        Ok(MasterDelegationSignResponse { response: response_body, response_json })
+    }
+
+    pub async fn apply_master_delegation_response(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        request: MasterDelegationRequestBodyV1,
+        response: MasterDelegationResponseBodyV1,
+        force_network_mismatch: bool,
+    ) -> Result<MasterDelegationApplyResponse> {
+        let master_anchor = response.master_anchor;
+        let request_id = request.request_id;
+        match self.apply_master_delegation_response_inner(wallet_secret, request, response, force_network_mismatch).await {
+            Ok(stats) => {
+                self.notify(Events::MasterDelegationResponseApplied {
+                    master_anchor,
+                    request_id,
+                    delegations: stats.applied,
+                    skipped: stats.skipped,
+                })
+                .await?;
+                Ok(stats)
+            }
+            Err(err) => {
+                let _ = self.notify(Events::MasterDelegationApplyFailed { master_anchor, request_id, reason: err.to_string() }).await;
+                Err(err)
+            }
+        }
+    }
+
+    async fn apply_master_delegation_response_inner(
+        self: &Arc<Self>,
+        wallet_secret: &Secret,
+        request: MasterDelegationRequestBodyV1,
+        response: MasterDelegationResponseBodyV1,
+        force_network_mismatch: bool,
+    ) -> Result<MasterDelegationApplyResponse> {
+        ensure_request_versions(&request)?;
+        ensure_response_versions(&response)?;
+
+        if response.request_id != request.request_id {
+            return Err(Error::Custom("delegation request_id mismatch".to_string()));
+        }
+        if response.master_anchor != request.master_anchor || response.master_level != request.master_level {
+            return Err(Error::Custom("delegation master mismatch".to_string()));
+        }
+
+        if !force_network_mismatch {
+            let wallet_network = self.network_id()?;
+            if wallet_network != request.network_id {
+                return Err(Error::MasterDelegationNetworkMismatch { expected: wallet_network, actual: request.network_id });
+            }
+        }
+
+        let anchor = MasterAnchor::new(response.master_anchor);
+        let master = self.find_active_master_by_anchor(&anchor).ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
+        if master.level() as u8 != response.master_level {
+            return Err(Error::Custom("delegation response level mismatch".to_string()));
+        }
+
+        let master_storage = master.to_storage()?;
+        let master_payload = MldsaMasterAccountPayloadV1::try_from_slice(master_storage.serialized())?;
+        let master_pubkey = master_payload.master_pubkey;
+
+        let store = self.delegation_store().clone();
+        if store.has_request(&request.request_id) {
+            let existing = store.records_for_request(&request.request_id);
+            if response.delegations.iter().all(|record| existing.iter().any(|stored| stored == record)) {
+                return Ok(MasterDelegationApplyResponse {
+                    applied: 0,
+                    skipped: response.delegations.len(),
+                    missing_accounts: Vec::new(),
+                });
+            }
+        }
+
+        let mut header_map = HashMap::new();
+        for header in request.delegations.iter() {
+            header_map.insert((header.account_id, header.nonce), header);
+        }
+
+        let guard_handle = self.guard();
+        let guard = guard_handle.lock().await;
+        let account_store = self.inner.store.clone().as_account_store()?;
+
+        let mut applied = 0usize;
+        let mut skipped = 0usize;
+        let mut missing_accounts = Vec::new();
+
+        for record in response.delegations.iter() {
+            if record.anchor != response.master_anchor || record.level != response.master_level {
+                skipped += 1;
+                continue;
+            }
+
+            let key = (record.account_id, record.nonce);
+            let Some(header) = header_map.get(&key) else {
+                skipped += 1;
+                continue;
+            };
+
+            let expected = DelegationRecordV1::from(*header);
+            if expected.anchor != record.anchor
+                || expected.account_id != record.account_id
+                || expected.valid_from_daa != record.valid_from_daa
+                || expected.valid_until_daa != record.valid_until_daa
+                || expected.spend_pubkey != record.spend_pubkey
+                || expected.scan_pubkey != record.scan_pubkey
+                || expected.status != record.status
+            {
+                skipped += 1;
+                continue;
+            }
+
+            let verified = crate::account::delegation::verify_against_anchor(&anchor, &master_pubkey, record)?;
+            if !verified {
+                skipped += 1;
+                continue;
+            }
+
+            if let Some(existing) = store.find_by_anchor_account_nonce(&response.master_anchor, &record.account_id, record.nonce) {
+                if existing == *record {
+                    skipped += 1;
+                    continue;
+                }
+                return Err(Error::MasterDelegationNonceConflict { account_id: record.account_id, nonce: record.nonce });
+            }
+
+            let Some(account) = self.get_account_by_id(&record.account_id, &guard).await? else {
+                missing_accounts.push(record.account_id);
+                skipped += 1;
+                continue;
+            };
+            let stealth_account = account.as_stealth_account()?;
+
+            let delegation_id = match store.upsert(record.clone(), Some(response.request_id)) {
+                Ok(id) => id,
+                Err(Error::MasterDelegationStaleNonce { .. }) => {
+                    skipped += 1;
+                    continue;
+                }
+                Err(err) => return Err(err),
+            };
+            stealth_account.set_delegation(record.anchor, Some(delegation_id));
+            account_store.store_single(&stealth_account.to_storage()?, None).await?;
+
+            applied += 1;
+        }
+        drop(guard);
+
+        self.save_delegations(wallet_secret).await?;
+        self.inner.store.commit(wallet_secret).await?;
+
+        Ok(MasterDelegationApplyResponse { applied, skipped, missing_accounts })
+    }
+
     async fn save_delegations(&self, wallet_secret: &Secret) -> Result<()> {
         if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
             if let Ok(network_id) = self.network_id() {
@@ -261,6 +621,47 @@ impl Wallet {
             }
         }
         Ok(())
+    }
+
+    fn delegation_request_path(wallet_folder: &str, network_id: NetworkId, request_id: &[u8; 32]) -> PathBuf {
+        PathBuf::from(wallet_folder)
+            .join("delegations")
+            .join(network_id.to_string())
+            .join("requests")
+            .join(format!("{}.json", request_id.to_vec().to_hex()))
+    }
+
+    async fn save_delegation_request(&self, request: &MasterDelegationRequestBodyV1) -> Result<()> {
+        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
+            if let Ok(network_id) = self.network_id() {
+                let path = Self::delegation_request_path(&wallet_folder, network_id, &request.request_id);
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).await?;
+                }
+                let json = serde_json::to_vec_pretty(request)
+                    .map_err(|e| Error::Custom(format!("serialize delegation request: {e}")))?;
+                fs::write(&path, json.as_slice()).await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn load_cached_master_delegation_request(
+        &self,
+        request_id: &[u8; 32],
+    ) -> Result<Option<MasterDelegationRequestBodyV1>> {
+        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
+            if let Ok(network_id) = self.network_id() {
+                let path = Self::delegation_request_path(&wallet_folder, network_id, request_id);
+                if fs::exists(&path).await? {
+                    let data = fs::read(&path).await?;
+                    let request = serde_json::from_slice(&data)
+                        .map_err(|e| Error::Custom(format!("read cached delegation request: {e}")))?;
+                    return Ok(Some(request));
+                }
+            }
+        }
+        Ok(None)
     }
 
     pub fn active_accounts(&self) -> &ActiveAccountMap {
@@ -1327,7 +1728,7 @@ impl Wallet {
         let signature = master.sign_delegation_hash(&hash).await?;
         record.signature = signature.as_bytes().to_vec();
 
-        let id = self.delegation_store().upsert(record)?;
+        let id = self.delegation_store().upsert(record, None)?;
         self.save_delegations(wallet_secret).await?;
 
         // Update stealth payload
@@ -1377,7 +1778,7 @@ impl Wallet {
         let signature = master.sign_delegation_hash(&hash).await?;
         new_record.signature = signature.as_bytes().to_vec();
 
-        self.delegation_store().upsert(new_record)?;
+        self.delegation_store().upsert(new_record, None)?;
         self.save_delegations(wallet_secret).await?;
         Ok(())
     }
@@ -2461,6 +2862,30 @@ impl Wallet {
     pub fn network_format_xpub(&self, xpub_key: &ExtendedPublicKeySecp256k1) -> String {
         NetworkTaggedXpub::from((xpub_key.clone(), self.network_id().unwrap())).to_string()
     }
+}
+
+fn ensure_request_versions(request: &MasterDelegationRequestBodyV1) -> Result<()> {
+    if request.version != 1 {
+        return Err(Error::MasterDelegationUnsupportedVersion { context: "request", expected: 1, found: request.version });
+    }
+    for header in &request.delegations {
+        if header.version != 1 {
+            return Err(Error::MasterDelegationUnsupportedVersion { context: "header", expected: 1, found: header.version });
+        }
+    }
+    Ok(())
+}
+
+fn ensure_response_versions(response: &MasterDelegationResponseBodyV1) -> Result<()> {
+    if response.version != 1 {
+        return Err(Error::MasterDelegationUnsupportedVersion { context: "response", expected: 1, found: response.version });
+    }
+    for record in &response.delegations {
+        if record.version != 1 {
+            return Err(Error::MasterDelegationUnsupportedVersion { context: "delegation", expected: 1, found: record.version });
+        }
+    }
+    Ok(())
 }
 
 // fn decrypt_mnemonic<T: AsRef<[u8]>>(
