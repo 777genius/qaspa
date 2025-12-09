@@ -190,3 +190,10 @@
   }
   ```
 
+## 14. Инварианты Iteration 7 и связь с тестами
+
+- Master state-machine: активный anchor меняется только через rotate, Revoked не возвращается в Active. Покрытие: `wallet/core/src/tests/delegation_unit.rs` (nonce/anchor проверки) + fuzz `wallet/core/fuzz/fuzz_targets/wallet_mldsa_master_state.rs`.
+- Делегации: подделанные подписи отклоняются, окно валидности соблюдается, истёкшие записи не выбираются. Покрытие: `wallet/core/src/tests/delegation_properties.rs` (proptest) + fuzz `wallet/core/fuzz/fuzz_targets/wallet_mldsa_delegation.rs`.
+- Стелс-миграции: payload v0 без master_anchor/delegation_id корректно читается как v1. Покрытие: `wallet/core/src/tests/stealth_payload_migration.rs`.
+- Nightly CI: `.github/workflows/mldsa-tests.yml` — джоб `wallet-core-fuzz` гоняет оба fuzz-таргета с `-max_total_time` 600/300 сек и появляется в summary как часть nightly/dispatch прогонов.
+

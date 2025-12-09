@@ -1,0 +1,34 @@
+[package]
+name = "kaspa-wallet-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+kaspa-wallet-core = { path = ".." }
+kaspa-wallet-keys = { path = "../../keys" }
+kaspa-mldsa = { path = "../../../crypto/mldsa" }
+serde_json = "1"
+borsh = "1.6"
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "wallet_mldsa_delegation"
+path = "fuzz_targets/wallet_mldsa_delegation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wallet_mldsa_master_state"
+path = "fuzz_targets/wallet_mldsa_master_state.rs"
+test = false
+doc = false
+bench = false

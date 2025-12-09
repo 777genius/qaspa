@@ -8,8 +8,8 @@ use std::fmt;
 ///
 /// Size depends on security level:
 /// - Level 2: 2420 bytes
-/// - Level 3: 3293 bytes
-/// - Level 5: 4595 bytes
+/// - Level 3: 3309 bytes
+/// - Level 5: 4627 bytes
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Signature {
     pub(crate) bytes: Vec<u8>,

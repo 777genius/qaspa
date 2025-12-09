@@ -226,6 +226,20 @@ Phase 2 / Iteration 4 introduces end-to-end validation for delegation records, T
 
 These additions increase the ML-DSA-related regression suite by **+12 tests**, bringing the combined total past 70 without altering the crypto module counts above. All new suites run in CI as part of the Phase 2 gating workflow.
 
+## Iteration 7 Additions (wallet/core)
+
+- Property tests (proptest):
+  - `wallet/core/src/tests/delegation_properties.rs` — подделки подписи, семантика окна валидности, исключение истёкших делегаций из `select_active`.
+  - `wallet/core/src/tests/stealth_payload_migration.rs` — Borsh v0 → v1 совместимость стелс-payload (master_anchor/delegation_id остаются `None`).
+- Fuzz:
+  - `wallet/core/fuzz/fuzz_targets/wallet_mldsa_delegation.rs` — безопасный парсинг/валидация DelegationRecord (borsh + serde JSON).
+  - `wallet/core/fuzz/fuzz_targets/wallet_mldsa_master_state.rs` — state-machine master ↔ stealth (anchor меняется только через rotate, Revoked не возвращается в Active, стелс-id не прыгает между anchor).
+- CI (nightly/dispatch): `.github/workflows/mldsa-tests.yml` добавлен job `wallet-core-fuzz` (`cargo fuzz run wallet_mldsa_delegation --fuzz-dir wallet/core/fuzz -- -max_total_time=600` и `wallet_mldsa_master_state --fuzz-dir wallet/core/fuzz -- -max_total_time=300`).
+- Локальные команды:
+  - `cargo test -p kaspa-wallet-core --features proptest delegation_properties stealth_payload_migration`
+  - `cargo fuzz run wallet_mldsa_delegation --fuzz-dir wallet/core/fuzz -- -runs=100`
+  - `cargo fuzz run wallet_mldsa_master_state --fuzz-dir wallet/core/fuzz -- -runs=100`
+
 ## Performance Testing
 
 **Benchmark Suite:** `crypto/mldsa/benches/mldsa_bench.rs`

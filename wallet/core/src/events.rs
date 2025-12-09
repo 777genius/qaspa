@@ -163,6 +163,13 @@ pub enum Events {
         valid_until_daa: u64,
     },
     #[serde(rename_all = "camelCase")]
+    MasterDelegationExpiringSoon {
+        account_id: AccountId,
+        delegation_id: u64,
+        anchor: [u8; 32],
+        valid_until_daa: u64,
+    },
+    #[serde(rename_all = "camelCase")]
     MasterDelegationRevoked {
         account_id: AccountId,
         delegation_id: u64,
@@ -371,6 +378,7 @@ pub enum EventKind {
     StealthAttachedToMaster,
     StealthDetachedFromMaster,
     MasterDelegationExpired,
+    MasterDelegationExpiringSoon,
     MasterDelegationRevoked,
     MasterDelegationRequestBuilt,
     MasterDelegationResponseApplied,
@@ -423,6 +431,7 @@ impl From<&Events> for EventKind {
             Events::StealthAttachedToMaster { .. } => EventKind::StealthAttachedToMaster,
             Events::StealthDetachedFromMaster { .. } => EventKind::StealthDetachedFromMaster,
             Events::MasterDelegationExpired { .. } => EventKind::MasterDelegationExpired,
+            Events::MasterDelegationExpiringSoon { .. } => EventKind::MasterDelegationExpiringSoon,
             Events::MasterDelegationRevoked { .. } => EventKind::MasterDelegationRevoked,
             Events::MasterDelegationRequestBuilt { .. } => EventKind::MasterDelegationRequestBuilt,
             Events::MasterDelegationResponseApplied { .. } => EventKind::MasterDelegationResponseApplied,
@@ -478,6 +487,7 @@ impl FromStr for EventKind {
             "stealth-attached-to-master" => Ok(EventKind::StealthAttachedToMaster),
             "stealth-detached-from-master" => Ok(EventKind::StealthDetachedFromMaster),
             "master-delegation-expired" => Ok(EventKind::MasterDelegationExpired),
+            "master-delegation-expiring-soon" => Ok(EventKind::MasterDelegationExpiringSoon),
             "master-delegation-revoked" => Ok(EventKind::MasterDelegationRevoked),
             "master-delegation-request-built" => Ok(EventKind::MasterDelegationRequestBuilt),
             "master-delegation-response-applied" => Ok(EventKind::MasterDelegationResponseApplied),
@@ -541,6 +551,7 @@ impl std::fmt::Display for EventKind {
             EventKind::StealthAttachedToMaster => "stealth-attached-to-master",
             EventKind::StealthDetachedFromMaster => "stealth-detached-from-master",
             EventKind::MasterDelegationExpired => "master-delegation-expired",
+            EventKind::MasterDelegationExpiringSoon => "master-delegation-expiring-soon",
             EventKind::MasterDelegationRevoked => "master-delegation-revoked",
             EventKind::MasterDelegationRequestBuilt => "master-delegation-request-built",
             EventKind::MasterDelegationResponseApplied => "master-delegation-response-applied",

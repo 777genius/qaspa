@@ -441,6 +441,8 @@ fn select_delegation_from_records(
 }
 
 impl StealthAccount {
+    const DELEGATION_WARN_WINDOW_DAA: u64 = 1_000;
+
     /// Returns the spend pubkey (XOnly) for this stealth account.
     pub fn spend_pubkey(&self) -> Result<XOnlyPublicKey> {
         Ok(self.spend_pubkey)
@@ -1598,6 +1600,7 @@ impl StealthUtxoHandler for StealthAccount {
         if let Some(anchor) = self.master_anchor() {
             let store = self.wallet().delegation_store();
             let mut expired_events = Vec::new();
+            let mut expiring_events = Vec::new();
             let mut revoked_events = Vec::new();
 
             for (id, rec) in store.by_anchor(&anchor).into_iter().filter(|(_, r)| r.account_id == *self.id()) {
@@ -1606,12 +1609,26 @@ impl StealthUtxoHandler for StealthAccount {
                         if let Some(until) = rec.valid_until_daa {
                             if current_daa_score >= until {
                                 expired_events.push((id, rec));
+                            } else if current_daa_score + Self::DELEGATION_WARN_WINDOW_DAA >= until {
+                                expiring_events.push((id, rec));
                             }
                         }
                     }
                     DelegationStatus::Revoked { .. } => revoked_events.push((id, rec)),
                     _ => {}
                 }
+            }
+
+            for (id, rec) in expiring_events {
+                let _ = self
+                    .wallet()
+                    .notify(Events::MasterDelegationExpiringSoon {
+                        account_id: *self.id(),
+                        delegation_id: id.0,
+                        anchor,
+                        valid_until_daa: rec.valid_until_daa.unwrap_or_default(),
+                    })
+                    .await;
             }
 
             for (id, rec) in expired_events {

@@ -11,6 +11,7 @@ repository.workspace = true
 
 [features]
 default = []
+proptest = ["dep:proptest"]
 
 [lib]
 crate-type = ["cdylib", "lib"]
@@ -46,6 +47,10 @@ workflow-wasm.workspace = true
 zeroize.workspace = true
 blake2b_simd.workspace = true
 hkdf.workspace = true
+
+[dependencies.proptest]
+version = "1.4"
+optional = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio.workspace = true

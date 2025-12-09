@@ -5,6 +5,7 @@
 New features:
 - Privacy: Stealth Address
 - MLDSA (Quantum Resistant) accounts (70% ready)
+- MLDSA: пока поддержан только Level2 в транзакциях; Level3/Level5 планируем включить позже
 - Privacy: random fees
 - Airgap делегации мастера → стелс (офлайн поток; см. `docs/guides/master_cold_storage.md`)
 

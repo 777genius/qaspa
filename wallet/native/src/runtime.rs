@@ -106,9 +106,9 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_sign_ex(
         return false;
     }
 
-    let wallet_arc = Arc::from_raw(wallet_ptr);
-    let wallet = wallet_arc.clone();
-    mem::forget(wallet_arc);
+    // Borrow Arc without leaking the original strong ref passed from the caller.
+    Arc::increment_strong_count(wallet_ptr as *const Wallet);
+    let wallet = Arc::from_raw(wallet_ptr);
     let wallet_secret = slice::from_raw_parts(wallet_secret_ptr, wallet_secret_len).to_vec().into();
     let json = slice::from_raw_parts(json_ptr, json_len);
 
@@ -217,9 +217,9 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply_ex(
         return false;
     }
 
-    let wallet_arc = Arc::from_raw(wallet_ptr);
-    let wallet = wallet_arc.clone();
-    mem::forget(wallet_arc);
+    // Borrow Arc without leaking the original strong ref passed from the caller.
+    Arc::increment_strong_count(wallet_ptr as *const Wallet);
+    let wallet = Arc::from_raw(wallet_ptr);
     let wallet_secret = slice::from_raw_parts(wallet_secret_ptr, wallet_secret_len).to_vec().into();
 
     let request: MasterDelegationRequestBodyV1 =

@@ -49,6 +49,7 @@ use kaspa_utils::hex::{FromHex, ToHex};
 use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use kaspa_wallet_keys::xpub::NetworkTaggedXpub;
 use kaspa_wrpc_client::{KaspaRpcClient, Resolver, WrpcEncoding};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use workflow_core::task::spawn;
 use workflow_store::fs;
@@ -498,9 +499,21 @@ impl Wallet {
         ensure_request_versions(&request)?;
         ensure_response_versions(&response)?;
 
-        if response.request_id != request.request_id {
-            return Err(Error::Custom("delegation request_id mismatch".to_string()));
+        // Защита от подмены request между оффлайн-подписью и apply: пересчитываем checksum.
+        let checksum = calc_request_id(&request)?;
+        if checksum != request.request_id {
+            return Err(Error::MasterDelegationInvalidChecksum {
+                expected: request.request_id.to_vec().to_hex(),
+                actual: checksum.to_vec().to_hex(),
+            });
         }
+        if response.request_id != checksum {
+            return Err(Error::MasterDelegationInvalidChecksum {
+                expected: checksum.to_vec().to_hex(),
+                actual: response.request_id.to_vec().to_hex(),
+            });
+        }
+
         if response.master_anchor != request.master_anchor || response.master_level != request.master_level {
             return Err(Error::Custom("delegation master mismatch".to_string()));
         }
@@ -535,8 +548,11 @@ impl Wallet {
         }
 
         let mut header_map = HashMap::new();
+        let mut expected_keys = HashSet::new();
         for header in request.delegations.iter() {
-            header_map.insert((header.account_id, header.nonce), header);
+            let key = (header.account_id, header.nonce);
+            header_map.insert(key, header);
+            expected_keys.insert(key);
         }
 
         let guard_handle = self.guard();
@@ -546,6 +562,8 @@ impl Wallet {
         let mut applied = 0usize;
         let mut skipped = 0usize;
         let mut missing_accounts = Vec::new();
+
+        let mut matched_keys = HashSet::new();
 
         for record in response.delegations.iter() {
             if record.anchor != response.master_anchor || record.level != response.master_level {
@@ -558,6 +576,7 @@ impl Wallet {
                 skipped += 1;
                 continue;
             };
+            matched_keys.insert(key);
 
             let expected = DelegationRecordV1::from(*header);
             if expected.anchor != record.anchor
@@ -607,6 +626,11 @@ impl Wallet {
             applied += 1;
         }
         drop(guard);
+
+        // Все заголовки из запроса должны присутствовать в ответе.
+        if matched_keys.len() != expected_keys.len() {
+            return Err(Error::Custom("delegation response missing records from request".to_string()));
+        }
 
         self.save_delegations(wallet_secret).await?;
         self.inner.store.commit(wallet_secret).await?;
@@ -1760,7 +1784,7 @@ impl Wallet {
         Ok(self.delegation_store().by_anchor(&anchor))
     }
 
-    pub async fn revoke_delegation(&self, wallet_secret: &Secret, delegation_id: DelegationId) -> Result<()> {
+    pub async fn revoke_delegation(self: &Arc<Self>, wallet_secret: &Secret, delegation_id: DelegationId) -> Result<()> {
         let record = self.delegation_store().by_id(delegation_id).ok_or(Error::Custom("delegation not found".to_string()))?;
         let anchor = MasterAnchor::new(record.anchor);
         let master = self.find_active_master_by_anchor(&anchor).ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
@@ -1776,7 +1800,26 @@ impl Wallet {
         new_record.signature = signature.as_bytes().to_vec();
 
         self.delegation_store().upsert(new_record, None)?;
+
+        // Очистить ссылку на делегацию в самом stealth-аккаунте, чтобы UI/метаданные не оставались активными.
+        let guard_handle = self.guard();
+        let guard = guard_handle.lock().await;
+        if let Some(account) = self.get_account_by_id(&record.account_id, &guard).await? {
+            let stealth = account.as_stealth_account()?;
+            stealth.set_delegation(record.anchor, None);
+            let account_store = self.inner.store.clone().as_account_store()?;
+            account_store.store_single(&stealth.to_storage()?, None).await?;
+        }
+
         self.save_delegations(wallet_secret).await?;
+        self.inner.store.commit(wallet_secret).await?;
+
+        self.notify(Events::MasterDelegationRevoked {
+            account_id: record.account_id,
+            delegation_id: delegation_id.0,
+            anchor: record.anchor,
+        })
+        .await?;
         Ok(())
     }
 

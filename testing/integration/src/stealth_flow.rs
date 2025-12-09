@@ -319,6 +319,47 @@ impl StealthTestEnv {
         (signed_tx.tx, outpoint)
     }
 
+    /// Generic miner spend to arbitrary outputs. Keeps change with the miner.
+    pub async fn spend_from_miner_to_outputs(
+        &self,
+        outputs: Vec<TransactionOutput>,
+        fee: u64,
+    ) -> (Transaction, Vec<TransactionOutpoint>) {
+        assert!(!outputs.is_empty(), "outputs must not be empty");
+        let target_amount = outputs.iter().map(|o| o.value).sum::<u64>().saturating_add(fee);
+        let utxos = self.take_miner_utxos(target_amount).await;
+
+        let total_in: u64 = utxos.iter().map(|(_, e)| e.amount).sum();
+        let change_amount = total_in.saturating_sub(target_amount);
+
+        let mut final_outputs = outputs;
+        if change_amount > 0 {
+            final_outputs.push(TransactionOutput { value: change_amount, script_public_key: self.miner.spk.clone() });
+        }
+
+        let inputs: Vec<TransactionInput> = utxos
+            .iter()
+            .map(|(op, _)| TransactionInput { previous_outpoint: *op, signature_script: vec![], sequence: 0, sig_op_count: 1 })
+            .collect();
+
+        let unsigned_tx = Transaction::new(TX_VERSION, inputs, final_outputs, 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
+        let entries: Vec<UtxoEntry> = utxos.iter().map(|(_, e)| e.clone()).collect();
+        let signed_tx = sign(MutableTransaction::with_entries(unsigned_tx, entries), self.miner.keypair);
+
+        let tx_id = signed_tx.id();
+        self.rpc_client.submit_transaction((&signed_tx.tx).into(), false).await.expect("Failed to submit miner spend");
+
+        let outpoints = signed_tx
+            .tx
+            .outputs
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| TransactionOutpoint::new(tx_id, idx as u32))
+            .collect();
+
+        (signed_tx.tx, outpoints)
+    }
+
     async fn take_miner_utxos(&self, target_amount: u64) -> Vec<(TransactionOutpoint, UtxoEntry)> {
         assert!(target_amount > 0, "target amount must be positive");
 

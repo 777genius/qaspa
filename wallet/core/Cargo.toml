@@ -127,6 +127,7 @@ hex-literal.workspace = true
 serde_repr.workspace = true
 tempfile.workspace = true
 wasm-bindgen-test.workspace = true
+proptest = "1.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio.workspace = true

@@ -122,6 +122,7 @@ cfg_if! {
             StealthAttachedToMaster = "stealth-attached-to-master",
             StealthDetachedFromMaster = "stealth-detached-from-master",
             MasterDelegationExpired = "master-delegation-expired",
+            MasterDelegationExpiringSoon = "master-delegation-expiring-soon",
             MasterDelegationRevoked = "master-delegation-revoked",
             MasterDelegationRequestBuilt = "master-delegation-request-built",
             MasterDelegationResponseApplied = "master-delegation-response-applied",
@@ -171,6 +172,7 @@ cfg_if! {
             "stealth-attached-to-master": IStealthAttachedToMasterEvent,
             "stealth-detached-from-master": IStealthDetachedFromMasterEvent,
             "master-delegation-expired": IMasterDelegationExpiredEvent,
+            "master-delegation-expiring-soon": IMasterDelegationExpiringSoonEvent,
             "master-delegation-revoked": IMasterDelegationRevokedEvent,
             "master-delegation-request-built": IMasterDelegationRequestBuiltEvent,
             "master-delegation-response-applied": IMasterDelegationResponseAppliedEvent,
@@ -587,6 +589,24 @@ declare! {
      * @category Wallet Events
      */
     export interface IMasterDelegationExpiredEvent {
+        accountId: HexString;
+        delegationId: number;
+        anchor: HexString;
+        validUntilDaa: number;
+    }
+    "#,
+}
+
+#[cfg(feature = "wasm32-sdk")]
+declare! {
+    IMasterDelegationExpiringSoonEvent,
+    r#"
+    /**
+     * Эмитится при приближении истечения делегации master.
+     *
+     * @category Wallet Events
+     */
+    export interface IMasterDelegationExpiringSoonEvent {
         accountId: HexString;
         delegationId: number;
         anchor: HexString;

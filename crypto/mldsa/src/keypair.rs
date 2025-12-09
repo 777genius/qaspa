@@ -66,9 +66,9 @@ impl fmt::Display for PublicKey {
 /// ML-DSA secret/private key
 ///
 /// Size depends on security level:
-/// - Level 2: 2528 bytes
-/// - Level 3: 4000 bytes
-/// - Level 5: 4864 bytes
+/// - Level 2: 2560 bytes
+/// - Level 3: 4032 bytes
+/// - Level 5: 4896 bytes
 ///
 /// **Security Notice**: This type does not implement Clone or Debug to prevent
 /// accidental exposure of secret key material.

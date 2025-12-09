@@ -1,4 +1,6 @@
 use crate::{error::*, keypair::keypair_from_seed_bytes, params::MlDsaLevel, MlDsaKeypair, Result};
+#[cfg(feature = "borsh")]
+use borsh::{BorshDeserialize, BorshSerialize};
 use hkdf::Hkdf;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_512;
@@ -9,6 +11,7 @@ const MASTER_KDF_INFO: &[u8] = b"kaspa.mldsa.master";
 
 /// Deterministic ML-DSA master seed (48 bytes).
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
 #[serde(transparent)]
 pub struct MasterSeed {
     #[serde(with = "serde_seed")]
@@ -61,6 +64,9 @@ impl Drop for MasterSeed {
 pub fn derive_keypair_from_seed(seed: &[u8], level: MlDsaLevel) -> Result<MlDsaKeypair> {
     if seed.len() != MASTER_SEED_LEN {
         return Err(MlDsaError::InvalidMasterSeedLength { expected: MASTER_SEED_LEN, actual: seed.len() });
+    }
+    if seed.iter().all(|b| *b == 0) {
+        return Err(MlDsaError::MasterDerivationFailed("master seed must not be all zeros".to_string()));
     }
     let mut derived = [0u8; 32];
     Hkdf::<Sha3_512>::new(None, seed)
@@ -134,9 +140,60 @@ mod tests {
     }
 
     #[test]
+    fn determinism_known_answer_level3() {
+        let seed = MasterSeed::from_slice(&TEST_SEED).unwrap();
+        let keypair = derive_keypair_from_master_seed(&seed, MlDsaLevel::Level3).unwrap();
+        let second = derive_keypair_from_master_seed(&seed, MlDsaLevel::Level3).unwrap();
+        assert_eq!(keypair.public_key, second.public_key);
+        assert_eq!(keypair.secret_key.as_bytes(), second.secret_key.as_bytes());
+
+        let pk_hash = hash256(keypair.public_key.as_bytes());
+        let sk_hash = hash256(keypair.secret_key.as_bytes());
+
+        // Known-answer to guard regressions for Level 3
+        assert_eq!(pk_hash, "90dd62775e66b73897038880f0f2cef5179942ab08b5c0a93d4e13674d123837");
+        assert_eq!(sk_hash, "b7d522d9fddb12f250ec798f31d928e652b8b21c95db28ffd23fde488a12a9dd");
+    }
+
+    #[test]
+    fn determinism_known_answer_level5() {
+        let seed = MasterSeed::from_slice(&TEST_SEED).unwrap();
+        let keypair = derive_keypair_from_master_seed(&seed, MlDsaLevel::Level5).unwrap();
+        let second = derive_keypair_from_master_seed(&seed, MlDsaLevel::Level5).unwrap();
+        assert_eq!(keypair.public_key, second.public_key);
+        assert_eq!(keypair.secret_key.as_bytes(), second.secret_key.as_bytes());
+
+        let pk_hash = hash256(keypair.public_key.as_bytes());
+        let sk_hash = hash256(keypair.secret_key.as_bytes());
+
+        // Known-answer to guard regressions for Level 5
+        assert_eq!(pk_hash, "307ed2b1e03c333587d115b1e97dcbfd9e9186f0159b9aeeb15bf7fa2f6bec79");
+        assert_eq!(sk_hash, "9194bc559b69e43aeaccedb975077d69d33511dfa24ff6a1bb779b1873174cc8");
+    }
+
+    #[test]
+    fn cross_level_derivations_are_distinct() {
+        let seed = MasterSeed::from_slice(&TEST_SEED).unwrap();
+        let l2 = derive_keypair_from_master_seed(&seed, MlDsaLevel::Level2).unwrap();
+        let l3 = derive_keypair_from_master_seed(&seed, MlDsaLevel::Level3).unwrap();
+        let l5 = derive_keypair_from_master_seed(&seed, MlDsaLevel::Level5).unwrap();
+
+        assert_ne!(l2.public_key.as_bytes(), l3.public_key.as_bytes());
+        assert_ne!(l2.public_key.as_bytes(), l5.public_key.as_bytes());
+        assert_ne!(l3.public_key.as_bytes(), l5.public_key.as_bytes());
+    }
+
+    #[test]
     fn rejects_wrong_length_seed() {
         let err = derive_keypair_from_seed(&TEST_SEED[..10], MlDsaLevel::Level2).unwrap_err();
         assert!(matches!(err, MlDsaError::InvalidMasterSeedLength { .. }));
+    }
+
+    #[test]
+    fn rejects_all_zero_seed() {
+        let seed = [0u8; MASTER_SEED_LEN];
+        let err = derive_keypair_from_seed(&seed, MlDsaLevel::Level2).unwrap_err();
+        assert!(matches!(err, MlDsaError::MasterDerivationFailed(_)));
     }
 
     #[test]
@@ -145,5 +202,22 @@ mod tests {
         seed.zeroize();
         const ZEROES: [u8; MASTER_SEED_LEN] = [0u8; MASTER_SEED_LEN];
         assert_eq!(seed.as_bytes(), &ZEROES);
+    }
+
+    #[test]
+    fn master_seed_serde_roundtrip_json() {
+        let seed = MasterSeed::from_slice(&TEST_SEED).unwrap();
+        let json = serde_json::to_string(&seed).unwrap();
+        let decoded: MasterSeed = serde_json::from_str(&json).unwrap();
+        assert!(decoded == seed);
+    }
+
+    #[cfg(feature = "borsh")]
+    #[test]
+    fn master_seed_serde_roundtrip_borsh() {
+        let seed = MasterSeed::from_slice(&TEST_SEED).unwrap();
+        let encoded = borsh::to_vec(&seed).expect("encode");
+        let decoded: MasterSeed = borsh::from_slice(&encoded).expect("decode");
+        assert!(decoded == seed);
     }
 }

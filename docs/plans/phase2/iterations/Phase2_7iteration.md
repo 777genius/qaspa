@@ -2,6 +2,21 @@
 
 > Цель итерации: довести стек MLDSA master / делегаций до уровня «production‑grade» за счёт систематического покрытия unit/property/integration/fuzz тестами и формализации ключевых инвариантов. На выходе мы должны иметь воспроизводимую матрицу тестов, минимум регрессий при доработках и понятную историю для внешнего аудита.
 
+**Текущий статус (промежуточно):**
+- ✅ `crypto/mldsa/src/master.rs`: расширены known-answer тесты L2/L3/L5, zeroize, запрет all-zero seed, roundtrip JSON/Borsh.
+- ✅ `wallet/keys`: unit + property тесты anchor/HKDF/master seed (feat `proptest`), zeroize.
+- ✅ `wallet/core`: тесты хранения `MlDsaMasterPayload`, unit/property для делегаций, базовые тесты master account (создание/anchor/подпись).
+- ✅ Интеграция: `test_mldsa_master_anchor_registration_rpc` (anchor регистрируется, RPC/`has_mldsa_master` видит его).
+- ✅ Интеграция: восстановление/реорг master+delegation (`test_mldsa_master_recovery_flow`, `test_mldsa_master_reorg_and_expiry`) и дополнительные проверки MLDSA скриптов/VM.
+- ✅ Интеграция: MLDSA delegated spend включает оффлайн VM‑валидацию сигнатуры/скрипта (без отправки в mempool).
+- ✅ Airgap: подписка на события `MasterDelegationExpiringSoon` через multiplexer (устранены проблемы с `events()`).
+
+**Осталось:**
+- Fuzz‑таргеты `wallet/core/fuzz` и nightly интеграция.
+- Расширить тесты делегаций/stealth property‑tests (п.4.2) и миграции.
+- Обновить `docs/api/MLDSA_MASTER.md` и `docs/TEST_COVERAGE_SUMMARY.md` связкой инвариантов/тестов.
+- ⚠️ Сценарии восстановления и reorg добавлены как каркасы (`#[ignore]`), требуют доработки (восстановление стелс-ветки, симуляция двух нод).
+
 ## 0. Контекст и границы итерации
 
 - **Что уже готово (Iter.1–6, согласно Phase2_MLDSA_master_key.md):**
@@ -29,10 +44,10 @@
 | Подсистема | Файлы / директории | Тип работ |
 |-----------|--------------------|----------|
 | MLDSA крипто | `crypto/mldsa/{lib.rs,master.rs,sign.rs,verify.rs}`, `crypto/mldsa/benches/mldsa_bench.rs`, `crypto/mldsa/tests/*` | Усиление unit‑тестов, KAT по FIPS‑204, тесты детерминированной деривации master‑ключа и zeroization. |
-| Wallet keys | `wallet/keys/src/keypair_mldsa.rs`, `wallet/keys/src/derivation/*`, новый модуль тестов (например, `wallet/keys/tests/mldsa_master_*.rs`) | Unit + property тесты для `MasterAnchor`, `from_bip39_root_seed`, HKDF‑деривации, zeroization; использование уже существующих тестов `test_mldsa_keypair_*` как референса. |
-| Storage master | `wallet/core/src/storage/keydata/data.rs`, существующие тесты из `docs/api/MLDSA_MASTER.md` + новый модуль `wallet/core/tests/keydata_mldsa_master.rs` | Дополнение существующих тестов payload’а (`MlDsaMasterPayload`) и `PrvKeyDataVariant` сценариями миграций, шифрования и обнуления. |
+| Wallet keys | `wallet/keys/src/keypair_mldsa.rs`, `wallet/keys/src/derivation/*`, расширение существующих тестов (при необходимости — отдельный `wallet/keys/tests/mldsa_master_*.rs`) | Unit + property тесты для `MasterAnchor`, `from_bip39_root_seed`, HKDF‑деривации, zeroization; использование уже существующих тестов `test_mldsa_keypair_*` как референса. |
+| Storage master | `wallet/core/src/storage/keydata/data.rs`, существующие тесты из `docs/api/MLDSA_MASTER.md` (дополнить сценариями миграций/reencrypt/zeroize; отдельный файл опционален) | Дополнение существующих тестов payload’а (`MlDsaMasterPayload`) и `PrvKeyDataVariant` сценариями миграций, шифрования и обнуления. |
 | Master account | `wallet/core/src/account/variants/mldsa_master.rs` (появится к Iter.3), `wallet/core/src/account/{kind.rs,mod.rs}`, `wallet/core/tests/account_mldsa_master.rs` | Жизненный цикл аккаунта (create/unlock/sign/rotate), инварианты anchor/status, согласованность с API из `wallet/core/src/wallet/mod.rs` и событиями из `wallet/core/src/events.rs`. |
-| Делегации и stealth | `wallet/core/src/account/delegation.rs` (Iter.4), `wallet/core/src/account/variants/stealth.rs`, `wallet/core/src/tx/generator/stealth_signer.rs`, `wallet/core/src/utxo/stealth_handler.rs` | Unit + property‑тесты делегаций и поведения стелс‑аккаунта при истечении/ревокации; расширение уже существующих тестов `stealth_signer::tests` и структуры `StealthUtxoHandler`. |
+| Делегации и stealth | `wallet/core/src/account/delegation.rs` (Iter.4), `wallet/core/src/account/variants/stealth.rs`, `wallet/core/src/tx/generator/stealth_signer.rs`, `wallet/core/src/utxo/stealth_handler.rs` | Unit + property‑тесты делегаций и поведения стелс‑аккаунта при истечении/ревокации; расширение уже существующих тестов (`delegation.rs::tests`, `stealth_signer::tests`, `StealthUtxoHandler`). |
 | RPC / сервисы | `rpc/core/*`, `rpc/service/*`, `wallet/core/src/api/{message.rs,traits.rs,transport.rs}`, `wallet/core/src/events.rs`, `testing/integration/src/rpc_tests.rs` | Интеграционные тесты RPC методов вокруг anchor/делегаций и airgap‑флоу, проверка событий `MasterAnchorCreated`/`MasterSeedExported` и будущих master‑/delegation‑ивентов. |
 | Интеграция нод/кошелька | `testing/integration/src/mldsa_master.rs` (новый файл), `testing/integration/src/stealth_flow.rs` | End‑to‑end сценарии master ↔ stealth ↔ делегации ↔ reorg; переиспользование инфраструктуры `StealthTestEnv`. |
 | Fuzz | Новый fuzz‑крейТ для wallet‑core (по мотивам `crypto/stealth/fuzz` и `math/fuzz`) | Fuzz‑таргеты парсинга делегаций, последовательностей событий master/stealth и состояния кошелька. |
@@ -109,9 +124,9 @@
       - Вызвать `lock`, убедиться, что повторный `sign_message` требует unlock.
   - **Rotate (тонкий момент — согласованность с PrvKeyDataStore):**
     - `rotate_changes_anchor_and_status`:
-      - Вызвать `rotate` с новым уровнем, проверить изменение anchor, смену статуса и создание записи истории (если предусмотрено).
+      - Вызывать `Wallet::rotate_master_account` (ротация реализована на уровне `Wallet`, сам `MldsaMasterAccount` ротацию не выполняет). Проверить изменение anchor, смену статуса и запись события.
     - `rotate_rejected_when_revoked`:
-      - Принудительно перевести статус в `Revoked`, проверить, что `rotate` возвращает ошибку.
+      - Принудительно перевести статус в `Revoked`, затем через `Wallet::rotate_master_account` ожидать ошибку/отказ.
 
 ### 3.2. Делегации и stealth‑аккаунты
 
@@ -153,7 +168,7 @@
   - `prop_delegation_forgery_rejected`:
     - Для случайно сгенерированных полей `DelegationRecord` и случайного неподписанного payload убедиться, что любая «подделанная» подпись (рандомные байты) отклоняется.
   - `prop_delegation_expiration_enforced`:
-    - Генерировать случайные окна `[valid_from_daa, valid_until_daa]` и DAA‑высоты; проверять, что helper `DelegationRecord::is_valid_at(daa)` даёт корректную булеву семантику.
+    - Генерировать случайные окна `[valid_from_daa, valid_until_daa]` и DAA‑высоты; проверять, что проверка окна (через helper вида `is_valid_at` или имеющийся `delegation_window_ok`) даёт корректную булеву семантику.
   - `prop_stealth_change_not_created_without_valid_delegation`:
     - Для случайных параметров делегации проверять, что генератор change‑адреса (`StealthAccount` + `StealthSigner`) отказывается создавать новые адреса, если делегация истекла.
 
@@ -257,7 +272,7 @@
 - **`wallet_mldsa_delegation.rs`:**
   - Вход: произвольный байтовый массив.
   - Попытаться распарсить как `DelegationRecord` (Borsh + serde), затем:
-    - Вызвать валидацию полей (`is_valid_at`, длины, допустимые уровни).
+    - Вызвать валидацию полей (проверка окна делегации через helper `delegation_window_ok`/`is_valid_at`, длины, допустимые уровни).
     - Если подпись формально валидна по формату, прогнать `verify` и убедиться в отсутствии паник/UB.
 - **`wallet_mldsa_master_state.rs`:**
   - Вход: последовательность случайных команд над упрощённой state‑machine мастера:
@@ -301,7 +316,7 @@
   - `cargo test -p kaspa-mldsa`
   - `cargo test -p kaspa-wallet-keys mldsa_master_* --features proptest`
   - `cargo test -p kaspa-wallet-core mldsa_master_*`
-  - `cargo test -p kaspa-testing mldsa_master`
+  - `cargo test -p kaspa-testing-integration mldsa_master`
   - `cargo fuzz run wallet-mldsa-delegation` / `wallet-mldsa-master-state` (nightly).
 
 ## 9. Порядок выполнения и организационные моменты

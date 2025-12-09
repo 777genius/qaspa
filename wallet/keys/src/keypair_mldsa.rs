@@ -317,4 +317,131 @@ mod tests {
 
         assert_eq!(anchor1.to_string(), "0a816d89bab3d6c2b3ea27151efbcbf8224afe628a1120892ba7068a3264a3f5");
     }
+
+    #[test]
+    fn anchor_deterministic_for_same_input() {
+        let mut root_seed = [0u8; BIP39_ROOT_SEED_LEN];
+        for (i, byte) in root_seed.iter_mut().enumerate() {
+            *byte = (i as u8).wrapping_mul(3);
+        }
+
+        let (kp1, anchor1, seed1) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 5, MlDsaLevel::Level3).unwrap();
+        let (kp2, anchor2, seed2) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 5, MlDsaLevel::Level3).unwrap();
+
+        assert_eq!(anchor1, anchor2);
+        assert_eq!(kp1.public_key(), kp2.public_key());
+        assert_eq!(kp1.secret_key().as_bytes(), kp2.secret_key().as_bytes());
+        assert_eq!(seed1.as_bytes(), seed2.as_bytes());
+    }
+
+    #[test]
+    fn anchor_changes_when_account_or_level_differs() {
+        let mut root_seed = [0u8; BIP39_ROOT_SEED_LEN];
+        for (i, byte) in root_seed.iter_mut().enumerate() {
+            *byte = (i as u8).wrapping_add(7);
+        }
+
+        let (_, anchor_l2_idx0, _) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 0, MlDsaLevel::Level2).unwrap();
+        let (_, anchor_l2_idx1, _) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 1, MlDsaLevel::Level2).unwrap();
+        let (_, anchor_l5_idx0, _) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 0, MlDsaLevel::Level5).unwrap();
+
+        assert_ne!(anchor_l2_idx0, anchor_l2_idx1, "account index should alter anchor");
+        assert_ne!(anchor_l2_idx0, anchor_l5_idx0, "security level should alter anchor");
+    }
+
+    #[test]
+    fn anchor_matches_manual_domain_hash() {
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let anchor = keypair.anchor();
+
+        let manual = compute_anchor(keypair.public_key());
+        assert_eq!(anchor.as_bytes(), &manual);
+    }
+
+    #[test]
+    fn derive_master_seed_from_bip39_rejects_wrong_length() {
+        let res = derive_master_seed_from_bip39(&[1u8; 10], 0);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn derive_master_seed_from_bip39_is_deterministic() {
+        let mut root_seed = [0u8; BIP39_ROOT_SEED_LEN];
+        for (i, byte) in root_seed.iter_mut().enumerate() {
+            *byte = (255u8).wrapping_sub(i as u8);
+        }
+
+        let seed1 = derive_master_seed_from_bip39(&root_seed, 42).unwrap();
+        let seed2 = derive_master_seed_from_bip39(&root_seed, 42).unwrap();
+        assert_eq!(seed1.as_bytes(), seed2.as_bytes());
+    }
+
+    #[test]
+    fn derive_master_seed_from_bip39_account_index_affects_seed() {
+        let mut root_seed = [0u8; BIP39_ROOT_SEED_LEN];
+        for (i, byte) in root_seed.iter_mut().enumerate() {
+            *byte = (i as u8).wrapping_mul(11);
+        }
+
+        let seed1 = derive_master_seed_from_bip39(&root_seed, 1).unwrap();
+        let seed2 = derive_master_seed_from_bip39(&root_seed, 2).unwrap();
+        assert_ne!(seed1.as_bytes(), seed2.as_bytes());
+    }
+
+    #[test]
+    fn master_seed_zeroize_clears_bytes() {
+        let mut root_seed = [0u8; BIP39_ROOT_SEED_LEN];
+        for (i, byte) in root_seed.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+        let (_, _, master_seed) = MlDsaKeypair::from_bip39_root_seed(&root_seed, 0, MlDsaLevel::Level2).unwrap();
+        let mut seed_copy = master_seed.clone();
+        seed_copy.zeroize();
+        assert_eq!(seed_copy.as_bytes(), &[0u8; MASTER_SEED_LEN]);
+    }
+}
+
+#[cfg(all(test, feature = "proptest"))]
+mod prop_tests {
+    use super::*;
+    use proptest::collection::vec;
+    use proptest::prelude::*;
+    use std::collections::HashSet;
+
+    fn level_strategy() -> impl Strategy<Value = MlDsaLevel> {
+        prop_oneof![
+            Just(MlDsaLevel::Level2),
+            Just(MlDsaLevel::Level3),
+            Just(MlDsaLevel::Level5),
+        ]
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 48, .. ProptestConfig::default() })]
+
+        #[test]
+        fn prop_master_seed_deterministic(root in any::<[u8; BIP39_ROOT_SEED_LEN]>(), idx in any::<u32>()) {
+            let seed1 = derive_master_seed_from_bip39(&root, idx).unwrap();
+            let seed2 = derive_master_seed_from_bip39(&root, idx).unwrap();
+            prop_assert_eq!(seed1.as_bytes(), seed2.as_bytes());
+        }
+
+        #[test]
+        fn prop_master_seed_unique_across_account_index(root in any::<[u8; BIP39_ROOT_SEED_LEN]>(), idx1 in any::<u32>(), idx2 in any::<u32>()) {
+            prop_assume!(idx1 != idx2);
+            let s1 = derive_master_seed_from_bip39(&root, idx1).unwrap();
+            let s2 = derive_master_seed_from_bip39(&root, idx2).unwrap();
+            prop_assert_ne!(s1.as_bytes(), s2.as_bytes());
+        }
+
+        #[test]
+        fn prop_anchor_unique_for_random_pubkeys(samples in vec(level_strategy(), 6)) {
+            let mut anchors = HashSet::new();
+            for (idx, level) in samples.into_iter().enumerate() {
+                let keypair = MlDsaKeypair::random(level);
+                anchors.insert((idx, keypair.anchor()));
+            }
+            prop_assert!(anchors.len() >= 5, "anchors should remain unique in small sample");
+        }
+    }
 }
