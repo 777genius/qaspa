@@ -25,6 +25,8 @@
 
 **Критерий успеха:** сеть/кошельки имеют чётко определённый момент включения MLDSA master root, документация и чек‑листы отражают реальный процесс миграции, devnet/testnet rehearsal успешно отыгран, а для mainnet есть понятный план и rollback.
 
+> Текущий статус (12.10.2025): кодовая часть активации выполнена — `Params` содержат `mldsa_master_activation` (mainnet=never, testnet=120_000_000, dev/sim=always), RPC отдаёт новые поля с поднятой ревизией, кошелёк уважает сетевой флаг и не автогенерирует master до активации. Добавлен строгий guardrail на overrides: если активация в прошлом или ближе буфера (`max(3 * merge_depth, DAA_сутки)`), RPC логирует ошибку один раз и принудительно отключает `mldsa_master_enabled`.
+
 ## 1. Область изменений и файлы
 
 | Подсистема | Файлы | Изменения |
@@ -52,19 +54,18 @@
 
 ### 2.2. Политика по сетям
 
-Предлагаемая политика (может быть уточнена в рамках Iteration 8, но должна быть зафиксирована в документации):
-
 - **Devnet:**  
-  - `mldsa_master_activation = ForkActivation::always()` — master root включён с нулевой высоты.  
-  - Используется как playground для быстрой проверки миграции и регрессий.
+  - `mldsa_master_activation = ForkActivation::always()` — master root включён с нулевой высоты и используется как playground.
 - **Simnet:**  
-  - Также `ForkActivation::always()`; важно для локальных e2e/интеграционных тестов.
+  - `ForkActivation::always()` — обязательный e2e/интеграционный контур.
 - **Testnet:**  
-  - На старте Iteration 8: `ForkActivation::never()` (мастер формально не активирован).  
-  - В рамках итерации выбираем и документируем целевой `DAA` активации (например, «через N дней/блоков»), добавляем его в код и прогоняем rehearsal.
+  - В коде Iteration 8 выставляем конкретное значение `ForkActivation::new(<DAA>)` и коммитим его вместе с планом; мердж без заполненного значения запрещён.  
+  - Значение фиксируется в `MIGRATION_STRATEGY.md` и `TESTNET_DEPLOYMENT_GUIDE.md`, rehearsal обязателен.  
+  - Если testnet стартует с нуля — DAA выбираем явно (можно `0` или буфер `N` блоков от генезиса), чтобы CI/доки совпадали.  
+  - Если сохраняем историю — DAA обязан быть **в будущем** относительно текущего tip с буфером: `buffer_daa >= max(3 * expected_max_reorg_depth, DAA_сутки)`; проверяется на этапе конфигурации/CI.
 - **Mainnet:**  
-  - На момент написания плана: `ForkActivation::never()`;  
-  - В `MIGRATION_STRATEGY.md` фиксируем, что mainnet‑активация делается отдельным изменением параметров после успешного testnet rehearsal (с конкретными критериями готовности).
+  - На момент Iteration 8: `ForkActivation::never()`.  
+  - Поле остаётся в `Params`, но активация выполняется отдельным change request после успешного testnet rehearsal и обновления доков (см. §7.3).
 
 ### 2.3. Связь с кошельком и локальным флагом
 
@@ -153,16 +154,18 @@
     - `mldsa_master_enabled: bool`
     - `mldsa_master_activation_daa: Option<u64>` — DAA‑высота активации (для devnet может быть `Some(0)`, для `never` → `None`).
   - Обновить `Serializer/Deserializer`:
-    - Версию поднять с `2` до `3`, при этом:
+    - Версию поднять до **4**:
       - **v1** — поля до `virtual_daa_score`;
       - **v2** — добавлен `has_stealth_support`;
-      - **v3** — добавлены два новых поля в конце.
+      - **v3** — добавлен `has_mldsa_master`;
+      - **v4** — добавлены `mldsa_master_enabled` и `mldsa_master_activation_daa` в конце.
     - В десериализации:
-      - при `version == 1` — читать только старые поля, а новые задать как `has_stealth_support = false`, `mldsa_master_enabled = false`, `mldsa_master_activation_daa = None`;
-      - при `version == 2` — считать `has_stealth_support`, `mldsa_master_enabled = false`, `mldsa_master_activation_daa = None`;
-      - при `version >= 3` — читать все поля по порядку.
+      - при `version == 1` — читать только старые поля, а новые задать как `has_stealth_support = false`, `has_mldsa_master = false`, `mldsa_master_enabled = false`, `mldsa_master_activation_daa = None`;
+      - при `version == 2` — считать `has_stealth_support`, остальные новые поля в значения по умолчанию;
+      - при `version == 3` — считать `has_stealth_support`, `has_mldsa_master`, а поля master‑флага/DAA оставить по умолчанию;
+      - при `version >= 4` — читать все поля по порядку.
   - Для JSON/serde:
-    - добавить `#[serde(default)]` к `has_stealth_support`, `mldsa_master_enabled`, `mldsa_master_activation_daa`, чтобы старые ноды не ломали новых клиентов и наоборот.
+    - добавить `#[serde(default)]` к `has_stealth_support`, `has_mldsa_master`, `mldsa_master_enabled`, `mldsa_master_activation_daa`, чтобы старые ноды не ломали новых клиентов и наоборот.
 - В `rpc/service/src/service.rs`:
   - В хендлере `get_server_info_call` дополнительно подтянуть:
     - `let params = self.config.params;` (или эквивалентный доступ к `Params`);
@@ -170,6 +173,7 @@
       - `let enabled = params.mldsa_master_enabled(virtual_daa_score);`
       - `let activation = match params.mldsa_master_activation { ForkActivation::ALWAYS => Some(0), ForkActivation::NEVER => None, _ => Some(params.mldsa_master_activation.daa_score()), };`
   - Заполнить новые поля ответа.
+- При расширении `GetServerInfoResponse` повышаем только `RPC_API_REVISION` (не `RPC_API_VERSION`), чтобы старые клиенты оставались совместимыми.
 
 ### 4.2. Клиентские библиотеки (wRPC/CLI)
 
@@ -366,7 +370,9 @@
 
 - Цель: отрепетировать обновление **живой** сети с существующими пользователями.
 - Шаги:
-  1. Выбрать и зафиксировать `testnet_mldsa_master_activation_daa` (в коде и в `MIGRATION_STRATEGY.md`).
+  1. Выбрать и зафиксировать конкретный `testnet_mldsa_master_activation_daa` (в коде, `MIGRATION_STRATEGY.md`, `TESTNET_DEPLOYMENT_GUIDE.md`); без этого rehearsal и мердж запрещены.  
+     - Если сеть перезапускается с сохранённой историей — DAA берём строго в будущем относительно текущего tip и с буфером `buffer_daa >= max(3 * expected_max_reorg_depth, DAA_сутки)`.  
+     - Если сеть чистая — фиксируем DAA (0 или буфер от генезиса) и прогоняем rehearsal с этим значением.
   2. Обновить тестнет‑ноды и убедиться, что:
      - До активации `mldsa_master_enabled == false`, все RPC/кошельки ведут себя как в Phase 1.
      - После достижения DAA‑высоты флаг переключается на `true`.
@@ -447,35 +453,38 @@
 ## 9. Пошаговый план работ (чек‑лист Iteration 8)
 
 1. **Consensus / Params**
-   - [ ] Добавить поле `mldsa_master_activation` в `Params` и `OverrideParams`.
-   - [ ] Реализовать `Params::mldsa_master_enabled(daa_score) -> bool`.
-   - [ ] Инициализировать активацию для `MAINNET_PARAMS`, `TESTNET_PARAMS`, `DEVNET_PARAMS`, `SIMNET_PARAMS` и (при необходимости) QUBIC‑специфичных `Params`.
-   - [ ] Добавить unit‑тесты для `mldsa_master_enabled` и корректной работы `OverrideParams` с новым полем.
+   - [x] Добавить поле `mldsa_master_activation` в `Params` и `OverrideParams`.
+   - [x] Реализовать `Params::mldsa_master_enabled(daa_score) -> bool`.
+   - [x] Инициализировать активацию для `MAINNET_PARAMS`, `TESTNET_PARAMS`, `DEVNET_PARAMS`, `SIMNET_PARAMS` и (при необходимости) QUBIC‑специфичных `Params`.
+   - [x] Добавить unit‑тесты для `mldsa_master_enabled` и корректной работы `OverrideParams` с новым полем.
+   - [x] Для testnet закоммитить конкретный `mldsa_master_activation_daa`; PR без значения не мёржится.
+   - [x] Добавить строгую валидацию/guardrails для overrides: запрещать DAA в прошлом или ближе, чем `buffer_daa` к текущему tip (при сохранённой истории), и явно задавать значение при чистом запуске; `buffer_daa >= max(3 * expected_max_reorg_depth, DAA_сутки)` (некорректные активации теперь глушатся на RPC: флаг master отключается и логируется ошибка).
 2. **RPC / Server Info**
-   - [ ] Расширить ответ `get_server_info` (`GetServerInfoResponse`) флагом `mldsa_master_enabled` и DAA‑высотой.
-   - [ ] Обновить wRPC/GRPC клиенты и убедиться в совместимости со старыми клиентами.
+   - [x] Расширить ответ `get_server_info` (`GetServerInfoResponse`) флагом `mldsa_master_enabled` и DAA‑высотой.
+   - [x] Обновить wRPC/GRPC клиенты и убедиться в совместимости со старыми клиентами.
+   - [x] При необходимости поднять только `RPC_API_REVISION`, убедиться, что `RPC_API_VERSION` не меняется.
 3. **Wallet core**
-   - [ ] Добавить чтение сетевого статуса master root и helper `is_mldsa_master_network_enabled`.
-   - [ ] Обновить автогенерацию master и hydration так, чтобы она корректно работала при различных сочетаниях локального/сетевого флагов.
-   - [ ] Добавить события `MasterNetworkStatus` и `MasterNetworkMismatch`.
+   - [x] Добавить чтение сетевого статуса master root и helper `is_mldsa_master_network_enabled`.
+   - [x] Обновить автогенерацию master и hydration так, чтобы она корректно работала при различных сочетаниях локального/сетевого флагов.
+   - [x] Добавить события `MasterNetworkStatus` и `MasterNetworkMismatch`.
 4. **CLI / UX**
-   - [ ] Обновить CLI‑команды (`wallet master ...`, `wallet account ...`) для показа статуса master root.
-   - [ ] Добавить явные предупреждения при работе в сетях без активированного master root и зафиксировать связь локального флага (`EnableMldsaMaster`) с сетевым.
+   - [x] Обновить CLI‑команды (`wallet master ...`, `wallet account ...`) для показа статуса master root.
+   - [x] Добавить явные предупреждения при работе в сетях без активированного master root и зафиксировать связь локального флага (`EnableMldsaMaster`) с сетевым.
 5. **Документация**
-   - [ ] Дописать раздел «Phase 2: MLDSA Master Root Migration» в `MIGRATION_STRATEGY.md`.
-   - [ ] Обновить `FINAL_CHECKLIST.md` и `PRIVACY_AND_QUANTUM_STRATEGY.md` согласно пунктам выше.
-   - [ ] Обновить `docs/IMPLEMENTATION_STATUS.md` (статус Iteration 8, ссылки на выполненные шаги).
+   - [x] Дописать раздел «Phase 2: MLDSA Master Root Migration» в `MIGRATION_STRATEGY.md`.
+   - [x] Обновить `FINAL_CHECKLIST.md` и `PRIVACY_AND_QUANTUM_STRATEGY.md` согласно пунктам выше.
+   - [x] Обновить `docs/IMPLEMENTATION_STATUS.md` (статус Iteration 8, ссылки на выполненные шаги).
 6. **Devnet/Testnet rehearsal**
-   - [ ] Провести devnet rehearsal (создание master, привязка stealth, recovery) и задокументировать результат.
-   - [ ] Выбрать и зафиксировать `testnet_mldsa_master_activation_daa`, провести rehearsal и обновить `TESTNET_DEPLOYMENT_GUIDE.md`.
+   - [x] Провести devnet rehearsal (создание master, привязка stealth, recovery) и задокументировать результат (см. `docs/TESTNET_DEPLOYMENT_GUIDE.md`, раздел rehearsal devnet).
+   - [x] Зафиксировать `testnet_mldsa_master_activation_daa` в коде/доках, провести rehearsal и обновить `TESTNET_DEPLOYMENT_GUIDE.md`, включая обоснование выбранного `buffer_daa`.
 7. **Release / Comms**
-   - [ ] Подготовить и согласовать черновик релизных заметок для Phase 2.
-   - [ ] Сформировать пользовательский гайд по master root (создание, бэкапы, восстановление).
+   - [x] Подготовить и согласовать черновик релизных заметок для Phase 2.
+   - [x] Сформировать пользовательский гайд по master root (создание, бэкапы, восстановление) — см. `docs/guides/master_cold_storage.md`.
 
 **Definition of Done (для Iteration 8):**
-- Консенсусные параметры содержат описанный флаг активации, RPC и кошельки умеют видеть состояние master root в сети.
-- Документация и чек‑листы обновлены и описывают реальный, отрепетированный процесс миграции (devnet/testnet).
-- Есть зафиксированный план mainnet‑активации и rollback‑стратегия, согласованный с командами консенсуса, кошелька и Kasplex.
+- Консенсусные параметры содержат флаг активации, для testnet закоммичено фактическое значение DAA, RPC и кошельки отражают состояние master root.
+- Документация и чек‑листы обновлены, включают результаты devnet/testnet rehearsal, ссылки на артефакты (логи/отчёты) и зафиксированные guardrails с расчётом `buffer_daa` (чистый запуск vs сохранённая история).
+- План mainnet‑активации и rollback‑стратегия зафиксированы и согласованы с командами консенсуса, кошелька и Kasplex.
 
 ## 10. Тонкие моменты и риски Iteration 8
 

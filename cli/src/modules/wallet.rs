@@ -151,6 +151,7 @@ impl Wallet {
             }
             "sign-delegation" => self.master_sign_delegation(ctx, argv).await,
             "apply-delegation" => self.master_apply_delegation(ctx, argv).await,
+            "status" => self.master_status(ctx).await,
             "enable" => self.set_master_flag(ctx, true).await,
             "disable" => self.set_master_flag(ctx, false).await,
             "help" => self.display_master_help(ctx).await,
@@ -317,11 +318,68 @@ impl Wallet {
         Ok(())
     }
 
+    async fn master_status(self: Arc<Self>, ctx: Arc<KaspaCli>) -> Result<()> {
+        Self::ensure_wallet_open(&ctx)?;
+        let local_enabled = Self::is_master_enabled(&ctx);
+        let rpc = ctx.wallet().rpc_api().clone();
+
+        match rpc.get_server_info().await {
+            Ok(info) => {
+                let activation = info
+                    .mldsa_master_activation_daa
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "never".to_string());
+                tprintln!(
+                    ctx,
+                    "Network master: {} (activation_daa: {activation}, has_stealth_support: {})",
+                    info.mldsa_master_enabled,
+                    info.has_stealth_support
+                );
+                tprintln!(ctx, "Local master: {}", if local_enabled { "enabled" } else { "disabled" });
+
+                if local_enabled && !info.mldsa_master_enabled {
+                    tprintln!(
+                        ctx,
+                        "Предупреждение: локальный master включён, но сеть ещё не активировала master root. Операции останутся локальными."
+                    );
+                } else if info.mldsa_master_enabled && !info.has_stealth_support {
+                    tprintln!(
+                        ctx,
+                        "Предупреждение: сеть репортит master=true при has_stealth_support=false — конфигурация неконсистентна."
+                    );
+                } else if info.mldsa_master_enabled && !local_enabled {
+                    tprintln!(
+                        ctx,
+                        "Предупреждение: сеть активировала master root, но локальный флаг выключен. Автогенерации не будет."
+                    );
+                }
+            }
+            Err(err) => {
+                tprintln!(ctx, "Не удалось прочитать статус сети: {err}");
+            }
+        }
+
+        Ok(())
+    }
+
     async fn set_master_flag(self: Arc<Self>, ctx: Arc<KaspaCli>, enabled: bool) -> Result<()> {
         ctx.wallet().settings().set(WalletSettings::EnableMldsaMaster, enabled).await?;
         ctx.wallet().settings().try_store().await?;
         let state = if enabled { "enabled" } else { "disabled" };
         tprintln!(ctx, "Automatic MLDSA master derivation is {state}.");
+
+        if enabled {
+            // Попробуем прочитать сетевой флаг, чтобы сразу предупредить пользователя
+            if let Ok(info) = ctx.wallet().rpc_api().get_server_info().await {
+                if !info.mldsa_master_enabled {
+                    tprintln!(
+                        ctx,
+                        "Внимание: сеть ещё не активировала MLDSA master root (activation_daa={:?}). Операции будут локальными.",
+                        info.mldsa_master_activation_daa
+                    );
+                }
+            }
+        }
         Ok(())
     }
 
@@ -331,6 +389,7 @@ impl Wallet {
                 ("list", "List stored MLDSA master anchors"),
                 ("export <id> [--format plain|json|qr]", "Export encrypted master seed"),
                 ("verify-anchor <hex>", "Check whether anchor exists locally"),
+                ("status", "Show local vs network master status"),
                 (
                     "sign-delegation --input <path|-> --out <path|-> [--force-network-mismatch] [--summary-only] [--no-confirm]",
                     "Sign offline delegation request JSON",

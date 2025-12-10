@@ -469,12 +469,16 @@ declare! {
      */
     export interface IGetServerInfoResponse {
         rpcApiVersion : number[];
+        rpcApiRevision : number[];
         serverVersion : string;
         networkId : string;
         hasUtxoIndex : boolean;
         isSynced : boolean;
         virtualDaaScore : bigint;
         hasStealthSupport : boolean;
+        hasMldsaMaster : boolean;
+        mldsaMasterEnabled : boolean;
+        mldsaMasterActivationDaa? : bigint | null;
     }
     "#,
 }

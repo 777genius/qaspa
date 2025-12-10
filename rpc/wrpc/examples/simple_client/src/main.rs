@@ -59,14 +59,23 @@ async fn check_node_status() -> Result<()> {
     client.connect(Some(options)).await?;
 
     // Retrieve and show Kaspa node information
-    let GetServerInfoResponse { is_synced, server_version, network_id, has_utxo_index, has_stealth_support, .. } =
-        client.get_server_info().await?;
+    let GetServerInfoResponse {
+        is_synced,
+        server_version,
+        network_id,
+        has_utxo_index,
+        has_stealth_support,
+        mldsa_master_enabled,
+        mldsa_master_activation_daa,
+        ..
+    } = client.get_server_info().await?;
 
     println!("Node version: {server_version}");
     println!("Network: {network_id}");
     println!("Node is synced: {is_synced}");
     println!("Node is indexing UTXOs: {has_utxo_index}");
     println!("Node supports stealth: {has_stealth_support}");
+    println!("Master root enabled: {mldsa_master_enabled} @ {:?}", mldsa_master_activation_daa);
 
     // Retrieve and show Kaspa network information
     let GetBlockDagInfoResponse {

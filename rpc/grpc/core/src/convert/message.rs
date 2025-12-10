@@ -590,6 +590,8 @@ from!(item: RpcResult<&kaspa_rpc_core::GetServerInfoResponse>, protowire::GetSer
         virtual_daa_score: item.virtual_daa_score,
         has_stealth_support: item.has_stealth_support,
         has_mldsa_master: item.has_mldsa_master,
+        mldsa_master_enabled: item.mldsa_master_enabled,
+        mldsa_master_activation_daa: item.mldsa_master_activation_daa,
         error: None,
     }
 });
@@ -1179,6 +1181,8 @@ try_from!(item: &protowire::GetServerInfoResponseMessage, RpcResult<kaspa_rpc_co
         virtual_daa_score: item.virtual_daa_score,
         has_stealth_support: item.has_stealth_support,
         has_mldsa_master: item.has_mldsa_master,
+        mldsa_master_enabled: item.mldsa_master_enabled,
+        mldsa_master_activation_daa: item.mldsa_master_activation_daa,
     }
 });
 

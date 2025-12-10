@@ -5,13 +5,14 @@ use crate::converter::feerate_estimate::{FeeEstimateConverter, FeeEstimateVerbos
 use crate::converter::{consensus::ConsensusConverter, index::IndexConverter, protocol::ProtocolConverter};
 use async_trait::async_trait;
 use kaspa_consensus_core::api::counters::ProcessingCounters;
+use kaspa_consensus_core::config::params::Params;
 use kaspa_consensus_core::daa_score_timestamp::DaaScoreTimestamp;
 use kaspa_consensus_core::errors::block::RuleError;
 use kaspa_consensus_core::utxo::utxo_inquirer::UtxoInquirerError;
 use kaspa_consensus_core::{
     block::Block,
     coinbase::MinerData,
-    config::Config,
+    config::{params::ForkActivation, Config},
     constants::MAX_SOMPI,
     network::NetworkType,
     tx::{Transaction, COINBASE_TRANSACTION_INDEX},
@@ -73,7 +74,8 @@ use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
 use kaspa_utils::{expiring_cache::ExpiringCache, hex::ToHex};
 use kaspa_utils_tower::counters::TowerConnectionCounters;
 use kaspa_utxoindex::api::UtxoIndexProxy;
-use log::info;
+use log::{error, info};
+use once_cell::sync::OnceCell;
 use std::time::Duration;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -83,6 +85,34 @@ use std::{
 };
 use tokio::join;
 use workflow_rpc::server::WebSocketCounters as WrpcServerCounters;
+
+fn compute_mldsa_master_status(params: &Params, virtual_daa_score: u64) -> (bool, Option<u64>, bool) {
+    match params.mldsa_master_activation {
+        activation if activation == ForkActivation::always() => return (true, Some(0), false),
+        activation if activation == ForkActivation::never() => return (false, None, false),
+        _ => {}
+    }
+
+    let activation_daa = Some(params.mldsa_master_activation.daa_score());
+
+    let mut enabled = params.mldsa_master_enabled(virtual_daa_score);
+    let mut invalid_activation = false;
+
+    if let Some(activation_daa) = activation_daa {
+        let merge_depth = params.merge_depth().get(virtual_daa_score);
+        let bps = params.bps().get(virtual_daa_score); // blocks per second
+        let daa_per_day = bps.saturating_mul(86_400);
+        let buffer = std::cmp::max(merge_depth.saturating_mul(3), daa_per_day);
+        let min_allowed_activation = virtual_daa_score.saturating_add(buffer);
+
+        if activation_daa < min_allowed_activation {
+            invalid_activation = true;
+            enabled = false;
+        }
+    }
+
+    (enabled, activation_daa, invalid_activation)
+}
 
 /// A service implementing the Rpc API at kaspa_rpc_core level.
 ///
@@ -1334,6 +1364,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         let sink_daa_score_timestamp = session.async_get_sink_daa_score_timestamp().await;
         let is_synced = self.mining_rule_engine.is_sink_recent_and_connected(sink_daa_score_timestamp);
         let virtual_daa_score = session.get_virtual_daa_score();
+        let params = &self.config.params;
         let provider = { self.delegation_provider.lock().unwrap().clone() };
         let has_mldsa_master = if let Some(provider) = provider {
             // If provider errors, fall back to anchor memory set
@@ -1341,6 +1372,35 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         } else {
             !self.mldsa_anchors.lock().unwrap().is_empty()
         };
+        let (mut mldsa_master_enabled, mldsa_master_activation_daa, invalid_activation) =
+            compute_mldsa_master_status(params, virtual_daa_score);
+
+        let has_stealth_support = true;
+
+        if invalid_activation {
+            static MLDSA_ACTIVATION_GUARD: OnceCell<()> = OnceCell::new();
+            if let Some(activation_daa) = mldsa_master_activation_daa {
+                let merge_depth = params.merge_depth().get(virtual_daa_score);
+                let bps = params.bps().get(virtual_daa_score); // blocks per second
+                let daa_per_day = bps.saturating_mul(86_400);
+                let buffer = std::cmp::max(merge_depth.saturating_mul(3), daa_per_day);
+
+                MLDSA_ACTIVATION_GUARD.get_or_init(|| {
+                    error!(
+                        "mldsa_master_activation={} некорректен для текущего DAA {}: требуется будущее значение с буфером >= {}. Сетевой флаг master будет отключён.",
+                        activation_daa, virtual_daa_score, buffer
+                    );
+                });
+            }
+        }
+
+        if invalid_activation {
+            mldsa_master_enabled = false;
+        }
+
+        if mldsa_master_enabled && !has_stealth_support {
+            warn!("mldsa_master_enabled=true while stealth support is disabled; configuration is inconsistent");
+        }
 
         Ok(GetServerInfoResponse {
             rpc_api_version: RPC_API_VERSION,
@@ -1350,8 +1410,10 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
             has_utxo_index: self.config.utxoindex,
             is_synced,
             virtual_daa_score,
-            has_stealth_support: true,
+            has_stealth_support,
             has_mldsa_master,
+            mldsa_master_enabled,
+            mldsa_master_activation_daa,
         })
     }
 
@@ -1528,6 +1590,7 @@ impl AsyncService for RpcCoreService {
 #[cfg(test)]
 mod tests {
     use super::*;
+        use kaspa_consensus_core::config::params::{ForkActivation, DEVNET_PARAMS};
 
     #[test]
     fn anchor_hint_cache_roundtrip() {
@@ -1537,4 +1600,40 @@ mod tests {
         assert_eq!(cache.get(&RpcTransactionId::default(), 42), Some("efbeadde".to_string()));
         assert!(cache.get(&RpcTransactionId::default(), 0).is_none());
     }
+
+        #[test]
+        fn guardrail_disables_past_activation() {
+            let mut params = DEVNET_PARAMS;
+            params.mldsa_master_activation = ForkActivation::new(20);
+            let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
+            assert!(invalid);
+            assert!(!enabled);
+            assert_eq!(activation, Some(20));
+        }
+
+        #[test]
+        fn guardrail_allows_buffered_future_activation() {
+            let mut params = DEVNET_PARAMS;
+            params.mldsa_master_activation = ForkActivation::new(100_000);
+            let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
+            assert!(!invalid);
+            assert!(!enabled);
+            assert_eq!(activation, Some(100_000));
+        }
+
+        #[test]
+        fn guardrail_respects_always_and_never() {
+            let mut params = DEVNET_PARAMS;
+            params.mldsa_master_activation = ForkActivation::always();
+            let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 0);
+            assert!(enabled);
+            assert!(!invalid);
+            assert_eq!(activation, Some(0));
+
+            params.mldsa_master_activation = ForkActivation::never();
+            let (enabled2, activation2, invalid2) = compute_mldsa_master_status(&params, 0);
+            assert!(!enabled2);
+            assert!(!invalid2);
+            assert_eq!(activation2, None);
+        }
 }

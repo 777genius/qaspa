@@ -2,9 +2,15 @@
 
 ## Executive Summary
 
-**Status:** ✅ **Phase 2 / Iteration 6 (Airgap UX) завершена**
+**Status:** ⏳ **Phase 2 / Iteration 8 (Deployment & Migration) в работе**
 
-Core задачи ML-DSA выполнены; идёт доведение оффлайн-потока делегаций (build → sign offline → apply) и документации.
+- Добавлен консенсусный флаг `mldsa_master_activation` (dev/simnet — always, test/mainnet — never до решения) и хелпер `mldsa_master_enabled`.
+- RPC `GetServerInfo` расширен полями `mldsa_master_enabled` и `mldsa_master_activation_daa`; поднят `RPC_API_REVISION` без смены `RPC_API_VERSION`.
+- Кошелёк читает сетевой флаг, эмитит `MasterNetworkStatus` и `MasterNetworkMismatch`, продолжает локальный мастер-режим без сетевых операций до активации.
+- Требование Iteration 8: testnet DAA зафиксирован в коде/доках (`mldsa_master_activation = 120_000_000`); devnet/testnet rehearsal описан.
+- Testnet deployment guide обновлён: фиксация DAA, шаги до/после активации, инварианты и rollback.
+
+Core задачи ML-DSA выполнены; доводим миграцию/документацию и rehearsal поток.
 
 **Completed:** ✅ *Phase 2 / Iteration 1 (MLDSA master root)*
 - Дет. master seed (HKDF-SHA3) добавлен в `kaspa-mldsa`.

@@ -1032,6 +1032,8 @@ mod mockery {
                 virtual_daa_score: mock(),
                 has_stealth_support: true,
                 has_mldsa_master: true,
+                mldsa_master_enabled: false,
+                mldsa_master_activation_daa: None,
             }
         }
     }

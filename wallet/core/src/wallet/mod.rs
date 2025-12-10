@@ -2736,6 +2736,16 @@ impl Wallet {
             return Ok(None);
         }
 
+        if let Some((network_enabled, activation_daa)) = self.fetch_mldsa_master_network_status().await? {
+            self.observe_mldsa_master_network_status(network_enabled, activation_daa).await?;
+            if !network_enabled {
+                log_warn!(
+                    "Skipping automatic MLDSA master derivation: network master flag is disabled (activation_daa={activation_daa:?})"
+                );
+                return Ok(None);
+            }
+        }
+
         let passphrase = payment_secret
             .map(|secret| std::str::from_utf8(secret.as_ref()).map(|s| s.to_owned()))
             .transpose()
@@ -2810,6 +2820,31 @@ impl Wallet {
         }
 
         Ok(created)
+    }
+
+    async fn fetch_mldsa_master_network_status(&self) -> Result<Option<(bool, Option<u64>)>> {
+        let Some(rpc) = self.utxo_processor().try_rpc_api() else {
+            return Ok(None);
+        };
+
+        match rpc.get_server_info().await {
+            Ok(info) => Ok(Some((info.mldsa_master_enabled, info.mldsa_master_activation_daa))),
+            Err(err) => {
+                log_warn!("Unable to read mldsa_master status from RPC: {err}");
+                Ok(None)
+            }
+        }
+    }
+
+    async fn observe_mldsa_master_network_status(&self, network_enabled: bool, activation_daa: Option<u64>) -> Result<()> {
+        self.notify(Events::MasterNetworkStatus { enabled: network_enabled, activation_daa }).await?;
+
+        let local_enabled = self.is_mldsa_master_enabled();
+        if local_enabled && !network_enabled {
+            self.notify(Events::MasterNetworkMismatch { local_enabled, network_enabled }).await?;
+        }
+
+        Ok(())
     }
 
     pub async fn master_anchor_infos(&self) -> Result<Vec<MasterAnchorInfo>> {

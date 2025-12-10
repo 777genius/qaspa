@@ -7,6 +7,31 @@ QUBIC will support **all three signature types in parallel** to ensure smooth mi
 - **PubKeyECDSA** - Legacy, quantum-vulnerable
 - **PubKeyMLDSA** - Post-quantum secure ✅
 
+## Phase 2: MLDSA Master Root Migration (Iteration 8)
+
+- **Форк-флаг:** `enable_mldsa_master` хранится в консенсусных `Params` как `mldsa_master_activation: ForkActivation`.
+- **Состояние сетей:** devnet/simnet — `always`, testnet/mainnet — `never` до явного решения; тестнет DAA обязателен к фиксации перед релизом.
+- **Testnet DAA (Iteration 8):** `mldsa_master_activation = ForkActivation::new(120_000_000)`; значение зафиксировано в коде и гайде по тестнету.
+- **RPC:** `GetServerInfo` теперь отдаёт `mldsa_master_enabled` и `mldsa_master_activation_daa`; `RPC_API_REVISION` повышен без смены `RPC_API_VERSION`.
+- **Клиент/кошелёк:** при создании/гидратации мастер-записей кошелёк читает сетевой статус, генерирует события `MasterNetworkStatus` и предупреждения `MasterNetworkMismatch`, не делает сетевые операции, если сеть ещё не активирована.
+- **Override:** `OverrideParams` позволяет задавать альтернативный DAA для rehearsal; запрещено мержить без зафиксированного testnet DAA.
+- **Guardrails testnet:** при сохранённой истории DAA должен быть в будущем с буфером `buffer_daa >= max(3 * expected_max_reorg_depth, DAA_сутки)`; при чистом запуске DAA задаётся явно (0 или буфер от генезиса).
+- **DoD Iteration 8:** флаг в Params, RPC отдаёт статус, кошелёк показывает статус/расхождения, тестнет DAA задокументирован, планы devnet/testnet rehearsal готовы, rollback через отключение RPC-эндпоинтов/локальных флагов.
+
+### Роли и шаги
+- **Оператор ноды:** обновить бинарники, проверить `mldsa_master_activation` и RPC `getServerInfo`, обеспечить согласованность флага на всех публичных узлах, вести мониторинг.
+- **Разработчик/оператор кошелька:** читать `mldsa_master_enabled`/`activation_daa`, включать auto‑master только после активации, показывать предупреждения при расхождении, поддерживать rollback через локальный флаг.
+- **Пользователь:** обновить кошелёк, убедиться в наличии master/anchor после активации, сделать бэкап, при работе до активации — ожидать предупреждений и отсутствие сетевых мастер‑операций.
+
+### Инварианты и мониторинг
+- Если `mldsa_master_enabled == true`, то `has_stealth_support` должен быть `true`; несоответствие логируется.
+- RPC `getServerInfo` на всех тестнет‑нодах должен возвращать одинаковое состояние флага; расхождение = стоп‑сигнал.
+
+### Rehearsal devnet/testnet
+1) Devnet: включён `always`; проверить `mldsa_master_enabled=true`, пройти сценарий master → stealth → tx → recovery.
+2) Testnet до активации: `enabled=false`, кошелёк только локальные master‑операции, предупреждение о несоответствии.
+3) Testnet после активации: `enabled=true`, повторить сценарий, записать результаты; зафиксировать DAA/время и найденные проблемы.
+
 ## Technical Implementation
 
 ### 1. All Opcodes Remain Active

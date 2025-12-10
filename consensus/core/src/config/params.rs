@@ -244,6 +244,7 @@ pub struct OverrideParams {
 
     pub crescendo: Option<CrescendoParams>,
     pub crescendo_activation: Option<ForkActivation>,
+    pub mldsa_master_activation: Option<ForkActivation>,
 }
 
 impl From<Params> for OverrideParams {
@@ -278,6 +279,7 @@ impl From<Params> for OverrideParams {
             pruning_proof_m: Some(p.pruning_proof_m),
             crescendo: Some(p.crescendo),
             crescendo_activation: Some(p.crescendo_activation),
+            mldsa_master_activation: Some(p.mldsa_master_activation),
         }
     }
 }
@@ -343,6 +345,7 @@ pub struct Params {
 
     pub crescendo: CrescendoParams,
     pub crescendo_activation: ForkActivation,
+    pub mldsa_master_activation: ForkActivation,
 }
 
 impl Params {
@@ -512,6 +515,15 @@ impl Params {
         ForkedParam::new(self.prior_max_script_public_key_len, self.crescendo.max_script_public_key_len, self.crescendo_activation)
     }
 
+    #[inline]
+    pub fn mldsa_master_enabled(&self, daa_score: u64) -> bool {
+        match self.mldsa_master_activation {
+            activation if activation == ForkActivation::never() => false,
+            activation if activation == ForkActivation::always() => true,
+            activation => activation.is_active(daa_score),
+        }
+    }
+
     pub fn network_name(&self) -> String {
         self.net.to_prefixed()
     }
@@ -588,6 +600,7 @@ impl Params {
 
             crescendo: overrides.crescendo.clone().unwrap_or(self.crescendo.clone()),
             crescendo_activation: overrides.crescendo_activation.unwrap_or(self.crescendo_activation),
+            mldsa_master_activation: overrides.mldsa_master_activation.unwrap_or(self.mldsa_master_activation),
         }
     }
 }
@@ -696,6 +709,8 @@ pub const MAINNET_PARAMS: Params = Params {
     crescendo: CRESCENDO,
     // Roughly 2025-05-05 1500 UTC
     crescendo_activation: ForkActivation::new(110_165_000),
+    // Mainnet: остаётся выключенным до отдельного решения
+    mldsa_master_activation: ForkActivation::never(),
 };
 
 pub const TESTNET_PARAMS: Params = Params {
@@ -763,6 +778,8 @@ pub const TESTNET_PARAMS: Params = Params {
     crescendo: CRESCENDO,
     // 18:30 UTC, March 6, 2025
     crescendo_activation: ForkActivation::new(88_657_000),
+    // Iteration 8: зафиксированная DAA активации master root на testnet
+    mldsa_master_activation: ForkActivation::new(120_000_000),
 };
 
 pub const SIMNET_PARAMS: Params = Params {
@@ -816,6 +833,7 @@ pub const SIMNET_PARAMS: Params = Params {
 
     crescendo: CRESCENDO,
     crescendo_activation: ForkActivation::always(),
+    mldsa_master_activation: ForkActivation::always(),
 };
 
 pub const DEVNET_PARAMS: Params = Params {
@@ -877,4 +895,39 @@ pub const DEVNET_PARAMS: Params = Params {
     crescendo: CRESCENDO,
     // TODO: Set this to always after the fork
     crescendo_activation: ForkActivation::never(),
+    mldsa_master_activation: ForkActivation::always(),
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mldsa_master_activation_evaluation() {
+        let mut params = MAINNET_PARAMS;
+        params.mldsa_master_activation = ForkActivation::new(100);
+
+        assert!(!params.mldsa_master_enabled(0));
+        assert!(!params.mldsa_master_enabled(99));
+        assert!(params.mldsa_master_enabled(100));
+        assert!(params.mldsa_master_enabled(150));
+
+        params.mldsa_master_activation = ForkActivation::always();
+        assert!(params.mldsa_master_enabled(0));
+
+        params.mldsa_master_activation = ForkActivation::never();
+        assert!(!params.mldsa_master_enabled(u64::MAX));
+    }
+
+    #[test]
+    fn override_params_respects_mldsa_activation() {
+        let params = MAINNET_PARAMS;
+        let overrides =
+            OverrideParams { mldsa_master_activation: Some(ForkActivation::new(500)), ..OverrideParams::from(params.clone()) };
+        let overridden = params.override_params(overrides);
+
+        assert!(!overridden.mldsa_master_enabled(0));
+        assert!(!overridden.mldsa_master_enabled(499));
+        assert!(overridden.mldsa_master_enabled(500));
+    }
+}

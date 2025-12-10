@@ -189,6 +189,38 @@ Then run:
 
 ---
 
+## MLDSA Master Root Activation (Iteration 8)
+
+### 0. Фиксация DAA
+- **Значение (Iteration 8):** `testnet_mldsa_master_activation_daa = 120_000_000` (записано в `consensus/core/src/config/params.rs`).
+- **История сохраняется?**
+  - Если история сохраняется — DAA должен быть **в будущем** с буфером `buffer_daa >= max(3 * expected_max_reorg_depth, DAA_сутки)`.
+  - Если чистый запуск — DAA задаётся явно (0 или буфер от генезиса), совпадает с CI/доками.
+
+### 1. До активации (devnet/testnet rehearsal)
+1) Обновить ноды на версию с полем `mldsa_master_activation` (testnet значение уже зафиксировано).
+2) Проверить RPC `getServerInfo` → `mldsa_master_enabled=false`, `mldsa_master_activation_daa=<ожидаемое>`.
+3) Кошелёк:
+   - Создать кошелёк, провести пару legacy/MLDSA/stealth транзакций.
+   - Убедиться, что при `EnableMldsaMaster=true` кошелёк не делает сетевые мастер-операции (только локально) и выдаёт предупреждение (`MasterNetworkMismatch`).
+
+### 2. Момент активации
+1) Дождаться достижения `mldsa_master_activation_daa` (или ускорить devnet).
+2) Проверить RPC `getServerInfo` → `mldsa_master_enabled=true`, `has_stealth_support=true`, `mldsa_master_activation_daa` соответствует плану.
+3) Валидировать инвариант: конфигурации всех публичных узлов возвращают одинаковые значения флага.
+
+### 3. После активации
+1) Кошелёк обновлённой версии:
+   - При открытии проверяет статус сети, эмитит `MasterNetworkStatus`.
+   - Авто‑мастер создаётся только если сеть `enabled`; при расхождении — предупреждение `MasterNetworkMismatch`.
+   - Выполнить мастер‑операции: создать master, привязать stealth, провести транзакцию, проверить recovery.
+2) Задокументировать результаты rehearsal (DAA, время активации, найденные проблемы) и приложить к FINAL_CHECKLIST.
+
+### 4. Rollback (аварийно)
+- Консенсусный флаг назад не откатывается; смягчение:
+  - Отключить RPC эндпоинты anchor/делегаций конфигом ноды.
+  - В кошельке временно выключить auto‑master через локальный флаг.
+
 ## Verification Steps
 
 ### 1. Check Node Status

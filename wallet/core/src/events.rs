@@ -195,6 +195,16 @@ pub enum Events {
         reason: String,
     },
     #[serde(rename_all = "camelCase")]
+    MasterNetworkStatus {
+        enabled: bool,
+        activation_daa: Option<u64>,
+    },
+    #[serde(rename_all = "camelCase")]
+    MasterNetworkMismatch {
+        local_enabled: bool,
+        network_enabled: bool,
+    },
+    #[serde(rename_all = "camelCase")]
     MasterAnchorMismatch {
         account_id: AccountId,
         expected_anchor: [u8; 32],
@@ -383,6 +393,8 @@ pub enum EventKind {
     MasterDelegationRequestBuilt,
     MasterDelegationResponseApplied,
     MasterDelegationApplyFailed,
+    MasterNetworkStatus,
+    MasterNetworkMismatch,
     MasterAnchorMismatch,
     AccountActivation,
     AccountDeactivation,
@@ -436,6 +448,8 @@ impl From<&Events> for EventKind {
             Events::MasterDelegationRequestBuilt { .. } => EventKind::MasterDelegationRequestBuilt,
             Events::MasterDelegationResponseApplied { .. } => EventKind::MasterDelegationResponseApplied,
             Events::MasterDelegationApplyFailed { .. } => EventKind::MasterDelegationApplyFailed,
+            Events::MasterNetworkStatus { .. } => EventKind::MasterNetworkStatus,
+            Events::MasterNetworkMismatch { .. } => EventKind::MasterNetworkMismatch,
             Events::MasterAnchorMismatch { .. } => EventKind::MasterAnchorMismatch,
             Events::AccountActivation { .. } => EventKind::AccountActivation,
             Events::AccountDeactivation { .. } => EventKind::AccountDeactivation,
@@ -492,6 +506,8 @@ impl FromStr for EventKind {
             "master-delegation-request-built" => Ok(EventKind::MasterDelegationRequestBuilt),
             "master-delegation-response-applied" => Ok(EventKind::MasterDelegationResponseApplied),
             "master-delegation-apply-failed" => Ok(EventKind::MasterDelegationApplyFailed),
+            "master-network-status" => Ok(EventKind::MasterNetworkStatus),
+            "master-network-mismatch" => Ok(EventKind::MasterNetworkMismatch),
             "master-anchor-mismatch" => Ok(EventKind::MasterAnchorMismatch),
             "account-activation" => Ok(EventKind::AccountActivation),
             "account-deactivation" => Ok(EventKind::AccountDeactivation),
@@ -556,6 +572,8 @@ impl std::fmt::Display for EventKind {
             EventKind::MasterDelegationRequestBuilt => "master-delegation-request-built",
             EventKind::MasterDelegationResponseApplied => "master-delegation-response-applied",
             EventKind::MasterDelegationApplyFailed => "master-delegation-apply-failed",
+            EventKind::MasterNetworkStatus => "master-network-status",
+            EventKind::MasterNetworkMismatch => "master-network-mismatch",
             EventKind::MasterAnchorMismatch => "master-anchor-mismatch",
             EventKind::AccountActivation => "account-activation",
             EventKind::AccountDeactivation => "account-deactivation",

@@ -2681,11 +2681,17 @@ pub struct GetServerInfoResponse {
     /// Whether the server advertises MLDSA master/delegation support
     #[serde(default)]
     pub has_mldsa_master: bool,
+    /// Whether the network params consider MLDSA master root activated at current DAA
+    #[serde(default)]
+    pub mldsa_master_enabled: bool,
+    /// DAA height of the activation if set (None for `never`, Some(0) for `always`)
+    #[serde(default)]
+    pub mldsa_master_activation_daa: Option<u64>,
 }
 
 impl Serializer for GetServerInfoResponse {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &3, writer)?; // Version 3: added has_mldsa_master
+        store!(u16, &4, writer)?; // Version 4: added mldsa_master_enabled + activation_daa
 
         store!(u16, &self.rpc_api_version, writer)?;
         store!(u16, &self.rpc_api_revision, writer)?;
@@ -2697,6 +2703,8 @@ impl Serializer for GetServerInfoResponse {
         store!(u64, &self.virtual_daa_score, writer)?;
         store!(bool, &self.has_stealth_support, writer)?; // v2
         store!(bool, &self.has_mldsa_master, writer)?; // v3
+        store!(bool, &self.mldsa_master_enabled, writer)?; // v4
+        store!(Option<u64>, &self.mldsa_master_activation_daa, writer)?; // v4
 
         Ok(())
     }
@@ -2718,6 +2726,8 @@ impl Deserializer for GetServerInfoResponse {
         // Backward compatible: default to false for old versions
         let has_stealth_support = if version >= 2 { load!(bool, reader)? } else { false };
         let has_mldsa_master = if version >= 3 { load!(bool, reader)? } else { false };
+        let mldsa_master_enabled = if version >= 4 { load!(bool, reader)? } else { false };
+        let mldsa_master_activation_daa = if version >= 4 { load!(Option<u64>, reader)? } else { None };
 
         Ok(Self {
             rpc_api_version,
@@ -2729,6 +2739,8 @@ impl Deserializer for GetServerInfoResponse {
             virtual_daa_score,
             has_stealth_support,
             has_mldsa_master,
+            mldsa_master_enabled,
+            mldsa_master_activation_daa,
         })
     }
 }

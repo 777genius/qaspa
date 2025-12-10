@@ -929,6 +929,8 @@ message GetServerInfoResponseMessage{
   uint64 virtualDaaScore = 7;
   bool hasStealthSupport = 8;
   bool hasMldsaMaster = 9;
+  bool mldsaMasterEnabled = 10;
+  optional uint64 mldsaMasterActivationDaa = 11;
   RPCError error = 1000;
 }
 
