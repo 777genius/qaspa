@@ -851,6 +851,7 @@ impl KaspadGoParams {
             pruning_proof_m: self.PruningProofM,
             crescendo: CRESCENDO,
             crescendo_activation: ForkActivation::never(),
+            mldsa_master_activation: MAINNET_PARAMS.mldsa_master_activation,
         }
     }
 }

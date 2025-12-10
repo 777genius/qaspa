@@ -641,18 +641,20 @@ async fn test_stealth_fallback_progress_events() {
     receiver.override_creation_daa_score_for_testing(Some(current_daa));
 
     let event_channel = env.wallet.multiplexer().channel();
+    let listener_channel = event_channel.clone();
     let (stop_tx, stop_rx) = oneshot::channel();
     let (ready_tx, ready_rx) = oneshot::channel();
     let progress_events = Arc::new(Mutex::new(Vec::<ProgressSnapshot>::new()));
     let progress_clone = progress_events.clone();
     let receiver_id = *receiver.id();
+    let drain_channel = event_channel.clone();
     let listener = tokio::spawn(async move {
         let mut stop_rx = stop_rx;
         let _ = ready_tx.send(());
         loop {
             tokio::select! {
                 _ = &mut stop_rx => break,
-                msg = event_channel.recv() => {
+                msg = listener_channel.recv() => {
                     match msg {
                         Ok(event) => {
                             if let Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed } = *event {
@@ -674,6 +676,21 @@ async fn test_stealth_fallback_progress_events() {
         .await
         .expect("Fallback scan with progress timed out")
         .expect("Fallback scan with progress failed");
+
+    // Дожидаемся финальных прогресс-ивентов, пока канал не опустеет по таймауту.
+    let drain_deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while tokio::time::Instant::now() < drain_deadline {
+        match tokio::time::timeout(Duration::from_millis(150), drain_channel.recv()).await {
+            Ok(Ok(event)) => {
+                if let Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed } = *event {
+                    if account_id == receiver_id {
+                        progress_events.lock().await.push(ProgressSnapshot { processed_blocks, last_daa_score, claimed });
+                    }
+                }
+            }
+            _ => break,
+        }
+    }
 
     let _ = stop_tx.send(());
     listener.await.expect("Progress listener task failed");
