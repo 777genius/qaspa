@@ -5,7 +5,6 @@ use kaspa_wallet_core::api::message::{
 use kaspa_wallet_core::api::traits::WalletApi;
 use kaspa_wallet_core::message::{MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
 use kaspa_wallet_core::wallet::Wallet;
-use std::mem;
 use std::ptr;
 use std::slice;
 use std::sync::Arc;

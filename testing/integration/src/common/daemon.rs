@@ -7,9 +7,16 @@ use kaspa_notify::subscription::context::SubscriptionContext;
 use kaspa_rpc_core::notify::mode::NotificationMode;
 use kaspa_rpc_service::service::RpcCoreService;
 use kaspa_utils::triggers::Listener;
+use kaspa_wrpc_server::address::WrpcNetAddress;
 use kaspad_lib::{args::Args, daemon::create_core_with_runtime};
 use parking_lot::RwLock;
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{
+    net::TcpListener,
+    ops::Deref,
+    sync::atomic::{AtomicU16, Ordering},
+    sync::Arc,
+    time::Duration,
+};
 use tempfile::TempDir;
 
 use kaspa_grpc_client::ClientPool;
@@ -98,24 +105,40 @@ pub struct Daemon {
 }
 
 impl Daemon {
+    fn resolve_wrpc_port(address: Option<&WrpcNetAddress>) -> u16 {
+        match address {
+            Some(WrpcNetAddress::Custom(addr)) if !addr.port_not_specified() => addr.normalize(0).port,
+            _ => Daemon::next_port(),
+        }
+    }
+
+    /// Allocate a unique local port for test daemons, avoiding collisions when
+    /// several nodes start in parallel during integration runs.
+    fn next_port() -> u16 {
+        const PORT_START: u16 = 50_000;
+        const PORT_END: u16 = 59_000;
+        const PORT_RANGE: u16 = PORT_END - PORT_START;
+        static NEXT_PORT: AtomicU16 = AtomicU16::new(PORT_START);
+
+        for _ in 0..PORT_RANGE {
+            let previous = NEXT_PORT.fetch_add(1, Ordering::SeqCst);
+            let candidate = PORT_START + previous.wrapping_sub(PORT_START) % PORT_RANGE;
+            if TcpListener::bind(("127.0.0.1", candidate)).is_ok() {
+                return candidate;
+            }
+        }
+
+        panic!("unable to allocate a free local port for daemon tests");
+    }
+
     pub fn fill_args_with_random_ports(args: &mut Args) {
-        // This should ask the OS to allocate free port for socket 1 to 4.
-        let socket1 = std::net::TcpListener::bind(format!("127.0.0.1:{}", args.rpclisten.map_or(0, |x| x.normalize(0).port))).unwrap();
-        let rpc_port = socket1.local_addr().unwrap().port();
-
-        let socket2 = std::net::TcpListener::bind(format!("127.0.0.1:{}", args.listen.map_or(0, |x| x.normalize(0).port))).unwrap();
-        let p2p_port = socket2.local_addr().unwrap().port();
-
-        let socket3 = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let rpc_json_port = socket3.local_addr().unwrap().port();
-
-        let socket4 = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let rpc_borsh_port = socket4.local_addr().unwrap().port();
-
-        drop(socket1);
-        drop(socket2);
-        drop(socket3);
-        drop(socket4);
+        // When multiple daemons start concurrently, relying on ephemeral OS
+        // selection causes occasional port reuse races. Use a simple atomic
+        // allocator to hand out distinct ports inside the test process.
+        let rpc_port = args.rpclisten.map_or_else(Daemon::next_port, |x| x.normalize(0).port);
+        let p2p_port = args.listen.map_or_else(Daemon::next_port, |x| x.normalize(0).port);
+        let rpc_json_port = Daemon::resolve_wrpc_port(args.rpclisten_json.as_ref());
+        let rpc_borsh_port = Daemon::resolve_wrpc_port(args.rpclisten_borsh.as_ref());
 
         args.rpclisten = Some(format!("0.0.0.0:{rpc_port}").try_into().unwrap());
         args.listen = Some(format!("0.0.0.0:{p2p_port}").try_into().unwrap());

@@ -325,10 +325,7 @@ impl Wallet {
 
         match rpc.get_server_info().await {
             Ok(info) => {
-                let activation = info
-                    .mldsa_master_activation_daa
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "never".to_string());
+                let activation = info.mldsa_master_activation_daa.map(|v| v.to_string()).unwrap_or_else(|| "never".to_string());
                 tprintln!(
                     ctx,
                     "Network master: {} (activation_daa: {activation}, has_stealth_support: {})",

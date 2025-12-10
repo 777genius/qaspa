@@ -1590,7 +1590,7 @@ impl AsyncService for RpcCoreService {
 #[cfg(test)]
 mod tests {
     use super::*;
-        use kaspa_consensus_core::config::params::{ForkActivation, DEVNET_PARAMS};
+    use kaspa_consensus_core::config::params::{ForkActivation, DEVNET_PARAMS};
 
     #[test]
     fn anchor_hint_cache_roundtrip() {
@@ -1601,39 +1601,39 @@ mod tests {
         assert!(cache.get(&RpcTransactionId::default(), 0).is_none());
     }
 
-        #[test]
-        fn guardrail_disables_past_activation() {
-            let mut params = DEVNET_PARAMS;
-            params.mldsa_master_activation = ForkActivation::new(20);
-            let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
-            assert!(invalid);
-            assert!(!enabled);
-            assert_eq!(activation, Some(20));
-        }
+    #[test]
+    fn guardrail_disables_past_activation() {
+        let mut params = DEVNET_PARAMS;
+        params.mldsa_master_activation = ForkActivation::new(20);
+        let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
+        assert!(invalid);
+        assert!(!enabled);
+        assert_eq!(activation, Some(20));
+    }
 
-        #[test]
-        fn guardrail_allows_buffered_future_activation() {
-            let mut params = DEVNET_PARAMS;
-            params.mldsa_master_activation = ForkActivation::new(100_000);
-            let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
-            assert!(!invalid);
-            assert!(!enabled);
-            assert_eq!(activation, Some(100_000));
-        }
+    #[test]
+    fn guardrail_allows_buffered_future_activation() {
+        let mut params = DEVNET_PARAMS;
+        params.mldsa_master_activation = ForkActivation::new(100_000);
+        let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
+        assert!(!invalid);
+        assert!(!enabled);
+        assert_eq!(activation, Some(100_000));
+    }
 
-        #[test]
-        fn guardrail_respects_always_and_never() {
-            let mut params = DEVNET_PARAMS;
-            params.mldsa_master_activation = ForkActivation::always();
-            let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 0);
-            assert!(enabled);
-            assert!(!invalid);
-            assert_eq!(activation, Some(0));
+    #[test]
+    fn guardrail_respects_always_and_never() {
+        let mut params = DEVNET_PARAMS;
+        params.mldsa_master_activation = ForkActivation::always();
+        let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 0);
+        assert!(enabled);
+        assert!(!invalid);
+        assert_eq!(activation, Some(0));
 
-            params.mldsa_master_activation = ForkActivation::never();
-            let (enabled2, activation2, invalid2) = compute_mldsa_master_status(&params, 0);
-            assert!(!enabled2);
-            assert!(!invalid2);
-            assert_eq!(activation2, None);
-        }
+        params.mldsa_master_activation = ForkActivation::never();
+        let (enabled2, activation2, invalid2) = compute_mldsa_master_status(&params, 0);
+        assert!(!enabled2);
+        assert!(!invalid2);
+        assert_eq!(activation2, None);
+    }
 }
