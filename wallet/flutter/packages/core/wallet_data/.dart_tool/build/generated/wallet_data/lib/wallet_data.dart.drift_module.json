@@ -1,0 +1,12 @@
+{
+  "elements": {},
+  "imports": [
+    "package:wallet_data/di/wallet_data_injectable.dart",
+    "package:wallet_data/src/repositories/wallet_repository_impl.dart",
+    "package:wallet_data/src/repositories/account_repository_impl.dart",
+    "package:wallet_data/src/repositories/transaction_repository_impl.dart",
+    "package:wallet_data/src/datasources/rust_datasource.dart",
+    "package:wallet_data/src/datasources/local_datasource.dart",
+    "package:wallet_data/src/database/history_database.dart"
+  ]
+}

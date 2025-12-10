@@ -1,0 +1,13 @@
+name: module_visualizer
+description: Module dependency graph visualization tool for Kaspa Wallet
+
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+resolution: workspace
+
+dependencies:
+  modularity_cli: ^0.1.0
+  kaspa_wallet_mobile:

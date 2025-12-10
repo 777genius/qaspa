@@ -1,0 +1,17 @@
+name: settings_domain
+description: Settings feature domain layer with use cases.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+resolution: workspace
+
+dependencies:
+  wallet_domain:
+  injectable: ^2.7.0
+
+dev_dependencies:
+  build_runner: ^2.4.15
+  injectable_generator: ^2.6.2

@@ -1,0 +1,371 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'stealth_store.dart';
+
+// **************************************************************************
+// StoreGenerator
+// **************************************************************************
+
+// ignore_for_file: non_constant_identifier_names, unnecessary_brace_in_string_interps, unnecessary_lambdas, prefer_expression_function_bodies, lines_longer_than_80_chars, avoid_as, avoid_annotating_with_dynamic, no_leading_underscores_for_local_identifiers
+
+mixin _$StealthStore on _StealthStoreBase, Store {
+  Computed<double>? _$stealthBalanceInKasComputed;
+
+  @override
+  double get stealthBalanceInKas =>
+      (_$stealthBalanceInKasComputed ??= Computed<double>(
+        () => super.stealthBalanceInKas,
+        name: '_StealthStoreBase.stealthBalanceInKas',
+      )).value;
+  Computed<bool>? _$canSendComputed;
+
+  @override
+  bool get canSend => (_$canSendComputed ??= Computed<bool>(
+    () => super.canSend,
+    name: '_StealthStoreBase.canSend',
+  )).value;
+  Computed<BigInt>? _$sendAmountInSompiComputed;
+
+  @override
+  BigInt get sendAmountInSompi =>
+      (_$sendAmountInSompiComputed ??= Computed<BigInt>(
+        () => super.sendAmountInSompi,
+        name: '_StealthStoreBase.sendAmountInSompi',
+      )).value;
+
+  late final _$stealthAddressAtom = Atom(
+    name: '_StealthStoreBase.stealthAddress',
+    context: context,
+  );
+
+  @override
+  Address? get stealthAddress {
+    _$stealthAddressAtom.reportRead();
+    return super.stealthAddress;
+  }
+
+  @override
+  set stealthAddress(Address? value) {
+    _$stealthAddressAtom.reportWrite(value, super.stealthAddress, () {
+      super.stealthAddress = value;
+    });
+  }
+
+  late final _$stealthBalanceAtom = Atom(
+    name: '_StealthStoreBase.stealthBalance',
+    context: context,
+  );
+
+  @override
+  Balance? get stealthBalance {
+    _$stealthBalanceAtom.reportRead();
+    return super.stealthBalance;
+  }
+
+  @override
+  set stealthBalance(Balance? value) {
+    _$stealthBalanceAtom.reportWrite(value, super.stealthBalance, () {
+      super.stealthBalance = value;
+    });
+  }
+
+  late final _$stealthTransactionsAtom = Atom(
+    name: '_StealthStoreBase.stealthTransactions',
+    context: context,
+  );
+
+  @override
+  ObservableList<Transaction> get stealthTransactions {
+    _$stealthTransactionsAtom.reportRead();
+    return super.stealthTransactions;
+  }
+
+  @override
+  set stealthTransactions(ObservableList<Transaction> value) {
+    _$stealthTransactionsAtom.reportWrite(value, super.stealthTransactions, () {
+      super.stealthTransactions = value;
+    });
+  }
+
+  late final _$isLoadingAtom = Atom(
+    name: '_StealthStoreBase.isLoading',
+    context: context,
+  );
+
+  @override
+  bool get isLoading {
+    _$isLoadingAtom.reportRead();
+    return super.isLoading;
+  }
+
+  @override
+  set isLoading(bool value) {
+    _$isLoadingAtom.reportWrite(value, super.isLoading, () {
+      super.isLoading = value;
+    });
+  }
+
+  late final _$isScanningAtom = Atom(
+    name: '_StealthStoreBase.isScanning',
+    context: context,
+  );
+
+  @override
+  bool get isScanning {
+    _$isScanningAtom.reportRead();
+    return super.isScanning;
+  }
+
+  @override
+  set isScanning(bool value) {
+    _$isScanningAtom.reportWrite(value, super.isScanning, () {
+      super.isScanning = value;
+    });
+  }
+
+  late final _$isSendingAtom = Atom(
+    name: '_StealthStoreBase.isSending',
+    context: context,
+  );
+
+  @override
+  bool get isSending {
+    _$isSendingAtom.reportRead();
+    return super.isSending;
+  }
+
+  @override
+  set isSending(bool value) {
+    _$isSendingAtom.reportWrite(value, super.isSending, () {
+      super.isSending = value;
+    });
+  }
+
+  late final _$errorMessageAtom = Atom(
+    name: '_StealthStoreBase.errorMessage',
+    context: context,
+  );
+
+  @override
+  String? get errorMessage {
+    _$errorMessageAtom.reportRead();
+    return super.errorMessage;
+  }
+
+  @override
+  set errorMessage(String? value) {
+    _$errorMessageAtom.reportWrite(value, super.errorMessage, () {
+      super.errorMessage = value;
+    });
+  }
+
+  late final _$currentAccountIdAtom = Atom(
+    name: '_StealthStoreBase.currentAccountId',
+    context: context,
+  );
+
+  @override
+  String? get currentAccountId {
+    _$currentAccountIdAtom.reportRead();
+    return super.currentAccountId;
+  }
+
+  @override
+  set currentAccountId(String? value) {
+    _$currentAccountIdAtom.reportWrite(value, super.currentAccountId, () {
+      super.currentAccountId = value;
+    });
+  }
+
+  late final _$scanProgressAtom = Atom(
+    name: '_StealthStoreBase.scanProgress',
+    context: context,
+  );
+
+  @override
+  int get scanProgress {
+    _$scanProgressAtom.reportRead();
+    return super.scanProgress;
+  }
+
+  @override
+  set scanProgress(int value) {
+    _$scanProgressAtom.reportWrite(value, super.scanProgress, () {
+      super.scanProgress = value;
+    });
+  }
+
+  late final _$scanTotalAtom = Atom(
+    name: '_StealthStoreBase.scanTotal',
+    context: context,
+  );
+
+  @override
+  int get scanTotal {
+    _$scanTotalAtom.reportRead();
+    return super.scanTotal;
+  }
+
+  @override
+  set scanTotal(int value) {
+    _$scanTotalAtom.reportWrite(value, super.scanTotal, () {
+      super.scanTotal = value;
+    });
+  }
+
+  late final _$recipientStealthAddressAtom = Atom(
+    name: '_StealthStoreBase.recipientStealthAddress',
+    context: context,
+  );
+
+  @override
+  String get recipientStealthAddress {
+    _$recipientStealthAddressAtom.reportRead();
+    return super.recipientStealthAddress;
+  }
+
+  @override
+  set recipientStealthAddress(String value) {
+    _$recipientStealthAddressAtom.reportWrite(
+      value,
+      super.recipientStealthAddress,
+      () {
+        super.recipientStealthAddress = value;
+      },
+    );
+  }
+
+  late final _$sendAmountAtom = Atom(
+    name: '_StealthStoreBase.sendAmount',
+    context: context,
+  );
+
+  @override
+  String get sendAmount {
+    _$sendAmountAtom.reportRead();
+    return super.sendAmount;
+  }
+
+  @override
+  set sendAmount(String value) {
+    _$sendAmountAtom.reportWrite(value, super.sendAmount, () {
+      super.sendAmount = value;
+    });
+  }
+
+  late final _$loadStealthDataAsyncAction = AsyncAction(
+    '_StealthStoreBase.loadStealthData',
+    context: context,
+  );
+
+  @override
+  Future<void> loadStealthData() {
+    return _$loadStealthDataAsyncAction.run(() => super.loadStealthData());
+  }
+
+  late final _$scanForPaymentsAsyncAction = AsyncAction(
+    '_StealthStoreBase.scanForPayments',
+    context: context,
+  );
+
+  @override
+  Future<void> scanForPayments() {
+    return _$scanForPaymentsAsyncAction.run(() => super.scanForPayments());
+  }
+
+  late final _$_loadTransactionsAsyncAction = AsyncAction(
+    '_StealthStoreBase._loadTransactions',
+    context: context,
+  );
+
+  @override
+  Future<void> _loadTransactions() {
+    return _$_loadTransactionsAsyncAction.run(() => super._loadTransactions());
+  }
+
+  late final _$sendStealthPaymentAsyncAction = AsyncAction(
+    '_StealthStoreBase.sendStealthPayment',
+    context: context,
+  );
+
+  @override
+  Future<TransactionId?> sendStealthPayment({required String password}) {
+    return _$sendStealthPaymentAsyncAction.run(
+      () => super.sendStealthPayment(password: password),
+    );
+  }
+
+  late final _$_StealthStoreBaseActionController = ActionController(
+    name: '_StealthStoreBase',
+    context: context,
+  );
+
+  @override
+  void setAccountId(String accountId) {
+    final _$actionInfo = _$_StealthStoreBaseActionController.startAction(
+      name: '_StealthStoreBase.setAccountId',
+    );
+    try {
+      return super.setAccountId(accountId);
+    } finally {
+      _$_StealthStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setRecipientStealthAddress(String value) {
+    final _$actionInfo = _$_StealthStoreBaseActionController.startAction(
+      name: '_StealthStoreBase.setRecipientStealthAddress',
+    );
+    try {
+      return super.setRecipientStealthAddress(value);
+    } finally {
+      _$_StealthStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setSendAmount(String value) {
+    final _$actionInfo = _$_StealthStoreBaseActionController.startAction(
+      name: '_StealthStoreBase.setSendAmount',
+    );
+    try {
+      return super.setSendAmount(value);
+    } finally {
+      _$_StealthStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void reset() {
+    final _$actionInfo = _$_StealthStoreBaseActionController.startAction(
+      name: '_StealthStoreBase.reset',
+    );
+    try {
+      return super.reset();
+    } finally {
+      _$_StealthStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  String toString() {
+    return '''
+stealthAddress: ${stealthAddress},
+stealthBalance: ${stealthBalance},
+stealthTransactions: ${stealthTransactions},
+isLoading: ${isLoading},
+isScanning: ${isScanning},
+isSending: ${isSending},
+errorMessage: ${errorMessage},
+currentAccountId: ${currentAccountId},
+scanProgress: ${scanProgress},
+scanTotal: ${scanTotal},
+recipientStealthAddress: ${recipientStealthAddress},
+sendAmount: ${sendAmount},
+stealthBalanceInKas: ${stealthBalanceInKas},
+canSend: ${canSend},
+sendAmountInSompi: ${sendAmountInSompi}
+    ''';
+  }
+}

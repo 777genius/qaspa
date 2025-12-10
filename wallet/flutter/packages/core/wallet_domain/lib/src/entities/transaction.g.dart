@@ -1,0 +1,55 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'transaction.dart';
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_Transaction _$TransactionFromJson(Map<String, dynamic> json) => _Transaction(
+      id: const TransactionIdConverter().fromJson(json['id'] as String),
+      kind: $enumDecode(_$TransactionKindEnumMap, json['kind']),
+      networkId:
+          const NetworkIdConverter().fromJson(json['networkId'] as String),
+      timestamp: (json['timestamp'] as num).toInt(),
+      amount: const BigIntConverter().fromJson(json['amount'] as String),
+      fee: const NullableBigIntConverter().fromJson(json['fee'] as String?),
+      fromAddresses: (json['fromAddresses'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      toAddresses: (json['toAddresses'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      note: json['note'] as String?,
+      metadata: json['metadata'] as String?,
+      acceptedDaaScore: (json['acceptedDaaScore'] as num?)?.toInt(),
+      isConfirmed: json['isConfirmed'] as bool? ?? false,
+    );
+
+Map<String, dynamic> _$TransactionToJson(_Transaction instance) =>
+    <String, dynamic>{
+      'id': const TransactionIdConverter().toJson(instance.id),
+      'kind': _$TransactionKindEnumMap[instance.kind]!,
+      'networkId': const NetworkIdConverter().toJson(instance.networkId),
+      'timestamp': instance.timestamp,
+      'amount': const BigIntConverter().toJson(instance.amount),
+      'fee': const NullableBigIntConverter().toJson(instance.fee),
+      'fromAddresses': instance.fromAddresses,
+      'toAddresses': instance.toAddresses,
+      'note': instance.note,
+      'metadata': instance.metadata,
+      'acceptedDaaScore': instance.acceptedDaaScore,
+      'isConfirmed': instance.isConfirmed,
+    };
+
+const _$TransactionKindEnumMap = {
+  TransactionKind.reorg: 'reorg',
+  TransactionKind.stasis: 'stasis',
+  TransactionKind.batch: 'batch',
+  TransactionKind.change: 'change',
+  TransactionKind.incoming: 'incoming',
+  TransactionKind.outgoing: 'outgoing',
+  TransactionKind.external: 'external',
+  TransactionKind.transferIncoming: 'transferIncoming',
+  TransactionKind.transferOutgoing: 'transferOutgoing',
+};

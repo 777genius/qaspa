@@ -1,0 +1,43 @@
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_Utxo _$UtxoFromJson(Map<String, dynamic> json) => _Utxo(
+      transactionId: const TransactionIdConverter()
+          .fromJson(json['transactionId'] as String),
+      index: (json['index'] as num).toInt(),
+      amount: const BigIntConverter().fromJson(json['amount'] as String),
+      address: json['address'] as String,
+      blockDaaScore: (json['blockDaaScore'] as num).toInt(),
+      isCoinbase: json['isCoinbase'] as bool,
+      isLocked: json['isLocked'] as bool,
+    );
+
+Map<String, dynamic> _$UtxoToJson(_Utxo instance) => <String, dynamic>{
+      'transactionId':
+          const TransactionIdConverter().toJson(instance.transactionId),
+      'index': instance.index,
+      'amount': const BigIntConverter().toJson(instance.amount),
+      'address': instance.address,
+      'blockDaaScore': instance.blockDaaScore,
+      'isCoinbase': instance.isCoinbase,
+      'isLocked': instance.isLocked,
+    };
+
+_UtxoSet _$UtxoSetFromJson(Map<String, dynamic> json) => _UtxoSet(
+      mature: (json['mature'] as List<dynamic>)
+          .map((e) => Utxo.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      pending: (json['pending'] as List<dynamic>)
+          .map((e) => Utxo.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      stasis: (json['stasis'] as List<dynamic>)
+          .map((e) => Utxo.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+
+Map<String, dynamic> _$UtxoSetToJson(_UtxoSet instance) => <String, dynamic>{
+      'mature': instance.mature,
+      'pending': instance.pending,
+      'stasis': instance.stasis,
+    };

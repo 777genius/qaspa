@@ -1,0 +1,45 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'mnemonic_verification.dart';
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_VerificationChallenge _$VerificationChallengeFromJson(
+  Map<String, dynamic> json,
+) => _VerificationChallenge(
+  wordIndex: (json['wordIndex'] as num).toInt(),
+  correctWord: json['correctWord'] as String,
+  options: (json['options'] as List<dynamic>).map((e) => e as String).toList(),
+);
+
+Map<String, dynamic> _$VerificationChallengeToJson(
+  _VerificationChallenge instance,
+) => <String, dynamic>{
+  'wordIndex': instance.wordIndex,
+  'correctWord': instance.correctWord,
+  'options': instance.options,
+};
+
+_MnemonicVerification _$MnemonicVerificationFromJson(
+  Map<String, dynamic> json,
+) => _MnemonicVerification(
+  challenges: (json['challenges'] as List<dynamic>)
+      .map((e) => VerificationChallenge.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  currentChallengeIndex: (json['currentChallengeIndex'] as num?)?.toInt() ?? 0,
+  userAnswers:
+      (json['userAnswers'] as List<dynamic>?)
+          ?.map((e) => e as String?)
+          .toList() ??
+      const [],
+);
+
+Map<String, dynamic> _$MnemonicVerificationToJson(
+  _MnemonicVerification instance,
+) => <String, dynamic>{
+  'challenges': instance.challenges,
+  'currentChallengeIndex': instance.currentChallengeIndex,
+  'userAnswers': instance.userAnswers,
+};

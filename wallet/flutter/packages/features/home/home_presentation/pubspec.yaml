@@ -1,0 +1,33 @@
+name: home_presentation
+description: Home feature presentation layer with MobX stores and pages
+
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  home_domain:
+  wallet_domain:
+  design_system:
+  mobx: ^2.4.0
+  flutter_mobx: ^2.2.1+1
+  go_router: ^15.1.2
+  modularity_core: ^0.1.0
+  modularity_flutter: ^0.1.0
+  modularity_injectable: ^0.1.0
+  injectable: ^2.7.0
+  get_it: ^8.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.15
+  mobx_codegen: ^2.6.1
+  injectable_generator: ^2.6.2
+  modularity_test: ^0.1.0
+  mocktail: ^1.0.4

@@ -1,0 +1,48 @@
+name: kaspa_wallet_workspace
+description: Kaspa Wallet Flutter Monorepo
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+workspace:
+  # Apps
+  - apps/mobile
+  - apps/desktop
+  - apps/web
+  - apps/extension
+  # Core
+  - packages/core/wallet_domain
+  - packages/core/wallet_data
+  - packages/core/wallet_rust_bridge
+  # UI
+  - packages/ui/design_system
+  # Features - Onboarding
+  - packages/features/onboarding/onboarding_domain
+  - packages/features/onboarding/onboarding_data
+  - packages/features/onboarding/onboarding_presentation
+  # Features - Home
+  - packages/features/home/home_domain
+  - packages/features/home/home_presentation
+  # Features - Send
+  - packages/features/send/send_domain
+  - packages/features/send/send_presentation
+  # Features - Receive
+  - packages/features/receive/receive_domain
+  - packages/features/receive/receive_presentation
+  # Features - History
+  - packages/features/history/history_domain
+  - packages/features/history/history_presentation
+  # Features - Settings
+  - packages/features/settings/settings_domain
+  - packages/features/settings/settings_presentation
+  # Features - Stealth
+  - packages/features/stealth/stealth_domain
+  - packages/features/stealth/stealth_presentation
+  # Tools
+  - packages/tools/module_visualizer
+
+dev_dependencies:
+  melos: ^6.3.0
+  modularity_cli: ^0.1.0
+  build_runner: ^2.4.12

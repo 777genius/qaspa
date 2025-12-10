@@ -1,0 +1,58 @@
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_Account _$AccountFromJson(Map<String, dynamic> json) => _Account(
+      id: json['id'] as String,
+      walletId: json['walletId'] as String,
+      name: json['name'] as String,
+      kind: $enumDecode(_$AccountKindEnumMap, json['kind']),
+      accountIndex: (json['accountIndex'] as num).toInt(),
+      isActive: json['isActive'] as bool? ?? true,
+      receiveAddressIndex: (json['receiveAddressIndex'] as num?)?.toInt() ?? 0,
+      changeAddressIndex: (json['changeAddressIndex'] as num?)?.toInt() ?? 0,
+      balance: json['balance'] == null
+          ? null
+          : Balance.fromJson(json['balance'] as Map<String, dynamic>),
+      receiveAddress: json['receiveAddress'] as String?,
+    );
+
+Map<String, dynamic> _$AccountToJson(_Account instance) => <String, dynamic>{
+      'id': instance.id,
+      'walletId': instance.walletId,
+      'name': instance.name,
+      'kind': _$AccountKindEnumMap[instance.kind]!,
+      'accountIndex': instance.accountIndex,
+      'isActive': instance.isActive,
+      'receiveAddressIndex': instance.receiveAddressIndex,
+      'changeAddressIndex': instance.changeAddressIndex,
+      'balance': instance.balance,
+      'receiveAddress': instance.receiveAddress,
+    };
+
+const _$AccountKindEnumMap = {
+  AccountKind.bip32: 'bip32',
+  AccountKind.legacy: 'legacy',
+  AccountKind.multisig: 'multisig',
+  AccountKind.stealth: 'stealth',
+  AccountKind.watchOnly: 'watchOnly',
+  AccountKind.resident: 'resident',
+};
+
+_AccountDescriptor _$AccountDescriptorFromJson(Map<String, dynamic> json) =>
+    _AccountDescriptor(
+      id: json['id'] as String,
+      walletId: json['walletId'] as String,
+      name: json['name'] as String,
+      kind: $enumDecode(_$AccountKindEnumMap, json['kind']),
+      accountIndex: (json['accountIndex'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$AccountDescriptorToJson(_AccountDescriptor instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'walletId': instance.walletId,
+      'name': instance.name,
+      'kind': _$AccountKindEnumMap[instance.kind]!,
+      'accountIndex': instance.accountIndex,
+    };

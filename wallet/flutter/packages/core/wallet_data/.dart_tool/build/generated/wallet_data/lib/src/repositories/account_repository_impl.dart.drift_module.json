@@ -1,0 +1,9 @@
+{
+  "elements": {},
+  "imports": [
+    "package:injectable/injectable.dart",
+    "package:modularity_injectable/modularity_injectable.dart",
+    "package:wallet_domain/wallet_domain.dart",
+    "package:wallet_data/src/datasources/rust_datasource.dart"
+  ]
+}

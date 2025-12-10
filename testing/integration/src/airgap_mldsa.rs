@@ -462,42 +462,41 @@ async fn test_airgap_delegation_expiring_soon_event() {
 
     // Проверим, что событие expiring soon пришло для аккаунта.
     let event_channel = env.wallet.multiplexer().channel();
-    let (stop_tx, stop_rx) = oneshot::channel();
     let seen = Arc::new(Mutex::new(false));
-    let seen_clone = seen.clone();
     let expected_id = *stealth_account.id();
 
-    let listener = tokio::spawn(async move {
-        let mut stop_rx = stop_rx;
-        loop {
-            tokio::select! {
-                _ = &mut stop_rx => break,
-                msg = event_channel.recv() => {
-                    match msg {
-                        Ok(evt) => {
-                            if let kaspa_wallet_core::events::Events::MasterDelegationExpiringSoon { account_id, .. } = &*evt {
-                                if *account_id == expected_id {
-                                    *seen_clone.lock().await = true;
-                                    break;
-                                }
-                            }
-                        }
-                        Err(_) => break,
+    let listener = {
+        let seen_clone = seen.clone();
+        tokio::spawn(async move {
+            while let Ok(evt) = event_channel.recv().await {
+                if let kaspa_wallet_core::events::Events::MasterDelegationExpiringSoon { account_id, .. } = &*evt {
+                    if *account_id == expected_id {
+                        *seen_clone.lock().await = true;
+                        break;
                     }
                 }
             }
+        })
+    };
+
+    // Продвигаем DAA до окна предупреждения и ждём событие с таймаутом.
+    let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_secs(20);
+    while tokio::time::Instant::now() < deadline {
+        env.mine_blocks(1).await;
+        if *seen.lock().await {
+            break;
         }
-    });
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
 
-    // Триггерим on_daa_score_changed через рост DAA (майним несколько блоков).
-    env.mine_blocks(5).await;
+    if *seen.lock().await {
+        let _ = listener.await;
+    } else {
+        listener.abort();
+        let _ = listener.await;
+    }
 
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    let _ = stop_tx.send(());
-    let _ = listener.await;
-
-    let seen_expiring = *seen.lock().await;
-    assert!(seen_expiring, "should receive MasterDelegationExpiringSoon event");
+    assert!(*seen.lock().await, "should receive MasterDelegationExpiringSoon event");
 
     env.shutdown().await;
 }

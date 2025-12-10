@@ -1,0 +1,28 @@
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_StealthScanProgress _$StealthScanProgressFromJson(Map<String, dynamic> json) =>
+    _StealthScanProgress(
+      scannedBlocks: (json['scannedBlocks'] as num).toInt(),
+      totalBlocks: (json['totalBlocks'] as num).toInt(),
+      foundPayments: (json['foundPayments'] as num).toInt(),
+      isComplete: json['isComplete'] as bool,
+      startedAt: json['startedAt'] == null
+          ? null
+          : DateTime.parse(json['startedAt'] as String),
+      completedAt: json['completedAt'] == null
+          ? null
+          : DateTime.parse(json['completedAt'] as String),
+    );
+
+Map<String, dynamic> _$StealthScanProgressToJson(
+        _StealthScanProgress instance) =>
+    <String, dynamic>{
+      'scannedBlocks': instance.scannedBlocks,
+      'totalBlocks': instance.totalBlocks,
+      'foundPayments': instance.foundPayments,
+      'isComplete': instance.isComplete,
+      'startedAt': instance.startedAt?.toIso8601String(),
+      'completedAt': instance.completedAt?.toIso8601String(),
+    };

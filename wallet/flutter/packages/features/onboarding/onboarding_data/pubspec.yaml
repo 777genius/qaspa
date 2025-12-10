@@ -1,0 +1,12 @@
+name: onboarding_data
+description: Onboarding data layer with BIP-39 wordlist
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+resolution: workspace
+
+dependencies:
+  onboarding_domain:

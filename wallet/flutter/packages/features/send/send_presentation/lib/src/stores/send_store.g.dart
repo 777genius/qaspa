@@ -1,0 +1,267 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND
+
+part of 'send_store.dart';
+
+// **************************************************************************
+// StoreGenerator
+// **************************************************************************
+
+// ignore_for_file: non_constant_identifier_names, unnecessary_brace_in_string_interps, unnecessary_lambdas, prefer_expression_function_bodies, lines_longer_than_80_chars, avoid_as, avoid_annotating_with_dynamic, no_leading_underscores_for_local_identifiers
+
+mixin _$SendStore on _SendStoreBase, Store {
+  Computed<bool>? _$isAddressValidComputed;
+
+  @override
+  bool get isAddressValid => (_$isAddressValidComputed ??= Computed<bool>(
+    () => super.isAddressValid,
+    name: '_SendStoreBase.isAddressValid',
+  )).value;
+  Computed<bool>? _$isAmountValidComputed;
+
+  @override
+  bool get isAmountValid => (_$isAmountValidComputed ??= Computed<bool>(
+    () => super.isAmountValid,
+    name: '_SendStoreBase.isAmountValid',
+  )).value;
+  Computed<bool>? _$canSendComputed;
+
+  @override
+  bool get canSend => (_$canSendComputed ??= Computed<bool>(
+    () => super.canSend,
+    name: '_SendStoreBase.canSend',
+  )).value;
+  Computed<BigInt>? _$amountInSompiComputed;
+
+  @override
+  BigInt get amountInSompi => (_$amountInSompiComputed ??= Computed<BigInt>(
+    () => super.amountInSompi,
+    name: '_SendStoreBase.amountInSompi',
+  )).value;
+
+  late final _$recipientAddressAtom = Atom(
+    name: '_SendStoreBase.recipientAddress',
+    context: context,
+  );
+
+  @override
+  String get recipientAddress {
+    _$recipientAddressAtom.reportRead();
+    return super.recipientAddress;
+  }
+
+  @override
+  set recipientAddress(String value) {
+    _$recipientAddressAtom.reportWrite(value, super.recipientAddress, () {
+      super.recipientAddress = value;
+    });
+  }
+
+  late final _$amountAtom = Atom(
+    name: '_SendStoreBase.amount',
+    context: context,
+  );
+
+  @override
+  String get amount {
+    _$amountAtom.reportRead();
+    return super.amount;
+  }
+
+  @override
+  set amount(String value) {
+    _$amountAtom.reportWrite(value, super.amount, () {
+      super.amount = value;
+    });
+  }
+
+  late final _$estimatedFeeAtom = Atom(
+    name: '_SendStoreBase.estimatedFee',
+    context: context,
+  );
+
+  @override
+  TransactionEstimate? get estimatedFee {
+    _$estimatedFeeAtom.reportRead();
+    return super.estimatedFee;
+  }
+
+  @override
+  set estimatedFee(TransactionEstimate? value) {
+    _$estimatedFeeAtom.reportWrite(value, super.estimatedFee, () {
+      super.estimatedFee = value;
+    });
+  }
+
+  late final _$isLoadingAtom = Atom(
+    name: '_SendStoreBase.isLoading',
+    context: context,
+  );
+
+  @override
+  bool get isLoading {
+    _$isLoadingAtom.reportRead();
+    return super.isLoading;
+  }
+
+  @override
+  set isLoading(bool value) {
+    _$isLoadingAtom.reportWrite(value, super.isLoading, () {
+      super.isLoading = value;
+    });
+  }
+
+  late final _$isSendingAtom = Atom(
+    name: '_SendStoreBase.isSending',
+    context: context,
+  );
+
+  @override
+  bool get isSending {
+    _$isSendingAtom.reportRead();
+    return super.isSending;
+  }
+
+  @override
+  set isSending(bool value) {
+    _$isSendingAtom.reportWrite(value, super.isSending, () {
+      super.isSending = value;
+    });
+  }
+
+  late final _$errorMessageAtom = Atom(
+    name: '_SendStoreBase.errorMessage',
+    context: context,
+  );
+
+  @override
+  String? get errorMessage {
+    _$errorMessageAtom.reportRead();
+    return super.errorMessage;
+  }
+
+  @override
+  set errorMessage(String? value) {
+    _$errorMessageAtom.reportWrite(value, super.errorMessage, () {
+      super.errorMessage = value;
+    });
+  }
+
+  late final _$sentTransactionIdAtom = Atom(
+    name: '_SendStoreBase.sentTransactionId',
+    context: context,
+  );
+
+  @override
+  TransactionId? get sentTransactionId {
+    _$sentTransactionIdAtom.reportRead();
+    return super.sentTransactionId;
+  }
+
+  @override
+  set sentTransactionId(TransactionId? value) {
+    _$sentTransactionIdAtom.reportWrite(value, super.sentTransactionId, () {
+      super.sentTransactionId = value;
+    });
+  }
+
+  late final _$currentAccountIdAtom = Atom(
+    name: '_SendStoreBase.currentAccountId',
+    context: context,
+  );
+
+  @override
+  String? get currentAccountId {
+    _$currentAccountIdAtom.reportRead();
+    return super.currentAccountId;
+  }
+
+  @override
+  set currentAccountId(String? value) {
+    _$currentAccountIdAtom.reportWrite(value, super.currentAccountId, () {
+      super.currentAccountId = value;
+    });
+  }
+
+  late final _$sendTransactionAsyncAction = AsyncAction(
+    '_SendStoreBase.sendTransaction',
+    context: context,
+  );
+
+  @override
+  Future<void> sendTransaction({required String password}) {
+    return _$sendTransactionAsyncAction.run(
+      () => super.sendTransaction(password: password),
+    );
+  }
+
+  late final _$_SendStoreBaseActionController = ActionController(
+    name: '_SendStoreBase',
+    context: context,
+  );
+
+  @override
+  void setRecipientAddress(String value) {
+    final _$actionInfo = _$_SendStoreBaseActionController.startAction(
+      name: '_SendStoreBase.setRecipientAddress',
+    );
+    try {
+      return super.setRecipientAddress(value);
+    } finally {
+      _$_SendStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setAmount(String value) {
+    final _$actionInfo = _$_SendStoreBaseActionController.startAction(
+      name: '_SendStoreBase.setAmount',
+    );
+    try {
+      return super.setAmount(value);
+    } finally {
+      _$_SendStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setAccountId(String accountId) {
+    final _$actionInfo = _$_SendStoreBaseActionController.startAction(
+      name: '_SendStoreBase.setAccountId',
+    );
+    try {
+      return super.setAccountId(accountId);
+    } finally {
+      _$_SendStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void reset() {
+    final _$actionInfo = _$_SendStoreBaseActionController.startAction(
+      name: '_SendStoreBase.reset',
+    );
+    try {
+      return super.reset();
+    } finally {
+      _$_SendStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  String toString() {
+    return '''
+recipientAddress: ${recipientAddress},
+amount: ${amount},
+estimatedFee: ${estimatedFee},
+isLoading: ${isLoading},
+isSending: ${isSending},
+errorMessage: ${errorMessage},
+sentTransactionId: ${sentTransactionId},
+currentAccountId: ${currentAccountId},
+isAddressValid: ${isAddressValid},
+isAmountValid: ${isAmountValid},
+canSend: ${canSend},
+amountInSompi: ${amountInSompi}
+    ''';
+  }
+}

@@ -1,0 +1,569 @@
+// **************************************************************************
+// StoreGenerator
+// **************************************************************************
+
+// ignore_for_file: non_constant_identifier_names, unnecessary_brace_in_string_interps, unnecessary_lambdas, prefer_expression_function_bodies, lines_longer_than_80_chars, avoid_as, avoid_annotating_with_dynamic, no_leading_underscores_for_local_identifiers
+
+mixin _$OnboardingStore on _OnboardingStoreBase, Store {
+  Computed<bool>? _$canProceedFromGenerateComputed;
+
+  @override
+  bool get canProceedFromGenerate =>
+      (_$canProceedFromGenerateComputed ??= Computed<bool>(
+        () => super.canProceedFromGenerate,
+        name: '_OnboardingStoreBase.canProceedFromGenerate',
+      )).value;
+  Computed<bool>? _$canProceedFromBackupComputed;
+
+  @override
+  bool get canProceedFromBackup =>
+      (_$canProceedFromBackupComputed ??= Computed<bool>(
+        () => super.canProceedFromBackup,
+        name: '_OnboardingStoreBase.canProceedFromBackup',
+      )).value;
+  Computed<bool>? _$canProceedFromVerifyComputed;
+
+  @override
+  bool get canProceedFromVerify =>
+      (_$canProceedFromVerifyComputed ??= Computed<bool>(
+        () => super.canProceedFromVerify,
+        name: '_OnboardingStoreBase.canProceedFromVerify',
+      )).value;
+  Computed<bool>? _$canProceedFromImportComputed;
+
+  @override
+  bool get canProceedFromImport =>
+      (_$canProceedFromImportComputed ??= Computed<bool>(
+        () => super.canProceedFromImport,
+        name: '_OnboardingStoreBase.canProceedFromImport',
+      )).value;
+  Computed<bool>? _$canProceedFromPasswordComputed;
+
+  @override
+  bool get canProceedFromPassword =>
+      (_$canProceedFromPasswordComputed ??= Computed<bool>(
+        () => super.canProceedFromPassword,
+        name: '_OnboardingStoreBase.canProceedFromPassword',
+      )).value;
+  Computed<PasswordStrengthLevel>? _$passwordStrengthComputed;
+
+  @override
+  PasswordStrengthLevel get passwordStrength =>
+      (_$passwordStrengthComputed ??= Computed<PasswordStrengthLevel>(
+        () => super.passwordStrength,
+        name: '_OnboardingStoreBase.passwordStrength',
+      )).value;
+  Computed<bool>? _$passwordsMatchComputed;
+
+  @override
+  bool get passwordsMatch => (_$passwordsMatchComputed ??= Computed<bool>(
+    () => super.passwordsMatch,
+    name: '_OnboardingStoreBase.passwordsMatch',
+  )).value;
+  Computed<int>? _$validImportedWordsCountComputed;
+
+  @override
+  int get validImportedWordsCount =>
+      (_$validImportedWordsCountComputed ??= Computed<int>(
+        () => super.validImportedWordsCount,
+        name: '_OnboardingStoreBase.validImportedWordsCount',
+      )).value;
+  Computed<int>? _$verificationProgressComputed;
+
+  @override
+  int get verificationProgress =>
+      (_$verificationProgressComputed ??= Computed<int>(
+        () => super.verificationProgress,
+        name: '_OnboardingStoreBase.verificationProgress',
+      )).value;
+  Computed<int>? _$totalStepsComputed;
+
+  @override
+  int get totalSteps => (_$totalStepsComputed ??= Computed<int>(
+    () => super.totalSteps,
+    name: '_OnboardingStoreBase.totalSteps',
+  )).value;
+  Computed<int>? _$currentStepNumberComputed;
+
+  @override
+  int get currentStepNumber => (_$currentStepNumberComputed ??= Computed<int>(
+    () => super.currentStepNumber,
+    name: '_OnboardingStoreBase.currentStepNumber',
+  )).value;
+
+  late final _$flowAtom = Atom(
+    name: '_OnboardingStoreBase.flow',
+    context: context,
+  );
+
+  @override
+  OnboardingFlow? get flow {
+    _$flowAtom.reportRead();
+    return super.flow;
+  }
+
+  @override
+  set flow(OnboardingFlow? value) {
+    _$flowAtom.reportWrite(value, super.flow, () {
+      super.flow = value;
+    });
+  }
+
+  late final _$currentStepAtom = Atom(
+    name: '_OnboardingStoreBase.currentStep',
+    context: context,
+  );
+
+  @override
+  OnboardingStep get currentStep {
+    _$currentStepAtom.reportRead();
+    return super.currentStep;
+  }
+
+  @override
+  set currentStep(OnboardingStep value) {
+    _$currentStepAtom.reportWrite(value, super.currentStep, () {
+      super.currentStep = value;
+    });
+  }
+
+  late final _$mnemonicAtom = Atom(
+    name: '_OnboardingStoreBase.mnemonic',
+    context: context,
+  );
+
+  @override
+  Mnemonic? get mnemonic {
+    _$mnemonicAtom.reportRead();
+    return super.mnemonic;
+  }
+
+  @override
+  set mnemonic(Mnemonic? value) {
+    _$mnemonicAtom.reportWrite(value, super.mnemonic, () {
+      super.mnemonic = value;
+    });
+  }
+
+  late final _$isMnemonicRevealedAtom = Atom(
+    name: '_OnboardingStoreBase.isMnemonicRevealed',
+    context: context,
+  );
+
+  @override
+  bool get isMnemonicRevealed {
+    _$isMnemonicRevealedAtom.reportRead();
+    return super.isMnemonicRevealed;
+  }
+
+  @override
+  set isMnemonicRevealed(bool value) {
+    _$isMnemonicRevealedAtom.reportWrite(value, super.isMnemonicRevealed, () {
+      super.isMnemonicRevealed = value;
+    });
+  }
+
+  late final _$isBackupConfirmedAtom = Atom(
+    name: '_OnboardingStoreBase.isBackupConfirmed',
+    context: context,
+  );
+
+  @override
+  bool get isBackupConfirmed {
+    _$isBackupConfirmedAtom.reportRead();
+    return super.isBackupConfirmed;
+  }
+
+  @override
+  set isBackupConfirmed(bool value) {
+    _$isBackupConfirmedAtom.reportWrite(value, super.isBackupConfirmed, () {
+      super.isBackupConfirmed = value;
+    });
+  }
+
+  late final _$importedWordsAtom = Atom(
+    name: '_OnboardingStoreBase.importedWords',
+    context: context,
+  );
+
+  @override
+  ObservableList<String> get importedWords {
+    _$importedWordsAtom.reportRead();
+    return super.importedWords;
+  }
+
+  @override
+  set importedWords(ObservableList<String> value) {
+    _$importedWordsAtom.reportWrite(value, super.importedWords, () {
+      super.importedWords = value;
+    });
+  }
+
+  late final _$verificationAtom = Atom(
+    name: '_OnboardingStoreBase.verification',
+    context: context,
+  );
+
+  @override
+  MnemonicVerification? get verification {
+    _$verificationAtom.reportRead();
+    return super.verification;
+  }
+
+  @override
+  set verification(MnemonicVerification? value) {
+    _$verificationAtom.reportWrite(value, super.verification, () {
+      super.verification = value;
+    });
+  }
+
+  late final _$passwordAtom = Atom(
+    name: '_OnboardingStoreBase.password',
+    context: context,
+  );
+
+  @override
+  String get password {
+    _$passwordAtom.reportRead();
+    return super.password;
+  }
+
+  @override
+  set password(String value) {
+    _$passwordAtom.reportWrite(value, super.password, () {
+      super.password = value;
+    });
+  }
+
+  late final _$confirmPasswordAtom = Atom(
+    name: '_OnboardingStoreBase.confirmPassword',
+    context: context,
+  );
+
+  @override
+  String get confirmPassword {
+    _$confirmPasswordAtom.reportRead();
+    return super.confirmPassword;
+  }
+
+  @override
+  set confirmPassword(String value) {
+    _$confirmPasswordAtom.reportWrite(value, super.confirmPassword, () {
+      super.confirmPassword = value;
+    });
+  }
+
+  late final _$selectedNetworkAtom = Atom(
+    name: '_OnboardingStoreBase.selectedNetwork',
+    context: context,
+  );
+
+  @override
+  NetworkId get selectedNetwork {
+    _$selectedNetworkAtom.reportRead();
+    return super.selectedNetwork;
+  }
+
+  @override
+  set selectedNetwork(NetworkId value) {
+    _$selectedNetworkAtom.reportWrite(value, super.selectedNetwork, () {
+      super.selectedNetwork = value;
+    });
+  }
+
+  late final _$isLoadingAtom = Atom(
+    name: '_OnboardingStoreBase.isLoading',
+    context: context,
+  );
+
+  @override
+  bool get isLoading {
+    _$isLoadingAtom.reportRead();
+    return super.isLoading;
+  }
+
+  @override
+  set isLoading(bool value) {
+    _$isLoadingAtom.reportWrite(value, super.isLoading, () {
+      super.isLoading = value;
+    });
+  }
+
+  late final _$errorMessageAtom = Atom(
+    name: '_OnboardingStoreBase.errorMessage',
+    context: context,
+  );
+
+  @override
+  String? get errorMessage {
+    _$errorMessageAtom.reportRead();
+    return super.errorMessage;
+  }
+
+  @override
+  set errorMessage(String? value) {
+    _$errorMessageAtom.reportWrite(value, super.errorMessage, () {
+      super.errorMessage = value;
+    });
+  }
+
+  late final _$createdWalletAtom = Atom(
+    name: '_OnboardingStoreBase.createdWallet',
+    context: context,
+  );
+
+  @override
+  Wallet? get createdWallet {
+    _$createdWalletAtom.reportRead();
+    return super.createdWallet;
+  }
+
+  @override
+  set createdWallet(Wallet? value) {
+    _$createdWalletAtom.reportWrite(value, super.createdWallet, () {
+      super.createdWallet = value;
+    });
+  }
+
+  late final _$walletNameAtom = Atom(
+    name: '_OnboardingStoreBase.walletName',
+    context: context,
+  );
+
+  @override
+  String get walletName {
+    _$walletNameAtom.reportRead();
+    return super.walletName;
+  }
+
+  @override
+  set walletName(String value) {
+    _$walletNameAtom.reportWrite(value, super.walletName, () {
+      super.walletName = value;
+    });
+  }
+
+  late final _$generateMnemonicAsyncAction = AsyncAction(
+    '_OnboardingStoreBase.generateMnemonic',
+    context: context,
+  );
+
+  @override
+  Future<void> generateMnemonic() {
+    return _$generateMnemonicAsyncAction.run(() => super.generateMnemonic());
+  }
+
+  late final _$validateImportedMnemonicAsyncAction = AsyncAction(
+    '_OnboardingStoreBase.validateImportedMnemonic',
+    context: context,
+  );
+
+  @override
+  Future<void> validateImportedMnemonic() {
+    return _$validateImportedMnemonicAsyncAction.run(
+      () => super.validateImportedMnemonic(),
+    );
+  }
+
+  late final _$createWalletAsyncAction = AsyncAction(
+    '_OnboardingStoreBase.createWallet',
+    context: context,
+  );
+
+  @override
+  Future<void> createWallet() {
+    return _$createWalletAsyncAction.run(() => super.createWallet());
+  }
+
+  late final _$_OnboardingStoreBaseActionController = ActionController(
+    name: '_OnboardingStoreBase',
+    context: context,
+  );
+
+  @override
+  void selectFlow(OnboardingFlow selectedFlow) {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.selectFlow',
+    );
+    try {
+      return super.selectFlow(selectedFlow);
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void revealMnemonic() {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.revealMnemonic',
+    );
+    try {
+      return super.revealMnemonic();
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void confirmBackup() {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.confirmBackup',
+    );
+    try {
+      return super.confirmBackup();
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void proceedToVerification() {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.proceedToVerification',
+    );
+    try {
+      return super.proceedToVerification();
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  bool submitVerificationAnswer(String selectedWord) {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.submitVerificationAnswer',
+    );
+    try {
+      return super.submitVerificationAnswer(selectedWord);
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setImportedWord(int index, String word) {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.setImportedWord',
+    );
+    try {
+      return super.setImportedWord(index, word);
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setPassword(String value) {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.setPassword',
+    );
+    try {
+      return super.setPassword(value);
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setConfirmPassword(String value) {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.setConfirmPassword',
+    );
+    try {
+      return super.setConfirmPassword(value);
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setWalletName(String value) {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.setWalletName',
+    );
+    try {
+      return super.setWalletName(value);
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void selectNetwork(NetworkId network) {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.selectNetwork',
+    );
+    try {
+      return super.selectNetwork(network);
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void proceedToNextStep() {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.proceedToNextStep',
+    );
+    try {
+      return super.proceedToNextStep();
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void reset() {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.reset',
+    );
+    try {
+      return super.reset();
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void goBack() {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.goBack',
+    );
+    try {
+      return super.goBack();
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  String toString() {
+    return '''
+flow: ${flow},
+currentStep: ${currentStep},
+mnemonic: ${mnemonic},
+isMnemonicRevealed: ${isMnemonicRevealed},
+isBackupConfirmed: ${isBackupConfirmed},
+importedWords: ${importedWords},
+verification: ${verification},
+password: ${password},
+confirmPassword: ${confirmPassword},
+selectedNetwork: ${selectedNetwork},
+isLoading: ${isLoading},
+errorMessage: ${errorMessage},
+createdWallet: ${createdWallet},
+walletName: ${walletName},
+canProceedFromGenerate: ${canProceedFromGenerate},
+canProceedFromBackup: ${canProceedFromBackup},
+canProceedFromVerify: ${canProceedFromVerify},
+canProceedFromImport: ${canProceedFromImport},
+canProceedFromPassword: ${canProceedFromPassword},
+passwordStrength: ${passwordStrength},
+passwordsMatch: ${passwordsMatch},
+validImportedWordsCount: ${validImportedWordsCount},
+verificationProgress: ${verificationProgress},
+totalSteps: ${totalSteps},
+currentStepNumber: ${currentStepNumber}
+    ''';
+  }
+}

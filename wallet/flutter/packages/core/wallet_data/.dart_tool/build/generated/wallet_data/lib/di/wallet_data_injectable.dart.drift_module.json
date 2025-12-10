@@ -1,0 +1,10 @@
+{
+  "elements": {},
+  "imports": [
+    "package:get_it/get_it.dart",
+    "package:injectable/injectable.dart",
+    "package:wallet_rust_bridge/wallet_rust_bridge.dart",
+    "package:wallet_data/src/database/history_database.dart",
+    "package:wallet_data/di/wallet_data_injectable.config.dart"
+  ]
+}
