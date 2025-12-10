@@ -85,4 +85,3 @@ fn ml_dsa_master_zeroize_clears_sensitive_material() {
     assert_eq!(payload.anchor().as_bytes(), &[0u8; 32]);
     assert!(payload.seed_cipher().is_empty());
 }
-

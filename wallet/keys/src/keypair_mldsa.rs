@@ -409,11 +409,7 @@ mod prop_tests {
     use std::collections::HashSet;
 
     fn level_strategy() -> impl Strategy<Value = MlDsaLevel> {
-        prop_oneof![
-            Just(MlDsaLevel::Level2),
-            Just(MlDsaLevel::Level3),
-            Just(MlDsaLevel::Level5),
-        ]
+        prop_oneof![Just(MlDsaLevel::Level2), Just(MlDsaLevel::Level3), Just(MlDsaLevel::Level5),]
     }
 
     proptest! {

@@ -317,10 +317,7 @@ async fn test_airgap_delegation_tampered_request_checksum_rejected_online() {
     let mut tampered_request = request_body.clone();
     tampered_request.network_id = NetworkId::new(NetworkType::Mainnet);
 
-    let result = env
-        .wallet
-        .apply_master_delegation_response(&env.wallet_secret, tampered_request, signed.response, false)
-        .await;
+    let result = env.wallet.apply_master_delegation_response(&env.wallet_secret, tampered_request, signed.response, false).await;
     assert!(result.is_err(), "tampered request must be rejected by checksum");
 
     env.shutdown().await;
@@ -390,19 +387,14 @@ async fn test_airgap_delegation_missing_record_rejected_online() {
     let offline_wallet_secret = Secret::new(b"offline-wallet-secret-09".to_vec());
     let offline_wallet = create_offline_wallet(network_id, &offline_wallet_secret, &master_secret, master_level).await;
 
-    let signed = offline_wallet
-        .sign_master_delegation_request(&offline_wallet_secret, request.clone(), false)
-        .await
-        .expect("offline sign");
+    let signed =
+        offline_wallet.sign_master_delegation_request(&offline_wallet_secret, request.clone(), false).await.expect("offline sign");
 
     let mut tampered_response = signed.response.clone();
     assert_eq!(tampered_response.delegations.len(), 2, "expected two delegations in signed response");
     tampered_response.delegations.pop();
 
-    let result = env
-        .wallet
-        .apply_master_delegation_response(&env.wallet_secret, request, tampered_response, false)
-        .await;
+    let result = env.wallet.apply_master_delegation_response(&env.wallet_secret, request, tampered_response, false).await;
     assert!(result.is_err(), "response missing records must be rejected");
 
     env.shutdown().await;
@@ -459,10 +451,8 @@ async fn test_airgap_delegation_expiring_soon_event() {
     let offline_wallet_secret = Secret::new(b"offline-wallet-secret-10".to_vec());
     let offline_wallet = create_offline_wallet(network_id, &offline_wallet_secret, &master_secret, master_level).await;
 
-    let signed = offline_wallet
-        .sign_master_delegation_request(&offline_wallet_secret, request.clone(), false)
-        .await
-        .expect("offline sign");
+    let signed =
+        offline_wallet.sign_master_delegation_request(&offline_wallet_secret, request.clone(), false).await.expect("offline sign");
 
     let _ = env
         .wallet
@@ -534,10 +524,8 @@ async fn test_airgap_delegation_revocation_clears_stealth_link() {
     let request = build_delegation_request(&env, master_anchor, master_level as u8, &stealth_account, Some(1)).await;
     let offline_wallet_secret = Secret::new(b"offline-wallet-secret-11".to_vec());
     let offline_wallet = create_offline_wallet(network_id, &offline_wallet_secret, &master_secret, master_level).await;
-    let signed = offline_wallet
-        .sign_master_delegation_request(&offline_wallet_secret, request.clone(), false)
-        .await
-        .expect("offline sign");
+    let signed =
+        offline_wallet.sign_master_delegation_request(&offline_wallet_secret, request.clone(), false).await.expect("offline sign");
 
     let applied = env
         .wallet
@@ -559,13 +547,9 @@ async fn test_airgap_delegation_revocation_clears_stealth_link() {
     let (_pair, _anchor, master_seed) = MlDsaKeypair::from_bip39_root_seed(root_seed, 0, master_level).expect("derive master seed");
     let guard = env.wallet.guard();
     let guard = guard.lock().await;
-    let account = env
-        .wallet
-        .get_account_by_id(&master_account_id, &guard)
-        .await
-        .expect("master lookup")
-        .expect("master account");
-    let master_account = account.clone().downcast_arc::<kaspa_wallet_core::account::variants::mldsa_master::MldsaMasterAccount>().expect("master");
+    let account = env.wallet.get_account_by_id(&master_account_id, &guard).await.expect("master lookup").expect("master account");
+    let master_account =
+        account.clone().downcast_arc::<kaspa_wallet_core::account::variants::mldsa_master::MldsaMasterAccount>().expect("master");
     drop(guard);
     master_account.unlock_with_master_seed(&master_seed, master_account.level()).await.expect("unlock master for revoke");
 
@@ -574,12 +558,7 @@ async fn test_airgap_delegation_revocation_clears_stealth_link() {
     // Ссылка в stealth должна быть очищена
     let guard = env.wallet.guard();
     let guard = guard.lock().await;
-    let account = env
-        .wallet
-        .get_account_by_id(stealth_account.id(), &guard)
-        .await
-        .expect("account lookup")
-        .expect("stealth account");
+    let account = env.wallet.get_account_by_id(stealth_account.id(), &guard).await.expect("account lookup").expect("stealth account");
     let stealth = account.as_stealth_account().expect("stealth account");
     assert!(stealth.delegation_id().is_none(), "delegation link should be cleared after revocation");
 
@@ -607,10 +586,8 @@ async fn test_airgap_delegation_revocation_event_emitted() {
     let request = build_delegation_request(&env, master_anchor, master_level as u8, &stealth_account, Some(1)).await;
     let offline_wallet_secret = Secret::new(b"offline-wallet-secret-12".to_vec());
     let offline_wallet = create_offline_wallet(network_id, &offline_wallet_secret, &master_secret, master_level).await;
-    let signed = offline_wallet
-        .sign_master_delegation_request(&offline_wallet_secret, request.clone(), false)
-        .await
-        .expect("offline sign");
+    let signed =
+        offline_wallet.sign_master_delegation_request(&offline_wallet_secret, request.clone(), false).await.expect("offline sign");
     let _ = env
         .wallet
         .apply_master_delegation_response(&env.wallet_secret, request, signed.response, false)
@@ -629,16 +606,9 @@ async fn test_airgap_delegation_revocation_event_emitted() {
     let (_pair, _anchor, master_seed) = MlDsaKeypair::from_bip39_root_seed(root_seed, 0, master_level).expect("derive master seed");
     let guard = env.wallet.guard();
     let guard = guard.lock().await;
-    let account = env
-        .wallet
-        .get_account_by_id(&master_account_id, &guard)
-        .await
-        .expect("master lookup")
-        .expect("master account");
-    let master_account = account
-        .clone()
-        .downcast_arc::<kaspa_wallet_core::account::variants::mldsa_master::MldsaMasterAccount>()
-        .expect("master");
+    let account = env.wallet.get_account_by_id(&master_account_id, &guard).await.expect("master lookup").expect("master account");
+    let master_account =
+        account.clone().downcast_arc::<kaspa_wallet_core::account::variants::mldsa_master::MldsaMasterAccount>().expect("master");
     drop(guard);
     master_account.unlock_with_master_seed(&master_seed, master_account.level()).await.expect("unlock master for revoke");
 
@@ -705,10 +675,8 @@ async fn test_airgap_delegation_duplicate_apply_is_idempotent() {
     let request = build_delegation_request(&env, master_anchor, master_level as u8, &stealth_account, Some(1)).await;
     let offline_wallet_secret = Secret::new(b"offline-wallet-secret-13".to_vec());
     let offline_wallet = create_offline_wallet(network_id, &offline_wallet_secret, &master_secret, master_level).await;
-    let signed = offline_wallet
-        .sign_master_delegation_request(&offline_wallet_secret, request.clone(), false)
-        .await
-        .expect("offline sign");
+    let signed =
+        offline_wallet.sign_master_delegation_request(&offline_wallet_secret, request.clone(), false).await.expect("offline sign");
 
     let first = env
         .wallet
@@ -717,11 +685,8 @@ async fn test_airgap_delegation_duplicate_apply_is_idempotent() {
         .expect("apply first");
     assert_eq!(first.applied, 1);
 
-    let second = env
-        .wallet
-        .apply_master_delegation_response(&env.wallet_secret, request, signed.response, false)
-        .await
-        .expect("apply second");
+    let second =
+        env.wallet.apply_master_delegation_response(&env.wallet_secret, request, signed.response, false).await.expect("apply second");
     assert_eq!(second.applied, 0);
     assert!(second.skipped >= 1);
 
@@ -757,10 +722,7 @@ async fn test_airgap_delegation_response_anchor_mismatch_rejected() {
 
     signed.master_anchor[0] ^= 0xFF;
 
-    let result = env
-        .wallet
-        .apply_master_delegation_response(&env.wallet_secret, request, signed, false)
-        .await;
+    let result = env.wallet.apply_master_delegation_response(&env.wallet_secret, request, signed, false).await;
     assert!(result.is_err(), "anchor mismatch should be rejected");
 
     env.shutdown().await;
@@ -795,10 +757,7 @@ async fn test_airgap_delegation_response_level_mismatch_rejected() {
 
     signed.master_level = (master_level as u8) + 1;
 
-    let result = env
-        .wallet
-        .apply_master_delegation_response(&env.wallet_secret, request, signed, false)
-        .await;
+    let result = env.wallet.apply_master_delegation_response(&env.wallet_secret, request, signed, false).await;
     assert!(result.is_err(), "level mismatch should be rejected");
 
     env.shutdown().await;
@@ -825,10 +784,8 @@ async fn test_airgap_delegation_double_revoke_stale_nonce() {
     let request = build_delegation_request(&env, master_anchor, master_level as u8, &stealth_account, Some(1)).await;
     let offline_wallet_secret = Secret::new(b"offline-wallet-secret-16".to_vec());
     let offline_wallet = create_offline_wallet(network_id, &offline_wallet_secret, &master_secret, master_level).await;
-    let signed = offline_wallet
-        .sign_master_delegation_request(&offline_wallet_secret, request.clone(), false)
-        .await
-        .expect("offline sign");
+    let signed =
+        offline_wallet.sign_master_delegation_request(&offline_wallet_secret, request.clone(), false).await.expect("offline sign");
     let _ = env
         .wallet
         .apply_master_delegation_response(&env.wallet_secret, request, signed.response, false)
@@ -845,16 +802,9 @@ async fn test_airgap_delegation_double_revoke_stale_nonce() {
     let (_pair, _anchor, master_seed) = MlDsaKeypair::from_bip39_root_seed(root_seed, 0, master_level).expect("derive master seed");
     let guard = env.wallet.guard();
     let guard = guard.lock().await;
-    let account = env
-        .wallet
-        .get_account_by_id(&master_account_id, &guard)
-        .await
-        .expect("master lookup")
-        .expect("master account");
-    let master_account = account
-        .clone()
-        .downcast_arc::<kaspa_wallet_core::account::variants::mldsa_master::MldsaMasterAccount>()
-        .expect("master");
+    let account = env.wallet.get_account_by_id(&master_account_id, &guard).await.expect("master lookup").expect("master account");
+    let master_account =
+        account.clone().downcast_arc::<kaspa_wallet_core::account::variants::mldsa_master::MldsaMasterAccount>().expect("master");
     drop(guard);
     master_account.unlock_with_master_seed(&master_seed, master_account.level()).await.expect("unlock master for revoke");
 
@@ -917,7 +867,10 @@ async fn create_offline_wallet(
 ) -> Arc<Wallet> {
     let store = Wallet::resident_store().expect("offline store");
     let wallet = Arc::new(Wallet::try_with_rpc(None, store, Some(network_id)).expect("offline wallet"));
-    let wallet_label = format!("airgap-offline-wallet-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
+    let wallet_label = format!(
+        "airgap-offline-wallet-{}",
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()
+    );
     let wallet_args = WalletCreateArgs::new(Some(wallet_label), None, EncryptionKind::XChaCha20Poly1305, None, true);
     wallet.clone().wallet_create(wallet_secret.clone(), wallet_args).await.expect("create offline wallet storage");
 

@@ -349,13 +349,7 @@ impl StealthTestEnv {
         let tx_id = signed_tx.id();
         self.rpc_client.submit_transaction((&signed_tx.tx).into(), false).await.expect("Failed to submit miner spend");
 
-        let outpoints = signed_tx
-            .tx
-            .outputs
-            .iter()
-            .enumerate()
-            .map(|(idx, _)| TransactionOutpoint::new(tx_id, idx as u32))
-            .collect();
+        let outpoints = signed_tx.tx.outputs.iter().enumerate().map(|(idx, _)| TransactionOutpoint::new(tx_id, idx as u32)).collect();
 
         (signed_tx.tx, outpoints)
     }

@@ -8,8 +8,11 @@ use kaspa_consensus_core::{
     hashing::sighash::SigHashReusedValuesUnsync,
     hashing::sighash_type::SIG_HASH_ALL,
     subnets::SUBNETWORK_ID_NATIVE,
-    tx::{MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry, VerifiableTransaction},
+    tx::{
+        MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry, VerifiableTransaction,
+    },
 };
+use kaspa_hashes::Hash;
 use kaspa_mldsa::{MasterSeed, MlDsaLevel};
 use kaspa_rpc_core::{
     api::rpc::RpcApi, GetMempoolEntryRequest, ListMldsaDelegationsRequest, RegisterMldsaAnchorRequest, RpcDelegationRecord, RpcError,
@@ -32,8 +35,10 @@ use kaspa_wallet_core::{
     wallet::args::{PrvKeyDataCreateArgs, WalletCreateArgs},
     wallet::Wallet,
 };
-use kaspa_wallet_keys::{keypair_mldsa::{MasterAnchor, MlDsaKeypair}, secret::Secret};
-use kaspa_hashes::Hash;
+use kaspa_wallet_keys::{
+    keypair_mldsa::{MasterAnchor, MlDsaKeypair},
+    secret::Secret,
+};
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
@@ -127,8 +132,7 @@ async fn test_mldsa_master_recovery_flow() {
     // Создаём master-аккаунт и детерминированный стелс-аккаунт
     let (master_anchor, master_account_id, master_seed_bytes) =
         create_master_with_secret_local(&env.wallet, &env.wallet_secret, &master_secret, master_level, "recovery-online").await;
-    let stealth_account =
-        create_stealth_with_secret(&env.wallet, &env.wallet_secret, &stealth_secret, "recovery-stealth", 0).await;
+    let stealth_account = create_stealth_with_secret(&env.wallet, &env.wallet_secret, &stealth_secret, "recovery-stealth", 0).await;
     stealth_account.unlock(&env.wallet_secret, None).await.expect("unlock stealth");
     stealth_account.clone().connect().await.expect("connect stealth");
 
@@ -280,7 +284,14 @@ async fn test_mldsa_master_reorg_and_expiry() {
     env.daemon.rpc_core_service().set_delegation_provider(Arc::new(WalletDelegationProvider { wallet: env.wallet.clone() }));
 
     // Запускаем вторую ноду (Node B) без подключения
-    let args = kaspad_lib::args::Args { simnet: true, unsafe_rpc: true, enable_unsynced_mining: true, disable_upnp: true, utxoindex: true, ..Default::default() };
+    let args = kaspad_lib::args::Args {
+        simnet: true,
+        unsafe_rpc: true,
+        enable_unsynced_mining: true,
+        disable_upnp: true,
+        utxoindex: true,
+        ..Default::default()
+    };
     let mut daemon_b = Daemon::new_random_with_args(args, kaspa_utils::fd_budget::limit() / 2 - 128);
     let client_b = daemon_b.start().await;
 
@@ -354,10 +365,7 @@ async fn test_mldsa_master_reorg_and_expiry() {
     mine_blocks_on_client(&client_b, miner_b, valid_until.saturating_add(20)).await;
 
     // Подключаем ноды для реорганизации (одно соединение, чтобы ограничить IBD)
-    env.rpc_client
-        .add_peer(format!("127.0.0.1:{}", daemon_b.p2p_port).try_into().unwrap(), true)
-        .await
-        .expect("add peer A->B");
+    env.rpc_client.add_peer(format!("127.0.0.1:{}", daemon_b.p2p_port).try_into().unwrap(), true).await.expect("add peer A->B");
 
     wait_for(
         180,
@@ -598,14 +606,7 @@ async fn test_mldsa_master_delegation_flow() {
 
     let cache = Cache::new(1024);
     let verifiable = mutable.as_verifiable();
-    let mut vm = TxScriptEngine::from_transaction_input(
-        &verifiable,
-        &verifiable.tx().inputs[0],
-        0,
-        &utxo_entry,
-        &reused,
-        &cache,
-    );
+    let mut vm = TxScriptEngine::from_transaction_input(&verifiable, &verifiable.tx().inputs[0], 0, &utxo_entry, &reused, &cache);
     vm.execute().expect("mldsa vm execution");
 
     // Simulate wallet restart via reload and ensure delegation store is recovered
@@ -921,7 +922,8 @@ async fn create_stealth_with_secret(
     let prv_args = PrvKeyDataCreateArgs::new(Some(format!("{label}-prv")), None, secret.clone(), PrvKeyDataVariantKind::Mnemonic);
     let prv_id = wallet.clone().prv_key_data_create(wallet_secret.clone(), prv_args).await.expect("create stealth prv");
 
-    let account_args = kaspa_wallet_core::wallet::AccountCreateArgs::new_stealth(prv_id, None, Some(label.to_string()), Some(account_index));
+    let account_args =
+        kaspa_wallet_core::wallet::AccountCreateArgs::new_stealth(prv_id, None, Some(label.to_string()), Some(account_index));
     let guard = wallet.guard();
     let guard = guard.lock().await;
     let account = wallet

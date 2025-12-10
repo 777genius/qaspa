@@ -34,7 +34,8 @@ async fn create_and_unlock_master_account() {
     let wallet_secret = Secret::new(b"test-wallet-secret".to_vec());
     let (seed_bytes, _pair, anchor_bytes) = make_seed_and_anchor(MlDsaLevel::Level2);
     let seed_cipher = encrypt_xchacha20poly1305(&seed_bytes, &wallet_secret).expect("encrypt seed");
-    let payload = MlDsaMasterPayload::new(MlDsaLevel::Level2, kaspa_wallet_keys::keypair_mldsa::MasterAnchor::new(anchor_bytes), seed_cipher);
+    let payload =
+        MlDsaMasterPayload::new(MlDsaLevel::Level2, kaspa_wallet_keys::keypair_mldsa::MasterAnchor::new(anchor_bytes), seed_cipher);
     let mut prv = PrvKeyData::try_new_mldsa_master(payload).expect("prv");
     prv.name = Some("test-master-prv".into());
     let prv_id = prv.id;
@@ -89,4 +90,3 @@ async fn anchor_corrected_even_if_payload_anchor_wrong() {
     assert_ne!(master.anchor().as_bytes(), &wrong_anchor);
     assert_eq!(master.anchor().as_bytes(), &anchor_bytes);
 }
-

@@ -73,4 +73,3 @@ proptest! {
         prop_assert_eq!(picked.map(|r| r.nonce), Some(active.nonce), "active delegation wins over expired");
     }
 }
-

@@ -1,8 +1,8 @@
 use crate::account::variants::stealth::Payload;
 use crate::serializer::StorageHeader;
 use crate::storage::storable::Storable;
-use borsh::BorshSerialize;
 use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use proptest::prelude::*;
 
 proptest! {

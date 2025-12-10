@@ -58,4 +58,3 @@ fn delegation_rejects_wrong_anchor() {
     let verified = verify_against_anchor(&anchor, master.public_key().as_bytes(), &bad).expect("verify");
     assert!(!verified, "anchor mismatch must fail verification");
 }
-
