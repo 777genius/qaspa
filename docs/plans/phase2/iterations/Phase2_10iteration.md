@@ -20,6 +20,17 @@
   - Не трогаем консенсус/`OpCheckSigMLDSA` и правила валидации транзакций.
   - Не меняем UX вокруг создания мастер‑аккаунта и делегаций (только добавляем поверх телеметрию и нотификации).
 
+### 0.2. План доработок (отладка, не выкатываем сейчас)
+
+> Статус: отлаживаем, код не трогаем, готовим безопасный rollout.
+
+- **Гейтинг TLV delegation_id:** привязать включение TLV `0xA1 || delegation_id` к сетевому флагу активации (mldsa_master/kip10), чтобы до активации оставаться в строгом формате. Базовое поведение уже работает, задача — лишь фичефлаг.
+- **Notify‑бридж expiring soon:** `Events::MasterDelegationExpiringSoon` уже генерится в кошельке и тип добавлен в notify; нужно только мостить его в notify‑пайплайн (idempotent), без изменения протокола.
+- **Тесты метрик:** добавить юнит/интеграцию для `MetricsUpdate::MasterMetrics` (serde + доставка через `UtxoProcessor::deliver_metrics_snapshot`), чтобы зафиксировать поведение.
+- **Тесты watcher’а:** покрыть `DelegationExpiryWatcher` (одно срабатывание в warn‑окне, отсутствие дублей, игнор просроченных делегаций).
+- **Документация/дашборды:** описать экспорт master‑метрик и примеры алертов; в `IMPLEMENTATION_STATUS.md` отметить, что итерация 10 в отладке и ждёт выката после тестов.
+- **Smoke‑гейт:** перед выкладкой — целенаправленные тесты: `cargo test -p kaspa-wallet-core metrics delegation_watch stealth_signer` и `cargo test -p kaspa-testing-integration airgap_mldsa`.
+
 ### 0.1. Architectural TL;DR
 
 - **Где живут новые метрики:** только в `wallet/core` через `MasterMetrics` + новый variant `MetricsUpdate::MasterMetrics`, которые уезжают наружу по уже существующему каналу `Events::Metrics`. `metrics/core` и node‑метрики не меняются.
@@ -580,28 +591,29 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 ### 7. Пошаговый чек‑лист Iteration 10
 
 1. **Базовая модель метрик**
-   - [ ] Добавить `MasterMetrics` и `MasterMetricsSnapshot` в `wallet/core/src/metrics.rs`.
-   - [ ] Расширить `MetricsUpdate` и `MetricsUpdateKind`, обновить `UtxoProcessor::deliver_metrics_snapshot`.
-   - [ ] Добавить API включения мастер‑метрик (`enable_master_metrics`).
+   - [x] Добавить `MasterMetrics` и `MasterMetricsSnapshot` в `wallet/core/src/metrics.rs`.
+   - [x] Расширить `MetricsUpdate` и `MetricsUpdateKind`, обновить `UtxoProcessor::deliver_metrics_snapshot`.
+   - [x] Добавить API включения мастер‑метрик (`enable_master_metrics`).
 2. **Инструментация мастера и делегаций**
-   - [ ] Инкременты в `MldsaMasterAccount::sign_message` и `rotate`.
-   - [ ] Инкременты в создании/ревокации делегаций (`DelegationRecord`/`DelegationManager`).
-   - [ ] Юнит‑тесты на корректный подсчёт.
+   - [x] Инкременты в `MldsaMasterAccount::sign_message` и `rotate`.
+   - [x] Инкременты в создании/ревокации делегаций (`DelegationRecord`/`DelegationManager`).
+   - [x] Юнит‑тесты на корректный подсчёт.
 3. **Watcher истечения делегаций**
-   - [ ] Реализовать `DelegationExpiryWatcher` и интегрировать его через подписку на `Events::DaaScoreChange` (wallet‑multiplexer), не изменяя внутренний код `UtxoProcessor`.
-   - [ ] Добавить событие `Events::MasterDelegationExpiringSoon` и привязать к watcher’у.
+   - [x] Реализовать `DelegationExpiryWatcher` и интегрировать его через подписку на `Events::DaaScoreChange` (wallet‑multiplexer), не изменяя внутренний код `UtxoProcessor`.
+   - [x] Добавить событие `Events::MasterDelegationExpiringSoon` и привязать к watcher’у.
    - [ ] Опционально — интегрировать с `notify` (новый `EventType`).
 4. **Логирование `master_anchor`**
-   - [ ] Добавить helper форматирования якоря и использовать его в master/delegation/scan‑логах.
-   - [ ] Покрыть ключевые операции (create/rotate/sign/delegate/revoke/expiry/mismatch).
+   - [x] Добавить helper форматирования якоря и использовать его в master/delegation/scan‑логах.
+   - [x] Покрыть ключевые операции (create/rotate/sign/delegate/revoke/expiry/mismatch).
 5. **Docker и healthcheck**
-   - [ ] Включить `ENABLE_MLDSA_MASTER=1` в `Dockerfile.kaspa-wallet` и `docker-compose.test.yml`.
-   - [ ] Реализовать CLI‑команду `kaspa-wallet health --mode=airgap`.
-   - [ ] Добавить `HEALTHCHECK` в Dockerfile и описать его в документации.
+   - [x] Включить `ENABLE_MLDSA_MASTER=1` в `Dockerfile.kaspa-wallet` и `docker-compose.test.yml`.
+   - [x] Реализовать CLI‑команду `kaspa-wallet health --mode=airgap`.
+   - [x] Добавить `HEALTHCHECK` в Dockerfile и описать его в документации.
 6. **Документация и статус**
    - [ ] Обновить `docs/plans/phase2/Phase2_MLDSA_master_key.md` (раздел Iteration 10 → подробный, со ссылкой на этот файл).
-   - [ ] Обновить `docs/IMPLEMENTATION_STATUS.md` и `docs/TEST_COVERAGE_SUMMARY.md` с указанием новых метрик/тестов.
-   - [ ] Передать инфра‑команде требования к дашбордам/алертам (описать в `docs/NETWORK_TESTING.md` или отдельном разделе).
+   - [x] Обновить `docs/IMPLEMENTATION_STATUS.md` с пометкой «Iteration 10 в отладке» и шагами по телеметрии.
+   - [x] Обновить `docs/TEST_COVERAGE_SUMMARY.md` (статус наблюдаемости: в отладке, доп. тесты после фичефлагов).
+   - [x] Зафиксировать требования к дашбордам/алертам в `docs/NETWORK_TESTING.md` (пометка: observability блок не выкатываем, включим после фичефлага TLV/notify).
 
 ### 8. Definition of Done для Iteration 10
 
@@ -668,4 +680,59 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
      - отдельные интеграционные тесты для healthcheck‑команды;  
      - явное описание того, что он проверяет, в `docs/NETWORK_TESTING.md` и `docs/MIGRATION_STRATEGY.md`, чтобы операторы могли быстро интерпретировать статус.
 
+### 10. Зависимости от других итераций Phase 2
+
+Iteration 10 опирается на результаты предыдущих итераций и должна быть реализована **после** их завершения:
+
+- **Iteration 1–3:** детерминированный MLDSA master, структуры `MasterSeed`, `MasterAnchor`, `PrvKeyDataVariant::MlDsaMaster`, базовый API `MldsaMasterAccount::sign_message` и `rotate`. Без них не будет точек инструментации для метрик.
+- **Iteration 4:** структура `DelegationRecord`, `DelegationManager`, базовые операции создания/ревокации делегаций. Необходима для счётчиков `delegations_issued_total`/`revoked_total` и watcher'а истечения.
+- **Iteration 5:** семантика `valid_until_daa`, события `MasterDelegationExpired`, логика обработки истёкших делегаций через `EphemeralKeyEntry`. Watcher `DelegationExpiryWatcher` использует `valid_until_daa` для ранних предупреждений, но не дублирует логику фактического истечения из Iteration 5.
+- **Iteration 6:** airgap‑протокол (`build_master_delegation_request`, `apply_master_delegation_response`). Метрики airgap‑флоу (`delegation_requests_total`, `delegation_responses_total`, `delegation_responses_failed_total`) инструментируют именно эти точки.
+- **Iteration 7–9:** property‑тесты, консенсус‑интеграция, миграции. Iteration 10 добавляет телеметрию поверх уже стабилизированного функционала, но не требует их завершения для базовой реализации метрик/логов.
+
+**Параллельная работа:** части Iteration 10 (например, структура `MasterMetrics` и helper'ы логирования) могут разрабатываться параллельно с Iteration 6–9, но финальная интеграция watcher'а и healthcheck'а должна происходить после стабилизации airgap‑протокола (Iteration 6).
+
+### 11. Связи с документацией и внешними системами
+
+#### 11.1. Обновляемые документы
+
+- **`docs/plans/phase2/Phase2_MLDSA_master_key.md`:** добавить раздел "Iteration 10: Observability & Telemetry" с кратким резюме и ссылкой на этот план.
+- **`docs/IMPLEMENTATION_STATUS.md`:** отметить Iteration 10 как "In Progress" → "Done", перечислить новые метрики и события.
+- **`docs/TEST_COVERAGE_SUMMARY.md`:** добавить строки для тестов метрик (`MasterMetrics`, `DelegationExpiryWatcher`, healthcheck), указать покрытие по каждому счётчику из §2.8.
+- **`docs/NETWORK_TESTING.md`:** расширить раздел "MLDSA Master Observability" с описанием:
+  - рекомендованных дашбордов (Prometheus/Grafana или альтернативы);
+  - порогов алертов и SLO;
+  - интерпретации метрик в контексте безопасности (утечки, аномалии).
+- **`docs/MIGRATION_STRATEGY.md`:** описать поведение метрик при миграции кошельков (старые версии не экспортируют `MasterMetrics`, новые — экспортируют; экспортёры должны быть обратно совместимы).
+
+#### 11.2. Интеграция с инфраструктурой
+
+- **Экспортёры метрик:** внешние системы (Prometheus exporter, OTLP collector) должны:
+  - подписываться на `Events::Metrics` от кошелька;
+  - маппить `MetricsUpdate::MasterMetrics` в целевой формат (Prometheus `/metrics`, OTLP spans/metrics);
+  - добавлять label'ы `network`, `instance` (но **не** `master_anchor`/`account_id`).
+- **Логирование:** централизованные системы (Elasticsearch, Grafana Loki) должны индексировать логи с тегом `master_anchor=<hex8>` для быстрого поиска по конкретному мастеру.
+- **Алертинг:** настройка алертов в Prometheus Alertmanager или аналогах на основе порогов из §2.7, с уведомлениями в Slack/PagerDuty при превышении.
+
+#### 11.3. API и версионирование
+
+- **Wire‑формат `Events::Metrics`:** добавление `MetricsUpdate::MasterMetrics` требует bump'а версии API кошелька (например, в `WalletApi::version()` или отдельном `MetricsApiVersion`).
+- **Обратная совместимость:** старые клиенты (CLI/WASM/JS SDK), не знающие о `MasterMetrics`, должны молча игнорировать этот variant или логировать предупреждение, но не падать при десериализации.
+- **Документация API:** обновить OpenAPI/Swagger‑спецификации (если есть) и JS/WASM SDK‑документацию с описанием новых метрик и событий.
+
+### 12. Заключение
+
+Iteration 10 завершает Phase 2 добавлением **наблюдаемости и телеметрии** для MLDSA master и делегаций, не меняя сам протокол и криптографию. Основные результаты:
+
+- **Метрики:** глобальные счётчики `wallet_master_*` для операций мастера, делегаций и airgap‑флоу, экспортируемые через стандартный канал `Events::Metrics`.
+- **Уведомления:** событие `MasterDelegationExpiringSoon` и watcher `DelegationExpiryWatcher`, предупреждающие об истекающих делегациях до фактического истечения.
+- **Логирование:** единообразный тег `master_anchor=<hex8>` во всех логах master‑операций, упрощающий поиск инцидентов.
+- **Инфраструктура:** Docker‑образ с `ENABLE_MLDSA_MASTER=1`, healthcheck для airgap‑режима, документация для инфра‑команды по дашбордам и алертам.
+
+Iteration 10 **не изменяет** семантику `valid_until_daa`, формат `DelegationRecord`, консенсус/валидацию транзакций и UX создания мастер‑аккаунтов — только добавляет поверх наблюдаемость. При сбоях телеметрии (отказ экспортёра, несовместимость версий) кошелёк продолжает работать штатно, деградируя только в наблюдаемости.
+
+**Следующие шаги после Iteration 10:**
+- Инфра‑команда настраивает дашборды и алерты на основе экспортируемых метрик.
+- Мониторинг в проде (devnet/testnet/mainnet) для валидации порогов и тюнинга `warn_window_daa`.
+- Итеративное улучшение наблюдаемости на основе реальных инцидентов и обратной связи операторов.
 

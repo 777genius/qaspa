@@ -117,6 +117,13 @@ impl DelegationStore {
         self.by_id.get(&id).map(|r| r.record.clone())
     }
 
+    pub fn mark_warned_at(&self, id: DelegationId, warned_at_daa: u64) {
+        if let Some(mut entry) = self.by_id.get_mut(&id) {
+            entry.record.version = entry.record.version.max(2);
+            entry.record.warned_at_daa = Some(warned_at_daa);
+        }
+    }
+
     pub fn by_anchor(&self, anchor: &[u8; 32]) -> Vec<(DelegationId, DelegationRecordV1)> {
         self.by_anchor_account
             .iter()
@@ -142,6 +149,16 @@ impl DelegationStore {
     pub fn latest_nonce(&self, anchor: &[u8; 32], account_id: &AccountId) -> Option<u64> {
         let key = (*anchor, *account_id);
         self.by_anchor_account.get(&key).and_then(|ids| ids.iter().filter_map(|id| self.by_id(*id).map(|rec| rec.nonce)).max())
+    }
+
+    pub fn active_records(&self) -> Vec<(DelegationId, DelegationRecordV1)> {
+        self.by_id
+            .iter()
+            .filter_map(|entry| {
+                let rec = entry.record.clone();
+                matches!(rec.status, DelegationStatus::Active).then_some((*entry.key(), rec))
+            })
+            .collect()
     }
 
     pub fn find_by_anchor_account_nonce(&self, anchor: &[u8; 32], account_id: &AccountId, nonce: u64) -> Option<DelegationRecordV1> {

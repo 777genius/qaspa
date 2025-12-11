@@ -25,6 +25,8 @@ pub enum WalletSettings {
     Wallet,
     #[describe("Enable automatic MLDSA master derivation (default true)")]
     EnableMldsaMaster,
+    #[describe("DAA window for master delegation expiry warnings")]
+    DelegationWarnWindowDaa,
 }
 
 #[async_trait]
@@ -34,6 +36,7 @@ impl DefaultSettings for WalletSettings {
             (Self::Server, to_value("public").unwrap()),
             (Self::Wallet, to_value("kaspa").unwrap()),
             (Self::EnableMldsaMaster, to_value(true).unwrap()),
+            (Self::DelegationWarnWindowDaa, to_value(1_000u64).unwrap()),
         ]
     }
 }

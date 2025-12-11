@@ -69,32 +69,28 @@ User (ML-DSA wallet) ← L1 Withdraw TX ← Bridge Contract ← L2 Settlement
 
 **ML-DSA Address Format:**
 ```rust
-// Our implementation
 let address = Address::new(
-    Prefix::Mainnet,           // or Testnet
-    Version::PubKeyMLDSA,      // Version 2
-    public_key.as_bytes()      // 1312 bytes for Level 2
+    Prefix::Mainnet,
+    Version::PubKeyMLDSA,      // 2
+    public_key.as_bytes()      // 1312 / 1952 / 2592 bytes (Level 2/3/5)
 );
-
-// Example: kaspa:qz<1312-byte-pubkey-encoded>
 ```
 
 **Kasplex L2 Requirements:**
-- L2 must recognize Version::PubKeyMLDSA (value: 2)
-- L2 bridge must map ML-DSA addresses to L2 accounts
-- L2 VM must support 1312-byte public keys in state
+- Распознавать `Version::PubKeyMLDSA` (2) и выдерживать payload до 2592 байт.
+- Маппинг в EVM: `keccak(payload)` → 20/32 байта, одинаково для Schnorr и MLDSA.
+- VM/bridge не интерпретирует `MasterAnchor`, но relayer/syncer могут логировать anchor, полученный через RPC.
 
-**Solution:**
+**Solution (pseudocode):**
 ```rust
-// L2 bridge pseudocode
 match address.version {
     Version::PubKey => verify_schnorr_signature(tx, pubkey),
-    Version::PubKeyMLDSA => verify_mldsa_signature(tx, pubkey),  // ← Add this
+    Version::PubKeyMLDSA => verify_mldsa_signature(tx, pubkey),
     _ => return Err("Unsupported address type")
 }
 ```
 
-**Status:** ⚠️ **Requires L2 modification**
+**Status:** ⚠️ Требуется поддержка Version::PubKeyMLDSA и буферов больших размеров в L2.
 
 ---
 
@@ -640,6 +636,26 @@ fn test_l2_mixed_signatures() {
     // L2 balances updated
     assert_eq!(l2.get_balance(deposit1.l2_account), 1000);
     assert_eq!(l2.get_balance(deposit2.l2_account), 2000);
+}
+```
+
+### Test 3: Syncer handles MLDSA payload sizes
+
+```go
+func TestSyncerMLDSA(t *testing.T) {
+    // payload/sig sizes из FFI, без хардкодов
+    pkSize := kaspa_mldsa_get_level2_pubkey_size()
+    sigSize := kaspa_mldsa_get_level2_signature_size()
+
+    block := mockBlockWithMLDSA(pkSize, sigSize)
+    syncer := NewSyncer()
+
+    txs, err := syncer.ParseKaspaBlock(block)
+    require.NoError(t, err)
+    require.Len(t, txs, 1)
+
+    // Keccak(payload) → EVM адрес фиксированной длины
+    require.True(t, len(txs[0].From) == 42 || len(txs[0].From) == 66)
 }
 ```
 

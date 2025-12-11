@@ -46,6 +46,10 @@ RUN apk --no-cache add \
 
 COPY --from=builder /app/kaspa-wallet .
 
+ENV ENABLE_MLDSA_MASTER=1
+
 USER root
 ENTRYPOINT [ "/sbin/tini", "--" ]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD /app/kaspa-wallet health --mode=airgap 2>/dev/null || exit 1
 CMD [ "/app/kaspa-wallet" ]

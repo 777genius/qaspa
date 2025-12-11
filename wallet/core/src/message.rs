@@ -262,6 +262,7 @@ impl From<&DelegationRecordHeaderV1> for DelegationRecordV1 {
             valid_until_daa: header.valid_until_daa,
             nonce: header.nonce,
             status: header.status.clone(),
+            warned_at_daa: None,
             signature: Vec::new(),
         }
     }

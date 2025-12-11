@@ -53,10 +53,12 @@ event_type_enum! {
         NewBlockTemplate,
         /// Stealth UTXO changes (filtered by script version)
         StealthUtxosChanged,
+        /// Wallet-level: master delegation approaching expiry
+        MasterDelegationExpiringSoon,
     }
 }
 
-pub const EVENT_COUNT: usize = 10;
+pub const EVENT_COUNT: usize = 11;
 
 impl FromStr for EventType {
     type Err = Error;
@@ -73,6 +75,7 @@ impl FromStr for EventType {
             "pruning-point-utxo-set-override" => Ok(EventType::PruningPointUtxoSetOverride),
             "new-block-template" => Ok(EventType::NewBlockTemplate),
             "stealth-utxos-changed" => Ok(EventType::StealthUtxosChanged),
+            "master-delegation-expiring-soon" => Ok(EventType::MasterDelegationExpiringSoon),
             _ => Err(Error::InvalidEventType(s.to_string())),
         }
     }

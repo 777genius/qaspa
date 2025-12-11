@@ -4,6 +4,8 @@
 
 The ML-DSA (CRYSTALS-Dilithium) post-quantum signature implementation for QUBIC blockchain has comprehensive test coverage exceeding 85% of all code paths and functionality.
 
+**Iteration 10 (observability) сейчас в отладке:** существующие тесты покрывают метрики (`master_metrics_increments_and_snapshot`); дополнительные сценарии для watcher/notify будут добавлены после включения фичефлагов.
+
 ## Test Statistics
 
 ### Total Test Count: **57 Tests**

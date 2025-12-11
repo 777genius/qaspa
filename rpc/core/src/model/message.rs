@@ -4034,6 +4034,89 @@ impl Deserializer for NotifyNewBlockTemplateResponse {
 #[serde(rename_all = "camelCase")]
 pub struct NewBlockTemplateNotification {}
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyMasterDelegationExpiringSoonRequest {
+    pub command: Command,
+}
+
+impl NotifyMasterDelegationExpiringSoonRequest {
+    pub fn new(command: Command) -> Self {
+        Self { command }
+    }
+}
+
+impl Serializer for NotifyMasterDelegationExpiringSoonRequest {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!(Command, &self.command, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for NotifyMasterDelegationExpiringSoonRequest {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let command = load!(Command, reader)?;
+        Ok(Self { command })
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyMasterDelegationExpiringSoonResponse {}
+
+impl Serializer for NotifyMasterDelegationExpiringSoonResponse {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for NotifyMasterDelegationExpiringSoonResponse {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        Ok(Self {})
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterDelegationExpiringSoonNotification {
+    pub account_id: [u8; 32],
+    pub delegation_id: u64,
+    pub anchor: [u8; 32],
+    pub valid_until_daa: u64,
+    pub current_daa_score: u64,
+    pub warn_window_daa: u64,
+}
+
+impl Serializer for MasterDelegationExpiringSoonNotification {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        store!([u8; 32], &self.account_id, writer)?;
+        store!(u64, &self.delegation_id, writer)?;
+        store!([u8; 32], &self.anchor, writer)?;
+        store!(u64, &self.valid_until_daa, writer)?;
+        store!(u64, &self.current_daa_score, writer)?;
+        store!(u64, &self.warn_window_daa, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for MasterDelegationExpiringSoonNotification {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        let account_id = load!([u8; 32], reader)?;
+        let delegation_id = load!(u64, reader)?;
+        let anchor = load!([u8; 32], reader)?;
+        let valid_until_daa = load!(u64, reader)?;
+        let current_daa_score = load!(u64, reader)?;
+        let warn_window_daa = load!(u64, reader)?;
+        Ok(Self { account_id, delegation_id, anchor, valid_until_daa, current_daa_score, warn_window_daa })
+    }
+}
+
 impl Serializer for NewBlockTemplateNotification {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         store!(u16, &1, writer)?;

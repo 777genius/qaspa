@@ -32,19 +32,49 @@
 - Расчёт: `BLAKE2b-256("mldsa-anchor" || master_pubkey_bytes)`.
 - Представление: hex (Debug/Display).
 
-## 4. FFI
+## 4. FFI (стабильный контракт для внешних клиентов)
 
-- Файл: `crypto/mldsa-ffi/src/lib.rs`, заголовок `crypto/mldsa-ffi/mldsa.h`.
-- Новые функции:
-  - `size_t kaspa_mldsa_master_seed_len(void)` — возвращает 48.
+- Файлы: `crypto/mldsa-ffi/src/lib.rs`, заголовок `crypto/mldsa-ffi/mldsa.h` (SemVer, crate-type = `cdylib`/`staticlib`).
+- Стабильные символы (поддерживаются во всех сборках Kasplex):
+  - `size_t kaspa_mldsa_master_seed_len(void)` — 48 байт.
   - `bool kaspa_mldsa_derive_keypair(const uint8_t* seed, size_t seed_len, uint8_t level, uint8_t* pk_out, size_t pk_len, uint8_t* sk_out, size_t sk_len)`.
-- Поведение:
-  - Требуется seed длиной 48 байт.
-  - Поддерживает уровни 2/3/5.
-  - Проверяет размеры буферов и возвращает `false` при ошибках.
-- Тесты:
-  - `tests::test_derive_keypair_deterministic` — idempotency.
-  - Обновлён `example.go`: функции `MasterSeedLen()`, `DeriveKeypair`.
+  - `bool kaspa_mldsa_generate_keypair(uint8_t level, uint8_t* pk_out, size_t pk_len, uint8_t* sk_out, size_t sk_len)`.
+  - `bool kaspa_mldsa_sign(const uint8_t* msg, size_t msg_len, const uint8_t* sk, size_t sk_len, uint8_t* sig_out, size_t sig_len)`.
+  - `bool kaspa_mldsa_verify(const uint8_t* msg, size_t msg_len, const uint8_t* sig, size_t sig_len, const uint8_t* pk, size_t pk_len)`.
+  - Size getters: `kaspa_mldsa_get_level{2,3,5}_{pubkey,secretkey,signature}_size()`.
+  - Утилита: `kaspa_mldsa_detect_level(size_t pubkey_len)` — определяет уровень по размеру.
+- Инварианты:
+  - Проверка длины буферов до копирования, возврат `false` при несоответствии.
+  - Уровень детектируется по размерам, внешние клиенты не хардкодят константы.
+  - Поддерживаются уровни 2/3/5; добавление новых уровней пойдёт через минорное обновление SemVer.
+- Smoke-поток для интеграторов (можно вынести в Go/C++ тест):
+  1. `kaspa_mldsa_master_seed_len` → аллоцировать seed.
+  2. `kaspa_mldsa_derive_keypair(seed, level=2, ...)`.
+  3. `kaspa_mldsa_sign(message, sk)` → `kaspa_mldsa_verify(message, sig, pk)` возвращает `true`.
+
+### 4.1. RPC для MasterAnchor/делегаций (внешние клиенты)
+
+- RPC сообщения (кошелёк, wrpc/grpc):
+  - `MasterAnchorListRequest/Response` → `anchors: Vec<MasterAnchorInfo { id: PrvKeyDataId, anchor: Option<String>, level: Option<u8>, is_encrypted: bool }>`; `anchor` может быть `null` для старых записей.
+  - RPC из Iter.4: `register_mldsa_anchor`, `list_mldsa_delegations(anchor_hex)`.
+- Требование к клиентам (relayer/syncer/desktop):
+  - Перед использованием методов проверять `get_server_info.rpc_api_revision` — нужная ревизия документируется в `KASPLEX_L2_COMPATIBILITY.md`.
+  - Не полагаться на внутренний формат `PrvKeyDataId`; использовать только публичные поля.
+  - Поддерживать `anchor == null` и gracefully деградировать до Schnorr.
+- Пример JSON (wrpc/HTTP):
+  - `POST /rpc` body: `{"method":"masterAnchorList","params":{}}`
+  - Response: `{"anchors":[{"id":"0001","anchor":"0a81...a3f5","level":2,"isEncrypted":true}]}`.
+
+### 4.2. REST обёртка над RPC (опционально для партнёров)
+
+- Эндпоинты (тонкий прокси, без логики):
+  - `GET /api/mldsa/master-anchors` → `{ anchors: [{ id, anchor_hex, level, is_encrypted }] }`
+  - `GET /api/mldsa/delegations?anchor=<hex>` → `{ anchor, delegations: [{ version, accountId, spendPubkey, scanPubkey, validFromDaa, validUntilDaa, nonce, signatureB64 }] }`
+- Семантика:
+  - Поля соответствуют Borsh структурам `DelegationRecord` (Iteration 4); подпись передаётся base64, payload — JSON-проекция Borsh.
+  - Любые дополнительные поля должны быть опциональными и не участвовать в валидации.
+- Ошибки: 400 при неверной длине буферов, 404 если anchor не найден, 503 если wallet-daemon недоступен.
+- REST отвечает теми же типами, что WASM/JS `IMasterAnchor*`, чтобы фронтенд не имел отдельного адаптера.
 
 ## 5. План используемого API
 

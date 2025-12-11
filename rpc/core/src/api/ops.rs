@@ -41,6 +41,7 @@ pub enum RpcApiOps {
     NotifyVirtualChainChanged = 17,
     NotifySinkBlueScoreChanged = 18,
     NotifyStealthUtxosChanged = 19,
+    NotifyMasterDelegationExpiringSoon = 20,
 
     // Notification ops required by wRPC
 
@@ -56,6 +57,7 @@ pub enum RpcApiOps {
     PruningPointUtxoSetOverrideNotification = 67,
     NewBlockTemplateNotification = 68,
     StealthUtxosChangedNotification = 69,
+    MasterDelegationExpiringSoonNotification = 70,
 
     // RPC methods
     /// Ping the node to check if connection is alive
@@ -190,6 +192,7 @@ impl From<EventType> for RpcApiOps {
             EventType::PruningPointUtxoSetOverride => RpcApiOps::PruningPointUtxoSetOverrideNotification,
             EventType::NewBlockTemplate => RpcApiOps::NewBlockTemplateNotification,
             EventType::StealthUtxosChanged => RpcApiOps::StealthUtxosChangedNotification,
+            EventType::MasterDelegationExpiringSoon => RpcApiOps::MasterDelegationExpiringSoonNotification,
         }
     }
 }

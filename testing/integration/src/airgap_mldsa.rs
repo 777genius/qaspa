@@ -463,15 +463,21 @@ async fn test_airgap_delegation_expiring_soon_event() {
     // Проверим, что событие expiring soon пришло для аккаунта.
     let event_channel = env.wallet.multiplexer().channel();
     let seen = Arc::new(Mutex::new(false));
+    let seen_warn_window = Arc::new(Mutex::new(0u64));
+    let seen_current_daa = Arc::new(Mutex::new(0u64));
     let expected_id = *stealth_account.id();
 
     let listener = {
         let seen_clone = seen.clone();
+        let warn_clone = seen_warn_window.clone();
+        let daa_clone = seen_current_daa.clone();
         tokio::spawn(async move {
             while let Ok(evt) = event_channel.recv().await {
-                if let kaspa_wallet_core::events::Events::MasterDelegationExpiringSoon { account_id, .. } = &*evt {
+                if let kaspa_wallet_core::events::Events::MasterDelegationExpiringSoon { account_id, warn_window_daa, current_daa_score, .. } = &*evt {
                     if *account_id == expected_id {
                         *seen_clone.lock().await = true;
+                        *warn_clone.lock().await = *warn_window_daa;
+                        *daa_clone.lock().await = *current_daa_score;
                         break;
                     }
                 }
@@ -497,6 +503,8 @@ async fn test_airgap_delegation_expiring_soon_event() {
     }
 
     assert!(*seen.lock().await, "should receive MasterDelegationExpiringSoon event");
+    assert!(*seen_warn_window.lock().await > 0, "warn_window_daa should be set");
+    assert!(*seen_current_daa.lock().await > 0, "current_daa_score should be set");
 
     env.shutdown().await;
 }

@@ -15,6 +15,7 @@ pub mod maps;
 pub use args::*;
 
 use crate::account::delegation::{delegation_message_hash, DelegationId, DelegationRecordV1, DelegationStatus};
+use crate::account::delegation_watch::DelegationExpiryWatcher;
 use crate::account::variants::mldsa_master::{MasterStatus, MldsaMasterAccount, MldsaMasterAccountPayloadV1};
 use crate::account::{Account, AccountKind, ScanNotifier};
 use crate::api::message::{
@@ -133,6 +134,7 @@ struct Inner {
     estimation_abortables: Mutex<HashMap<AccountId, Abortable>>,
     retained_contexts: Mutex<HashMap<String, Arc<Vec<u8>>>>,
     delegations: Arc<DelegationStore>,
+    delegation_watcher: Mutex<Option<Arc<DelegationExpiryWatcher>>>,
     // Mutex used to protect concurrent access to accounts at the wallet api level
     guard: Arc<AsyncMutex<()>>,
     account_guard: Arc<AsyncMutex<()>>,
@@ -201,6 +203,7 @@ impl Wallet {
                 estimation_abortables: Mutex::new(HashMap::new()),
                 retained_contexts: Mutex::new(HashMap::new()),
                 delegations: Arc::new(DelegationStore::new()),
+                delegation_watcher: Mutex::new(None),
                 guard: Arc::new(AsyncMutex::new(())),
                 account_guard: Arc::new(AsyncMutex::new(())),
             }),
@@ -385,6 +388,11 @@ impl Wallet {
         })
         .await?;
 
+        MasterMetrics::global().inc_delegation_requests();
+        let anchor_short = crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor_bytes));
+        let request_id_short = request_id[..4].to_vec().to_hex();
+        log_info!("Built master delegation request: master_anchor={} delegation_request_id={}", anchor_short, request_id_short);
+
         Ok(MasterDelegationBuildResponse { request: body, request_json })
     }
 
@@ -480,10 +488,18 @@ impl Wallet {
                     skipped: stats.skipped,
                 })
                 .await?;
+                MasterMetrics::global().inc_delegation_responses();
+                let anchor_short = crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor));
+                let request_id_short = request_id[..4].to_vec().to_hex();
+                log_info!("Applied master delegation response: master_anchor={} delegation_request_id={} applied={} skipped={}", anchor_short, request_id_short, stats.applied, stats.skipped);
                 Ok(stats)
             }
             Err(err) => {
+                MasterMetrics::global().inc_delegation_responses_failed();
                 let _ = self.notify(Events::MasterDelegationApplyFailed { master_anchor, request_id, reason: err.to_string() }).await;
+                let anchor_short = crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor));
+                let request_id_short = request_id[..4].to_vec().to_hex();
+                log_error!("Failed to apply master delegation response: master_anchor={} delegation_request_id={} reason={}", anchor_short, request_id_short, err);
                 Err(err)
             }
         }
@@ -613,7 +629,14 @@ impl Wallet {
             let stealth_account = account.as_stealth_account()?;
 
             let delegation_id = match store.upsert(record.clone(), Some(response.request_id)) {
-                Ok(id) => id,
+                Ok(id) => {
+                    match record.status {
+                        DelegationStatus::Active => MasterMetrics::global().inc_delegations_issued(),
+                        DelegationStatus::Revoked { .. } => MasterMetrics::global().inc_delegations_revoked(),
+                        DelegationStatus::Expired { .. } => {}
+                    }
+                    id
+                }
                 Err(Error::MasterDelegationStaleNonce { .. }) => {
                     skipped += 1;
                     continue;
@@ -1570,6 +1593,8 @@ impl Wallet {
         self.notify(Events::MasterAccountCreated { account_id: *account.id(), anchor: *anchor.as_bytes(), level: level as u8 })
             .await?;
 
+        log_info!("Created MLDSA master account: master_anchor={} level={:?} account_id={}", crate::account::variants::mldsa_master::format_master_anchor_short(&anchor), level, account.id());
+
         Ok(account)
     }
 
@@ -1625,7 +1650,8 @@ impl Wallet {
 
         let mut account_payload = MldsaMasterAccountPayloadV1::try_from_slice(stored_account.serialized())?;
         let old_anchor = *account_payload.anchor.as_bytes();
-        let level = new_level.unwrap_or(account_payload.level);
+        let level_before = account_payload.level;
+        let level = new_level.unwrap_or(level_before);
 
         let master_id: PrvKeyDataId = stored_account.prv_key_data_ids.clone().try_into()?;
         let prv_store = self.inner.store.as_prv_key_data_store()?;
@@ -1683,6 +1709,9 @@ impl Wallet {
         self.inner.store.commit(wallet_secret).await?;
 
         self.notify(Events::MasterAccountRotated { account_id: *account_id, old_anchor, new_anchor: *new_anchor.as_bytes() }).await?;
+
+        MasterMetrics::global().inc_rotations();
+        log_info!("Rotated MLDSA master: master_anchor={} level_before={:?} level_after={:?}", crate::account::variants::mldsa_master::format_master_anchor_short(&new_anchor), level_before, level);
 
         Ok(())
     }
@@ -1750,6 +1779,8 @@ impl Wallet {
         record.signature = signature.as_bytes().to_vec();
 
         let id = self.delegation_store().upsert(record, None)?;
+        MasterMetrics::global().inc_delegations_issued();
+        log_info!("Created master delegation: master_anchor={} delegation_id={} valid_until_daa={:?}", crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor)), id.0, valid_until);
         self.save_delegations(wallet_secret).await?;
 
         // Update stealth payload
@@ -1800,6 +1831,8 @@ impl Wallet {
         new_record.signature = signature.as_bytes().to_vec();
 
         self.delegation_store().upsert(new_record, None)?;
+        MasterMetrics::global().inc_delegations_revoked();
+        log_info!("Revoked master delegation: master_anchor={} delegation_id={}", crate::account::variants::mldsa_master::format_master_anchor_short(&anchor), delegation_id.0);
 
         // Очистить ссылку на делегацию в самом stealth-аккаунте, чтобы UI/метаданные не оставались активными.
         let guard_handle = self.guard();
@@ -2109,6 +2142,34 @@ impl Wallet {
         let task_ctl_sender = self.inner.task_ctl.response.sender.clone();
         let events = self.multiplexer().channel();
         let wallet_bus_receiver = self.wallet_bus().receiver.clone();
+        let watcher = Arc::new(DelegationExpiryWatcher::new(self.clone()));
+        {
+            let mut slot = self.inner.delegation_watcher.lock().unwrap();
+            *slot = Some(watcher.clone());
+        }
+        let watcher_events = self.multiplexer().channel();
+        let watcher_task_ctl = task_ctl_receiver.clone();
+        spawn(async move {
+            loop {
+                select! {
+                    _ = watcher_task_ctl.recv().fuse() => {
+                        break;
+                    },
+                    msg = watcher_events.receiver.recv().fuse() => {
+                        match msg {
+                            Ok(event) => {
+                                if let Events::DaaScoreChange { current_daa_score } = *event {
+                                    if let Err(e) = watcher.on_daa_score_change(current_daa_score).await {
+                                        log_error!("DelegationExpiryWatcher error: {}", e);
+                                    }
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        });
 
         // let this_clone = self.clone();
         // spawn(async move {
@@ -2170,7 +2231,16 @@ impl Wallet {
         self.utxo_processor().enable_metrics_kinds(kinds);
     }
 
+    pub fn enable_master_metrics(&self) {
+        self.utxo_processor().add_metrics_kinds(&[MetricsUpdateKind::WalletMetrics, MetricsUpdateKind::MasterMetrics]);
+    }
+
     pub async fn start_metrics(&self) -> Result<()> {
+        // Всегда публикуем базовые метрики кошелька; при включённом master режиме добавляем и master-метрики.
+        self.utxo_processor().add_metrics_kinds(&[MetricsUpdateKind::WalletMetrics]);
+        if self.is_mldsa_master_enabled() {
+            self.utxo_processor().add_metrics_kinds(&[MetricsUpdateKind::MasterMetrics]);
+        }
         self.utxo_processor().start_metrics().await?;
         Ok(())
     }
@@ -2940,11 +3010,11 @@ impl Wallet {
 }
 
 fn ensure_request_versions(request: &MasterDelegationRequestBodyV1) -> Result<()> {
-    if request.version != 1 {
+    if request.version != 1 && request.version != 2 {
         return Err(Error::MasterDelegationUnsupportedVersion { context: "request", expected: 1, found: request.version });
     }
     for header in &request.delegations {
-        if header.version != 1 {
+        if header.version != 1 && header.version != 2 {
             return Err(Error::MasterDelegationUnsupportedVersion { context: "header", expected: 1, found: header.version });
         }
     }
@@ -2952,11 +3022,11 @@ fn ensure_request_versions(request: &MasterDelegationRequestBodyV1) -> Result<()
 }
 
 fn ensure_response_versions(response: &MasterDelegationResponseBodyV1) -> Result<()> {
-    if response.version != 1 {
+    if response.version != 1 && response.version != 2 {
         return Err(Error::MasterDelegationUnsupportedVersion { context: "response", expected: 1, found: response.version });
     }
     for record in &response.delegations {
-        if record.version != 1 {
+        if record.version != 1 && record.version != 2 {
             return Err(Error::MasterDelegationUnsupportedVersion { context: "delegation", expected: 1, found: record.version });
         }
     }

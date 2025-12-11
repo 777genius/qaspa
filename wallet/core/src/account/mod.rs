@@ -4,6 +4,7 @@
 //!
 
 pub mod delegation;
+pub mod delegation_watch;
 pub mod descriptor;
 pub mod kind;
 pub mod pskb;

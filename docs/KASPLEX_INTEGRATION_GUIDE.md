@@ -86,168 +86,94 @@
 
 ---
 
-## План интеграции
+## План интеграции (Iteration 9, стабильный контракт)
 
-### Фаза 1: Relayer (ОБЯЗАТЕЛЬНО)
+- Источник правды: `docs/api/MLDSA_MASTER.md`, `docs/KASPLEX_L2_COMPATIBILITY.md`, этот файл. Примеры привязаны к экспортам `crypto/mldsa-ffi/mldsa.h`.
+- Цель Iteration 9: зафиксировать FFI/RPC/REST интерфейсы и E2E сценарии для relayer и syncer. Реализация остаётся в репозиториях Kasplex.
 
-**Где:** `evm-l2-relayer` репозиторий (Go)
+### Минимальный чек‑лист
+- Relayer:
+  - Подпись/верификация: `kaspa_mldsa_sign/verify`, деривация `kaspa_mldsa_derive_keypair`, размерные getters, `kaspa_mldsa_detect_level`.
+  - Адреса `Version::PubKeyMLDSA` → Keccak(payload) для EVM аккаунта.
+  - (Опционально) `MasterAnchor` через RPC `masterAnchorList`/`register_mldsa_anchor`, хранить anchor рядом с конфигом.
+- Syncer:
+  - Парсит MLDSA payload/подписи с лимитами из getters (без хардкодов).
+  - Маппинг адресов идентичен Schnorr: Keccak(payload) → 20/32 байта.
+- Capability detection:
+  - Проверять `getServerInfo.rpc_api_revision` и наличие `MasterAnchorList`; при отсутствии — fallback к Schnorr/без master.
 
-**Что сделать:**
+### Фазы (выравнивание с Iter.9)
+- **Фаза 1 (обязательно):** relayer + syncer поддерживают MLDSA адреса/подписи, mixed блоки.  
+  Результат: депозит/вывод MLDSA проходят, смешанные блоки не ломают парсер.
+- **Фаза 2 (опционально):** VM/precompile или account abstraction для on-chain verify.  
+  Результат: контракты могут вызывать MLDSA verify.
+- **Фаза 3 (наблюдаемость/ABI):** зафиксировать минимальные версии `kaspa-mldsa-ffi`, собрать smoke-тест в CI Kasplex.
 
-1. Добавить поддержку ML-DSA адресов в Wallet
-2. Создавать транзакции с ML-DSA подписями
-3. Верифицировать ML-DSA подписи при приёме
+## Детальный план: Relayer (Go)
 
-**Затраты времени:** 1-2 недели
+### 1. FFI (актуальный список символов)
+`mldsa.h` экспортирует: `kaspa_mldsa_master_seed_len`, `kaspa_mldsa_derive_keypair`, `kaspa_mldsa_generate_keypair`, `kaspa_mldsa_sign`, `kaspa_mldsa_verify`, `kaspa_mldsa_get_level{2,3,5}_{pubkey,secretkey,signature}_size`, `kaspa_mldsa_detect_level`.
 
----
-
-### Фаза 2: Syncer (ОБЯЗАТЕЛЬНО)
-
-**Где:** `evm-l2-nodes-docker` репозиторий (syncer компонент)
-
-**Что сделать:**
-
-1. Распознавать ML-DSA транзакции при синхронизации
-2. Правильно мапить ML-DSA адреса в EVM аккаунты
-3. Обрабатывать большие транзакции (ML-DSA sig = 2420 байт)
-
-**Затраты времени:** 1 неделя
-
----
-
-### Фаза 3: EVM Precompile (ОПЦИОНАЛЬНО)
-
-**Где:** geth (форк для Kasplex)
-
-**Что сделать:**
-
-1. Добавить precompile для проверки ML-DSA подписей в контрактах
-2. Определить стоимость газа
-
-**Затраты времени:** 2-3 недели
-
----
-
-## Детальный план: Relayer
-
-### 1. Форк и настройка
-
-```bash
-# Форкнуть репозиторий
-git clone https://github.com/kasplex/evm-l2-relayer
-cd evm-l2-relayer
-
-# Создать ветку для ML-DSA
-git checkout -b feature/mldsa-support
-```
-
-### 2. Добавить ML-DSA библиотеку
-
-**Проблема:** Relayer на Go, наша реализация на Rust.
-
-**Решение 1 (Рекомендуемое):** FFI через CGO
-
+Рекомендованный CGO-шов (использовать size getters, а не магические числа):
 ```go
-// file: pkg/mldsa/mldsa.go
-package mldsa
-
 /*
-#cgo LDFLAGS: -L../../kaspa-mldsa-ffi -lkaspa_mldsa
+#cgo LDFLAGS: -L${SRCDIR}/../../kaspa-mldsa-ffi -lkaspa_mldsa_ffi
 #include "../../kaspa-mldsa-ffi/mldsa.h"
 */
 import "C"
 import "unsafe"
 
-// Verify ML-DSA signature
-func Verify(message []byte, signature []byte, publicKey []byte) bool {
-    msg := (*C.uchar)(unsafe.Pointer(&message[0]))
-    sig := (*C.uchar)(unsafe.Pointer(&signature[0]))
-    pk := (*C.uchar)(unsafe.Pointer(&publicKey[0]))
+func Derive(level uint8, seed []byte) (pk, sk []byte, ok bool) {
+    if len(seed) != int(C.kaspa_mldsa_master_seed_len()) {
+        return nil, nil, false
+    }
+    pk = make([]byte, C.kaspa_mldsa_get_level2_pubkey_size()) // подбирайте по уровню
+    sk = make([]byte, C.kaspa_mldsa_get_level2_secretkey_size())
+    ok = bool(C.kaspa_mldsa_derive_keypair(
+        (*C.uint8_t)(unsafe.Pointer(&seed[0])), C.size_t(len(seed)),
+        C.uint8_t(level),
+        (*C.uint8_t)(unsafe.Pointer(&pk[0])), C.size_t(len(pk)),
+        (*C.uint8_t)(unsafe.Pointer(&sk[0])), C.size_t(len(sk)),
+    ))
+    return
+}
 
-    result := C.kaspa_mldsa_verify(
-        msg, C.size_t(len(message)),
-        sig, C.size_t(len(signature)),
-        pk, C.size_t(len(publicKey)),
-    )
-
-    return bool(result)
+func Sign(msg []byte, sk []byte) (sig []byte, ok bool) {
+    level := C.kaspa_mldsa_detect_level(C.size_t(len(sk)))
+    if level == 0 {
+        return nil, false
+    }
+    var sigLen C.size_t
+    switch level {
+    case 2:
+        sigLen = C.kaspa_mldsa_get_level2_signature_size()
+    case 3:
+        sigLen = C.kaspa_mldsa_get_level3_signature_size()
+    case 5:
+        sigLen = C.kaspa_mldsa_get_level5_signature_size()
+    }
+    sig = make([]byte, sigLen)
+    ok = bool(C.kaspa_mldsa_sign(
+        (*C.uint8_t)(unsafe.Pointer(&msg[0])), C.size_t(len(msg)),
+        (*C.uint8_t)(unsafe.Pointer(&sk[0])), C.size_t(len(sk)),
+        (*C.uint8_t)(unsafe.Pointer(&sig[0])), sigLen,
+    ))
+    return
 }
 ```
 
-**Решение 2 (Альтернатива):** Использовать существующую Go реализацию ML-DSA
+Packaging/ABI: `libkaspa_mldsa_ffi.{dylib,so,dll}` и `libkaspa_mldsa_ffi.a`, SemVer, без дополнительных флагов.
 
-```go
-// Использовать github.com/pqc-ml-dsa/ml-dsa (если существует)
-import "github.com/cloudflare/circl/sign/mldsa/mldsa65"
+### 2. Потоки relayer
+- Ключи: сервисный сид или общий BIP39 → `kaspa_mldsa_derive_keypair`; уровень по умолчанию — `Level2`.
+- Подпись/верификация: определять уровень по версии адреса или `detect_level`; буферы выделять через getters.
+- Anchor (опционально): `masterAnchorList`/`register_mldsa_anchor`; хранить anchor рядом с EVM конфигом, логировать в метриках.
+- Capability detection: `getServerInfo` → проверка ревизии и `mldsa_master_enabled`; при недоступности master — работать как MLDSA без anchor.
 
-func VerifyMLDSA(message, signature, publicKey []byte) bool {
-    pk := new(mldsa65.PublicKey)
-    if err := pk.UnmarshalBinary(publicKey); err != nil {
-        return false
-    }
-
-    return mldsa65.Verify(pk, message, nil, signature)
-}
-```
-
-### 3. Модифицировать Wallet для ML-DSA
-
-**Файл:** `pkg/kaspa/wallet.go` (предполагаемое расположение)
-
-```go
-package kaspa
-
-import (
-    "github.com/kasplex/evm-l2-relayer/pkg/mldsa"
-)
-
-type AddressVersion byte
-
-const (
-    PubKey       AddressVersion = 0  // Schnorr (existing)
-    PubKeyMLDSA  AddressVersion = 2  // ML-DSA (NEW)
-)
-
-type Address struct {
-    Version  AddressVersion
-    Payload  []byte
-}
-
-// Detect address type
-func (a *Address) IsMLDSA() bool {
-    return a.Version == PubKeyMLDSA
-}
-
-// Create transaction with appropriate signature
-func (w *Wallet) CreateTransaction(to *Address, amount uint64) (*Transaction, error) {
-    tx := &Transaction{
-        Inputs:  w.selectUTXOs(amount),
-        Outputs: []Output{{Address: to, Value: amount}},
-    }
-
-    // Sign with appropriate algorithm
-    if w.Address.IsMLDSA() {
-        // ML-DSA signature
-        sigHash := calculateSigHash(tx)
-        signature := w.SignMLDSA(sigHash)
-        tx.SignatureScript = createMLDSASigScript(signature)
-    } else {
-        // Schnorr signature (existing)
-        sigHash := calculateSigHash(tx)
-        signature := w.SignSchnorr(sigHash)
-        tx.SignatureScript = createSchnorrSigScript(signature)
-    }
-
-    return tx, nil
-}
-
-func (w *Wallet) SignMLDSA(message []byte) []byte {
-    // Вызов нашей Rust библиотеки через FFI
-    // или использование Go ML-DSA библиотеки
-    return mldsa.Sign(message, w.SecretKey)
-}
-```
+### 3. Сценарии L1↔L2 (обязательные)
+- **Депозит L1→L2 (MLDSA):** relayer читает блок L1, извлекает отправителя через Kaspa rules, маппит payload → EVM (Keccak), опционально логирует anchor.
+- **Вывод L2→L1 (relayer MLDSA):** подпись через `kaspa_mldsa_sign`, итоговый скрипт с `OpCheckSigMLDSA`.
+- **Смешанный блок:** relayer различает Schnorr/MLDSA по version/payload (не только по длине), обрабатывает оба в одном блоке.
 
 ### 4. Обновить JSON-RPC обработчик
 

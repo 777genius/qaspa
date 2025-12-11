@@ -51,6 +51,14 @@ pub enum Notification {
 
     #[display(fmt = "StealthUtxosChanged notification: {} removed, {} added", "_0.removed.len()", "_0.added.len()")]
     StealthUtxosChanged(StealthUtxosChangedNotification),
+
+    #[display(
+        fmt = "MasterDelegationExpiringSoon notification: delegation {} anchor {:?} valid_until_daa {}",
+        "_0.delegation_id",
+        "_0.anchor",
+        "_0.valid_until_daa"
+    )]
+    MasterDelegationExpiringSoon(MasterDelegationExpiringSoonNotification),
 }
 }
 
@@ -68,6 +76,7 @@ impl Notification {
             Notification::SinkBlueScoreChanged(v) => to_value(&v),
             Notification::VirtualChainChanged(v) => to_value(&v),
             Notification::StealthUtxosChanged(v) => to_value(&v),
+            Notification::MasterDelegationExpiringSoon(v) => to_value(&v),
         }
     }
 }
@@ -183,6 +192,10 @@ impl Serializer for Notification {
                 store!(u16, &9, writer)?;
                 serialize!(StealthUtxosChangedNotification, notification, writer)?;
             }
+            Notification::MasterDelegationExpiringSoon(notification) => {
+                store!(u16, &10, writer)?;
+                serialize!(MasterDelegationExpiringSoonNotification, notification, writer)?;
+            }
         }
         Ok(())
     }
@@ -231,6 +244,10 @@ impl Deserializer for Notification {
             9 => {
                 let notification = deserialize!(StealthUtxosChangedNotification, reader)?;
                 Ok(Notification::StealthUtxosChanged(notification))
+            }
+            10 => {
+                let notification = deserialize!(MasterDelegationExpiringSoonNotification, reader)?;
+                Ok(Notification::MasterDelegationExpiringSoon(notification))
             }
             _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid variant")),
         }

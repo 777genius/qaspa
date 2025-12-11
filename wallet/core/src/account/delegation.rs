@@ -38,7 +38,7 @@ pub enum DelegationStatus {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DelegationRecordV1 {
     pub version: u8,
@@ -54,6 +54,8 @@ pub struct DelegationRecordV1 {
     pub valid_until_daa: Option<u64>,
     pub nonce: u64,
     pub status: DelegationStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warned_at_daa: Option<u64>,
     #[serde(with = "crate::message::serde_base64_bytes")]
     pub signature: Vec<u8>,
 }
@@ -71,7 +73,7 @@ impl DelegationRecordV1 {
         status: DelegationStatus,
     ) -> Self {
         Self {
-            version: 1,
+            version: 2,
             level: level as u8,
             anchor,
             account_id,
@@ -81,12 +83,80 @@ impl DelegationRecordV1 {
             valid_until_daa,
             nonce,
             status,
+            warned_at_daa: None,
             signature: Vec::new(),
         }
     }
 
     pub fn signature_len(&self) -> Option<usize> {
         MlDsaLevel::from_u8(self.level).map(|lvl| lvl.signature_len())
+    }
+
+    pub fn warned_recently(&self, current_daa: u64, warn_window_daa: u64) -> bool {
+        match self.warned_at_daa {
+            None => false,
+            Some(prev) => current_daa.saturating_sub(prev) < warn_window_daa,
+        }
+    }
+
+    pub fn set_warned_at(&mut self, current_daa: u64) {
+        self.warned_at_daa = Some(current_daa);
+    }
+}
+
+impl BorshSerialize for DelegationRecordV1 {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.version, writer)?;
+        BorshSerialize::serialize(&self.level, writer)?;
+        BorshSerialize::serialize(&self.anchor, writer)?;
+        BorshSerialize::serialize(&self.account_id, writer)?;
+        BorshSerialize::serialize(&self.spend_pubkey, writer)?;
+        BorshSerialize::serialize(&self.scan_pubkey, writer)?;
+        BorshSerialize::serialize(&self.valid_from_daa, writer)?;
+        BorshSerialize::serialize(&self.valid_until_daa, writer)?;
+        BorshSerialize::serialize(&self.nonce, writer)?;
+        BorshSerialize::serialize(&self.status, writer)?;
+        if self.version >= 2 {
+            BorshSerialize::serialize(&self.warned_at_daa, writer)?;
+        }
+        BorshSerialize::serialize(&self.signature, writer)?;
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for DelegationRecordV1 {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let version: u8 = BorshDeserialize::deserialize_reader(reader)?;
+        let level: u8 = BorshDeserialize::deserialize_reader(reader)?;
+        let anchor: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
+        let account_id: AccountId = BorshDeserialize::deserialize_reader(reader)?;
+        let spend_pubkey: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
+        let scan_pubkey: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
+        let valid_from_daa: u64 = BorshDeserialize::deserialize_reader(reader)?;
+        let valid_until_daa: Option<u64> = BorshDeserialize::deserialize_reader(reader)?;
+        let nonce: u64 = BorshDeserialize::deserialize_reader(reader)?;
+        let status: DelegationStatus = BorshDeserialize::deserialize_reader(reader)?;
+        let warned_at_daa = if version >= 2 {
+            BorshDeserialize::deserialize_reader(reader)?
+        } else {
+            None
+        };
+        let signature: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
+
+        Ok(Self {
+            version,
+            level,
+            anchor,
+            account_id,
+            spend_pubkey,
+            scan_pubkey,
+            valid_from_daa,
+            valid_until_daa,
+            nonce,
+            status,
+            warned_at_daa,
+            signature,
+        })
     }
 }
 

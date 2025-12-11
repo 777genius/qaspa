@@ -47,6 +47,8 @@ pub enum Scope {
     NewBlockTemplate,
     /// Stealth UTXO changes filtered by script version
     StealthUtxosChanged,
+    /// Wallet-level: master delegation expiry warnings
+    MasterDelegationExpiringSoon,
 }
 }
 
@@ -334,5 +336,28 @@ impl Deserializer for StealthUtxosChangedScope {
         let _version = load!(u16, reader)?;
         let script_versions = load!(Vec<u16>, reader)?;
         Ok(Self { script_versions })
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
+pub struct MasterDelegationExpiringSoonScope {}
+
+impl std::fmt::Display for MasterDelegationExpiringSoonScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MasterDelegationExpiringSoonScope")
+    }
+}
+
+impl Serializer for MasterDelegationExpiringSoonScope {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        store!(u16, &1, writer)?;
+        Ok(())
+    }
+}
+
+impl Deserializer for MasterDelegationExpiringSoonScope {
+    fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let _version = load!(u16, reader)?;
+        Ok(Self {})
     }
 }

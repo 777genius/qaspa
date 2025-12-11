@@ -611,6 +611,8 @@ declare! {
         delegationId: number;
         anchor: HexString;
         validUntilDaa: number;
+        currentDaaScore: number;
+        warnWindowDaa: number;
     }
     "#,
 }

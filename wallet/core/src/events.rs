@@ -168,6 +168,8 @@ pub enum Events {
         delegation_id: u64,
         anchor: [u8; 32],
         valid_until_daa: u64,
+        current_daa_score: u64,
+        warn_window_daa: u64,
     },
     #[serde(rename_all = "camelCase")]
     MasterDelegationRevoked {

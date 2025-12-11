@@ -37,6 +37,7 @@ use kaspa_stealth::EPHEMERAL_OUTPUT_SIZE;
 use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAddress};
 use kaspa_txscript::{extract_stealth_output, STEALTH_SCRIPT_VERSION};
 use kaspa_utils::hex::ToHex;
+use kaspa_wallet_keys::keypair_mldsa::MasterAnchor;
 use secp256k1::{PublicKey, SecretKey, XOnlyPublicKey, SECP256K1};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
@@ -441,8 +442,6 @@ fn select_delegation_from_records(
 }
 
 impl StealthAccount {
-    const DELEGATION_WARN_WINDOW_DAA: u64 = 1_000;
-
     /// Returns the spend pubkey (XOnly) for this stealth account.
     pub fn spend_pubkey(&self) -> Result<XOnlyPublicKey> {
         Ok(self.spend_pubkey)
@@ -1547,6 +1546,8 @@ impl StealthUtxoHandler for StealthAccount {
                                         actual_anchor: [0u8; 32],
                                     })
                                     .await;
+                                MasterMetrics::global().inc_anchor_mismatch();
+                                log_error!("Master anchor mismatch: master_anchor_expected={} master_anchor_actual=00000000 account_id={}", crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(expected)), self.id());
                             }
                         }
                         EphemeralKeyStatus::Orphaned { reason }
@@ -1600,7 +1601,6 @@ impl StealthUtxoHandler for StealthAccount {
         if let Some(anchor) = self.master_anchor() {
             let store = self.wallet().delegation_store();
             let mut expired_events = Vec::new();
-            let mut expiring_events = Vec::new();
             let mut revoked_events = Vec::new();
 
             for (id, rec) in store.by_anchor(&anchor).into_iter().filter(|(_, r)| r.account_id == *self.id()) {
@@ -1609,26 +1609,12 @@ impl StealthUtxoHandler for StealthAccount {
                         if let Some(until) = rec.valid_until_daa {
                             if current_daa_score >= until {
                                 expired_events.push((id, rec));
-                            } else if current_daa_score + Self::DELEGATION_WARN_WINDOW_DAA >= until {
-                                expiring_events.push((id, rec));
                             }
                         }
                     }
                     DelegationStatus::Revoked { .. } => revoked_events.push((id, rec)),
                     _ => {}
                 }
-            }
-
-            for (id, rec) in expiring_events {
-                let _ = self
-                    .wallet()
-                    .notify(Events::MasterDelegationExpiringSoon {
-                        account_id: *self.id(),
-                        delegation_id: id.0,
-                        anchor,
-                        valid_until_daa: rec.valid_until_daa.unwrap_or_default(),
-                    })
-                    .await;
             }
 
             for (id, rec) in expired_events {
@@ -1642,6 +1628,7 @@ impl StealthUtxoHandler for StealthAccount {
                         valid_until_daa: rec.valid_until_daa.unwrap_or_default(),
                     })
                     .await;
+                log_warn!("Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}", crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)), id.0, rec.valid_until_daa.unwrap_or_default(), current_daa_score);
             }
 
             for (id, _rec) in revoked_events {
@@ -1838,6 +1825,7 @@ mod tests {
             valid_until_daa: valid_until,
             nonce: 0,
             status: DelegationStatus::Active,
+            warned_at_daa: None,
             signature: Vec::new(),
         }
     }

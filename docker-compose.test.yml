@@ -21,6 +21,7 @@ services:
     environment:
       - RUST_BACKTRACE=1
       - RUST_LOG=info
+      - ENABLE_MLDSA_MASTER=1
 
   # ML-DSA Transaction Creation and Mining Test
   mldsa-transaction-test:

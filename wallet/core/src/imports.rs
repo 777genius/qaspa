@@ -11,7 +11,7 @@ pub use crate::encryption::{Encryptable, EncryptionKind};
 pub use crate::error::Error;
 pub use crate::events::{EventKind, Events, SyncState};
 pub use crate::factory::{factories, Factory};
-pub use crate::metrics::{MetricsUpdate, MetricsUpdateKind};
+pub use crate::metrics::{MasterMetrics, MetricsUpdate, MetricsUpdateKind};
 pub use crate::result::Result;
 pub use crate::rpc::Rpc;
 pub use crate::rpc::{DynRpcApi, RpcCtl};

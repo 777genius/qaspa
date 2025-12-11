@@ -4,6 +4,12 @@
 
 This guide covers the network-level end-to-end tests for QUBIC ML-DSA implementation. These tests spawn multiple nodes and verify network behavior, block propagation, and transaction handling.
 
+### Observability (Iteration 10)
+- Метрики кошелька `wallet_master_*` экспортируются через `Events::Metrics`; экспортер должен маппить `network`/`instance` и строить графики `rate(sign_ops_total)`, `rate(rotations_total)`, `delegations_{issued,revoked,expiring_soon}`, `delegation_responses_failed_total`, `healthcheck_failures_total`.
+- Алерты: рост `delegations_expiring_soon_total` без компенсирующих `issued/revoked` в окне, доля `delegation_responses_failed_total` >5% за 15m, любой рост `healthcheck_failures_total` на mainnet.
+- Логи: поиск по `master_anchor=<hex8>` для корреляции метрик с конкретным мастером/делегацией.
+- Статус: блок наблюдаемости Iteration 10 сейчас в отладке (не выкатываем); включение master-метрик и алертов делаем по готовности после фичефлага TLV/notify.
+
 ## Available Tests
 
 ### 1. Bash Script Test (`tests/network_e2e.sh`)

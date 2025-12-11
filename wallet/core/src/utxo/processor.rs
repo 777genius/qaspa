@@ -26,6 +26,7 @@ use workflow_core::task::spawn;
 
 use crate::deterministic::AccountId;
 use crate::events::Events;
+use crate::metrics::{MasterMetrics, MetricsUpdate, MetricsUpdateKind};
 use crate::result::Result;
 use crate::utxo::stealth_handler::DynStealthUtxoHandler;
 use crate::utxo::{Maturity, OutgoingTransaction, PendingUtxoEntryReference, SyncMonitor, UtxoContext, UtxoEntryId};
@@ -999,6 +1000,11 @@ impl UtxoProcessor {
                     let metrics = MetricsUpdate::WalletMetrics { mempool_size };
                     self.try_notify(Events::Metrics { network_id: self.network_id()?, metrics })?;
                 }
+                MetricsUpdateKind::MasterMetrics => {
+                    let master = MasterMetrics::global().snapshot();
+                    let metrics = MetricsUpdate::MasterMetrics { metrics: master };
+                    self.try_notify(Events::Metrics { network_id: self.network_id()?, metrics })?;
+                }
             }
         }
 
@@ -1119,6 +1125,15 @@ impl UtxoProcessor {
 
     pub fn enable_metrics_kinds(&self, metrics_kinds: &[MetricsUpdateKind]) {
         *self.inner.metrics_kinds.lock().unwrap() = metrics_kinds.to_vec();
+    }
+
+    pub fn add_metrics_kinds(&self, metrics_kinds: &[MetricsUpdateKind]) {
+        let mut guard = self.inner.metrics_kinds.lock().unwrap();
+        for kind in metrics_kinds {
+            if !guard.contains(kind) {
+                guard.push(kind.clone());
+            }
+        }
     }
 
     pub async fn start_fee_rate_poller(&self, poller_interval: Duration) -> Result<()> {

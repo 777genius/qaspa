@@ -246,6 +246,7 @@
 - `wallet/core` + `notify`: новое событие/уведомление `MasterDelegationExpiringSoon` и watcher `DelegationExpiryWatcher`, слушающий рост `DAA` и заранее предупреждающий об истечении делегаций.  
 - Логи: тег `master_anchor=<hex8>` при всех операциях мастера, делегаций и airgap‑флоу, чтобы было проще искать инциденты в Elastic/Grafana Loki.  
 - Докер-образ `docker/Dockerfile.kaspa-wallet`: включить `ENABLE_MLDSA_MASTER=1`, добавить healthcheck для airgap‑сервиса на базе `kaspa-wallet health --mode=airgap`.  
+- Статус: реализованы master-метрики, watcher `DelegationExpiryWatcher`, событие `MasterDelegationExpiringSoon` (с `current_daa_score` и `warn_window_daa`), healthcheck и Docker/compose флаги; notify расширен новым `EventType`. Выкат отложен: гейтинг TLV по сетевому флагу, мост notify и доп. тесты (метрики/watcher) отлаживаются, не включаем сейчас.  
 
 ## 2.1. Кросс-компонентные зависимости
 
@@ -387,13 +388,14 @@
 - **Тезис:** готовим миграцию/релиз с включённым master и чеклистами.
 
 ### Итерация 9 — Kasplex / внешние интеграции ([детали](iterations/Phase2_9iteration.md))
+- **Статус:** Done — гайды обновлены, FFI контракт зафиксирован (`kaspa_mldsa_*`), REST/RPC описаны, сценарии deposit/withdraw/mixed задокументированы.  
 - **Шаги:**  
   1. Внедрить новые RPC в relayer и syncer (Go).  
   2. Провести e2e тесты L1↔L2 с PQ мастером.  
   3. Обновить публичные гайды/SDK Kasplex.  
 - **Проверки:** успешный мост Kaspa↔Kasplex с использованием anchor; regression на старых адресах.  
-- **Выходы:** PRы в Kasplex, обновлённые docs/SDK.
-- **Тезис:** согласовать anchor/delegations с Kasplex и внешними клиентами.
+- **Артефакты:** `cargo test -p kaspa-mldsa-ffi --release` (pass); `nm -gU target/release/libkaspa_mldsa_ffi.dylib` показывает master_seed_len/derive/generate/sign/verify и size getters; `target/release/libkaspa_mldsa_ffi.{dylib,a}`.
+- **Тезис:** согласованы anchor/delegations для внешних клиентов; FFI/RPC/REST готовы для интеграции Kasplex.
 
 ### Итерация 10 — Observability & Telemetry ([детали](iterations/Phase2_10iteration.md))
 - **Шаги:**  

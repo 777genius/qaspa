@@ -6,9 +6,15 @@ use crate::storage::account::{AccountSettings, AccountStorable, AccountStorage};
 use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use kaspa_addresses::{Address, Version};
 use kaspa_mldsa::{sign as mldsa_sign, MasterSeed, MlDsaLevel, Signature as MlDsaSignature, MASTER_SIGN_DOMAIN_DELEGATION};
+use kaspa_utils::hex::ToHex;
 use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use std::borrow::Cow;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
+
+pub fn format_master_anchor_short(anchor: &MasterAnchor) -> String {
+    let bytes = anchor.as_bytes();
+    bytes[..4].to_vec().to_hex()
+}
 
 /// Account kind identifier for MLDSA master accounts.
 pub const MLDSA_MASTER_ACCOUNT_KIND: &str = "kaspa-mldsa-master";
@@ -264,7 +270,10 @@ impl MldsaMasterAccount {
         message.extend_from_slice(self.anchor.as_bytes());
         message.extend_from_slice(payload);
 
-        Ok(mldsa_sign(&message, &keypair.inner().secret_key))
+        let signature = mldsa_sign(&message, &keypair.inner().secret_key);
+        MasterMetrics::global().inc_sign_ops();
+        log_trace!("MLDSA master sign: master_anchor={} domain={:?}", format_master_anchor_short(&self.anchor), domain);
+        Ok(signature)
     }
 
     /// Signs a delegation hash exactly as produced by `delegation_message_hash`
@@ -273,7 +282,9 @@ impl MldsaMasterAccount {
     pub async fn sign_delegation_hash(&self, payload: &[u8]) -> Result<MlDsaSignature> {
         let guard = self.unlocked_keypair.read().await;
         let keypair = guard.as_ref().ok_or(Error::AccountLocked)?;
-        Ok(mldsa_sign(payload, &keypair.inner().secret_key))
+        let signature = mldsa_sign(payload, &keypair.inner().secret_key);
+        MasterMetrics::global().inc_sign_ops();
+        Ok(signature)
     }
 }
 

@@ -2,7 +2,19 @@
 
 ## Executive Summary
 
-**Status:** ⏳ **Phase 2 / Iteration 8 (Deployment & Migration) в работе**
+**Status:** 🟡 **Phase 2 / Iteration 10 (Observability & Telemetry) в работе**
+
+- Добавлены master-метрики кошелька (`wallet_master_*`) и доставка через `Events::Metrics`; healthcheck ошибок учитывается в `healthcheck_failures_total`.
+- Событие `MasterDelegationExpiringSoon` расширено данными окна предупреждения и текущего DAA, warn-window настраивается через `WalletSettings::DelegationWarnWindowDaa`.
+- Docker wallet-образ включает healthcheck `kaspa-wallet health --mode=airgap`, dev/test compose поднимается с `ENABLE_MLDSA_MASTER=1`.
+- Итерация 10 сейчас **в отладке, выкатывать не планируем** до завершения: гейтинг TLV delegation_id по сетевому флагу, мост `MasterDelegationExpiringSoon` → notify, тесты метрик/watcher и d dashboards/alerts.
+- Дальнейшие шаги: завершить интеграцию notify-пайплайна для expiring soon, добить дашборды/алерты и покрытие тестов для новых метрик.
+
+- Обновлены гайды `KASPLEX_INTEGRATION_GUIDE.md`, `KASPLEX_L2_COMPATIBILITY.md`, `docs/api/MLDSA_MASTER.md` под финальный FFI (`kaspa_mldsa_*`) и RPC/REST слой (masterAnchor/delegations).
+- Требование: внешние клиенты проверяют `rpc_api_revision` и используют size getters/`kaspa_mldsa_detect_level`, не хардкодят длины.
+- Smoke/артефакты FFI:
+  - `cargo test -p kaspa-mldsa-ffi --release` (derive→sign→verify, 6 тестов, ok).
+  - Собраны `target/release/libkaspa_mldsa_ffi.{dylib,a}`; экспорт `nm -gU .../libkaspa_mldsa_ffi.dylib` содержит `kaspa_mldsa_master_seed_len/derive_keypair/generate_keypair/sign/verify` и все size getters.
 
 - Добавлен консенсусный флаг `mldsa_master_activation` (dev/simnet — always, test/mainnet — never до решения) и хелпер `mldsa_master_enabled`.
 - RPC `GetServerInfo` расширен полями `mldsa_master_enabled` и `mldsa_master_activation_daa`; поднят `RPC_API_REVISION` без смены `RPC_API_VERSION`.
