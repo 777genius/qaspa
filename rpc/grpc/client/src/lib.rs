@@ -281,6 +281,7 @@ impl RpcApi for GrpcClient {
     route!(get_utxo_return_address_call, GetUtxoReturnAddress);
     route!(register_mldsa_anchor_call, RegisterMldsaAnchor);
     route!(list_mldsa_delegations_call, ListMldsaDelegations);
+    route!(get_virtual_chain_from_block_v2_call, GetVirtualChainFromBlockV2);
 
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Notification API

@@ -68,6 +68,7 @@ pub mod kaspad_request_convert {
     impl_into_kaspad_request!(GetBlockViewTags);
     impl_into_kaspad_request!(RegisterMldsaAnchor);
     impl_into_kaspad_request!(ListMldsaDelegations);
+    impl_into_kaspad_request!(GetVirtualChainFromBlockV2);
 
     impl_into_kaspad_request!(NotifyBlockAdded);
     impl_into_kaspad_request!(NotifyNewBlockTemplate);
@@ -210,6 +211,7 @@ pub mod kaspad_response_convert {
     impl_into_kaspad_response!(GetBlockViewTags);
     impl_into_kaspad_response!(RegisterMldsaAnchor);
     impl_into_kaspad_response!(ListMldsaDelegations);
+    impl_into_kaspad_response!(GetVirtualChainFromBlockV2);
 
     impl_into_kaspad_notify_response!(NotifyBlockAdded);
     impl_into_kaspad_notify_response!(NotifyNewBlockTemplate);

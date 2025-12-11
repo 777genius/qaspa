@@ -73,6 +73,8 @@ impl Router {
                 GetVirtualChainFromBlock,
                 RegisterMldsaAnchor,
                 ListMldsaDelegations,
+                GetVirtualChainFromBlockV2,
+                GetVirtualChainFromBlockV2,
                 ResolveFinalityConflict,
                 Shutdown,
                 SubmitBlock,

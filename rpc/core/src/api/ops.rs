@@ -150,6 +150,8 @@ pub enum RpcApiOps {
     RegisterMldsaAnchor = 153,
     /// List MLDSA delegations for anchor (Iteration 4)
     ListMldsaDelegations = 154,
+    /// Get Virtual Chain from Block V2
+    GetVirtualChainFromBlockV2 = 155,
 }
 
 impl RpcApiOps {

@@ -70,6 +70,7 @@ message KaspadRequest {
     GetBlockViewTagsRequestMessage getBlockViewTagsRequest = 1116;
     RegisterMldsaAnchorRequestMessage registerMldsaAnchorRequest = 1118;
     ListMldsaDelegationsRequestMessage listMldsaDelegationsRequest = 1120;
+    GetVirtualChainFromBlockV2RequestMessage getVirtualChainFromBlockV2Request = 1122;
   }
 }
 
@@ -140,6 +141,7 @@ message KaspadResponse {
     GetBlockViewTagsResponseMessage getBlockViewTagsResponse = 1117;
     RegisterMldsaAnchorResponseMessage registerMldsaAnchorResponse = 1119;
     ListMldsaDelegationsResponseMessage listMldsaDelegationsResponse = 1121;
+    GetVirtualChainFromBlockV2ResponseMessage getVirtualChainFromBlockV2Response = 1123;
   }
 }
 

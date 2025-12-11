@@ -24,6 +24,10 @@ pub mod mempool_benchmarks;
 pub mod subscribe_benchmarks;
 
 #[cfg(test)]
+#[cfg(feature = "devnet-prealloc")]
+pub mod rpc_perf_benchmarks;
+
+#[cfg(test)]
 pub mod rpc_tests;
 
 #[cfg(test)]

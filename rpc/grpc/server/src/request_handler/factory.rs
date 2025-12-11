@@ -86,6 +86,7 @@ impl Factory {
                 GetBlockViewTags,
                 RegisterMldsaAnchor,
                 ListMldsaDelegations,
+                GetVirtualChainFromBlockV2,
                 NotifyBlockAdded,
                 NotifyNewBlockTemplate,
                 NotifyFinalityConflict,

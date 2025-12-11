@@ -92,6 +92,7 @@ pub enum KaspadPayloadOps {
     GetBlockViewTags,
     RegisterMldsaAnchor,
     ListMldsaDelegations,
+    GetVirtualChainFromBlockV2,
 
     // Subscription commands for starting/stopping notifications
     NotifyBlockAdded,
