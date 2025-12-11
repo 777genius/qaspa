@@ -1547,7 +1547,11 @@ impl StealthUtxoHandler for StealthAccount {
                                     })
                                     .await;
                                 MasterMetrics::global().inc_anchor_mismatch();
-                                log_error!("Master anchor mismatch: master_anchor_expected={} master_anchor_actual=00000000 account_id={}", crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(expected)), self.id());
+                                log_error!(
+                                    "Master anchor mismatch: master_anchor_expected={} master_anchor_actual=00000000 account_id={}",
+                                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(expected)),
+                                    self.id()
+                                );
                             }
                         }
                         EphemeralKeyStatus::Orphaned { reason }
@@ -1628,7 +1632,13 @@ impl StealthUtxoHandler for StealthAccount {
                         valid_until_daa: rec.valid_until_daa.unwrap_or_default(),
                     })
                     .await;
-                log_warn!("Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}", crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)), id.0, rec.valid_until_daa.unwrap_or_default(), current_daa_score);
+                log_warn!(
+                    "Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}",
+                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)),
+                    id.0,
+                    rec.valid_until_daa.unwrap_or_default(),
+                    current_daa_score
+                );
             }
 
             for (id, _rec) in revoked_events {

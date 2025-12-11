@@ -489,17 +489,30 @@ impl Wallet {
                 })
                 .await?;
                 MasterMetrics::global().inc_delegation_responses();
-                let anchor_short = crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor));
+                let anchor_short =
+                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor));
                 let request_id_short = request_id[..4].to_vec().to_hex();
-                log_info!("Applied master delegation response: master_anchor={} delegation_request_id={} applied={} skipped={}", anchor_short, request_id_short, stats.applied, stats.skipped);
+                log_info!(
+                    "Applied master delegation response: master_anchor={} delegation_request_id={} applied={} skipped={}",
+                    anchor_short,
+                    request_id_short,
+                    stats.applied,
+                    stats.skipped
+                );
                 Ok(stats)
             }
             Err(err) => {
                 MasterMetrics::global().inc_delegation_responses_failed();
                 let _ = self.notify(Events::MasterDelegationApplyFailed { master_anchor, request_id, reason: err.to_string() }).await;
-                let anchor_short = crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor));
+                let anchor_short =
+                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor));
                 let request_id_short = request_id[..4].to_vec().to_hex();
-                log_error!("Failed to apply master delegation response: master_anchor={} delegation_request_id={} reason={}", anchor_short, request_id_short, err);
+                log_error!(
+                    "Failed to apply master delegation response: master_anchor={} delegation_request_id={} reason={}",
+                    anchor_short,
+                    request_id_short,
+                    err
+                );
                 Err(err)
             }
         }
@@ -1593,7 +1606,12 @@ impl Wallet {
         self.notify(Events::MasterAccountCreated { account_id: *account.id(), anchor: *anchor.as_bytes(), level: level as u8 })
             .await?;
 
-        log_info!("Created MLDSA master account: master_anchor={} level={:?} account_id={}", crate::account::variants::mldsa_master::format_master_anchor_short(&anchor), level, account.id());
+        log_info!(
+            "Created MLDSA master account: master_anchor={} level={:?} account_id={}",
+            crate::account::variants::mldsa_master::format_master_anchor_short(&anchor),
+            level,
+            account.id()
+        );
 
         Ok(account)
     }
@@ -1711,7 +1729,12 @@ impl Wallet {
         self.notify(Events::MasterAccountRotated { account_id: *account_id, old_anchor, new_anchor: *new_anchor.as_bytes() }).await?;
 
         MasterMetrics::global().inc_rotations();
-        log_info!("Rotated MLDSA master: master_anchor={} level_before={:?} level_after={:?}", crate::account::variants::mldsa_master::format_master_anchor_short(&new_anchor), level_before, level);
+        log_info!(
+            "Rotated MLDSA master: master_anchor={} level_before={:?} level_after={:?}",
+            crate::account::variants::mldsa_master::format_master_anchor_short(&new_anchor),
+            level_before,
+            level
+        );
 
         Ok(())
     }
@@ -1780,7 +1803,12 @@ impl Wallet {
 
         let id = self.delegation_store().upsert(record, None)?;
         MasterMetrics::global().inc_delegations_issued();
-        log_info!("Created master delegation: master_anchor={} delegation_id={} valid_until_daa={:?}", crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor)), id.0, valid_until);
+        log_info!(
+            "Created master delegation: master_anchor={} delegation_id={} valid_until_daa={:?}",
+            crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(master_anchor)),
+            id.0,
+            valid_until
+        );
         self.save_delegations(wallet_secret).await?;
 
         // Update stealth payload
@@ -1832,7 +1860,11 @@ impl Wallet {
 
         self.delegation_store().upsert(new_record, None)?;
         MasterMetrics::global().inc_delegations_revoked();
-        log_info!("Revoked master delegation: master_anchor={} delegation_id={}", crate::account::variants::mldsa_master::format_master_anchor_short(&anchor), delegation_id.0);
+        log_info!(
+            "Revoked master delegation: master_anchor={} delegation_id={}",
+            crate::account::variants::mldsa_master::format_master_anchor_short(&anchor),
+            delegation_id.0
+        );
 
         // Очистить ссылку на делегацию в самом stealth-аккаунте, чтобы UI/метаданные не оставались активными.
         let guard_handle = self.guard();

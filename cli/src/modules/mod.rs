@@ -58,9 +58,9 @@ pub fn register_handlers(cli: &Arc<KaspaCli>) -> Result<()> {
         cli,
         cli.handlers(),
         [
-            account, address, close, connect, details, disconnect, estimate, exit, export, guide, health, help, history, rpc, list, miner,
-            message, monitor, mute, network, node, open, ping, pskb, reload, select, send, server, settings, sweep, track, transfer,
-            wallet,
+            account, address, close, connect, details, disconnect, estimate, exit, export, guide, health, help, history, rpc, list,
+            miner, message, monitor, mute, network, node, open, ping, pskb, reload, select, send, server, settings, sweep, track,
+            transfer, wallet,
             // halt,
             // theme,  start, stop
         ]

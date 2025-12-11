@@ -15,11 +15,7 @@ impl DelegationExpiryWatcher {
     }
 
     pub async fn on_daa_score_change(&self, current_daa_score: u64) -> Result<()> {
-        let warn_window = self
-            .wallet
-            .settings()
-            .get::<u64>(WalletSettings::DelegationWarnWindowDaa)
-            .unwrap_or(1_000);
+        let warn_window = self.wallet.settings().get::<u64>(WalletSettings::DelegationWarnWindowDaa).unwrap_or(1_000);
 
         for (id, rec) in self.wallet.delegation_store().active_records() {
             if let Some(until) = rec.valid_until_daa {

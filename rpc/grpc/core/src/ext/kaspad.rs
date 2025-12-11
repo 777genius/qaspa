@@ -73,6 +73,10 @@ impl kaspad_request::Payload {
                     command: command.into(),
                 })
             }
+            Scope::MasterDelegationExpiringSoon(_) => {
+                // gRPC пока не поддерживает MasterDelegationExpiringSoon; используйте wRPC
+                panic!("MasterDelegationExpiringSoon notification is not supported over gRPC. Use wRPC instead.")
+            }
         }
     }
 

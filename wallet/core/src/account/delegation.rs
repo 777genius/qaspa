@@ -136,11 +136,7 @@ impl BorshDeserialize for DelegationRecordV1 {
         let valid_until_daa: Option<u64> = BorshDeserialize::deserialize_reader(reader)?;
         let nonce: u64 = BorshDeserialize::deserialize_reader(reader)?;
         let status: DelegationStatus = BorshDeserialize::deserialize_reader(reader)?;
-        let warned_at_daa = if version >= 2 {
-            BorshDeserialize::deserialize_reader(reader)?
-        } else {
-            None
-        };
+        let warned_at_daa = if version >= 2 { BorshDeserialize::deserialize_reader(reader)? } else { None };
         let signature: Vec<u8> = BorshDeserialize::deserialize_reader(reader)?;
 
         Ok(Self {

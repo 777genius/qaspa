@@ -17,7 +17,7 @@ impl Health {
         let mode = if mode_arg.starts_with("--mode=") {
             mode_arg.trim_start_matches("--mode=").to_string()
         } else if mode_arg == "--mode" {
-            argv.get(0).cloned().unwrap_or_default()
+            argv.first().cloned().unwrap_or_default()
         } else {
             mode_arg
         };
@@ -46,7 +46,7 @@ impl Health {
         }
 
         let settings = wallet.settings();
-        let enable_mldsa_master = settings.get(WalletSettings::EnableMldsaMaster);
+        let enable_mldsa_master = settings.get::<bool>(WalletSettings::EnableMldsaMaster).unwrap_or(true);
         if !enable_mldsa_master {
             MasterMetrics::global().inc_healthcheck_failures();
             return Err(Error::custom("MLDSA master is not enabled (ENABLE_MLDSA_MASTER=0)"));

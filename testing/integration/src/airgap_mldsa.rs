@@ -473,7 +473,13 @@ async fn test_airgap_delegation_expiring_soon_event() {
         let daa_clone = seen_current_daa.clone();
         tokio::spawn(async move {
             while let Ok(evt) = event_channel.recv().await {
-                if let kaspa_wallet_core::events::Events::MasterDelegationExpiringSoon { account_id, warn_window_daa, current_daa_score, .. } = &*evt {
+                if let kaspa_wallet_core::events::Events::MasterDelegationExpiringSoon {
+                    account_id,
+                    warn_window_daa,
+                    current_daa_score,
+                    ..
+                } = &*evt
+                {
                     if *account_id == expected_id {
                         *seen_clone.lock().await = true;
                         *warn_clone.lock().await = *warn_window_daa;

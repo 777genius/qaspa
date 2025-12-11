@@ -35,7 +35,7 @@ impl MetricsUpdate {
         match self {
             MetricsUpdate::WalletMetrics { .. } => MetricsUpdateKind::WalletMetrics,
             MetricsUpdate::MasterMetrics { .. } => MetricsUpdateKind::MasterMetrics,
-    }
+        }
     }
 }
 
