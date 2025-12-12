@@ -10,12 +10,7 @@ use kaspa_utils::triggers::Listener;
 use kaspa_wrpc_server::address::WrpcNetAddress;
 use kaspad_lib::{args::Args, daemon::create_core_with_runtime};
 use parking_lot::RwLock;
-use std::{
-    net::TcpListener,
-    ops::Deref,
-    sync::Arc,
-    time::Duration,
-};
+use std::{net::TcpListener, ops::Deref, sync::Arc, time::Duration};
 use tempfile::TempDir;
 
 use kaspa_grpc_client::ClientPool;
@@ -107,8 +102,7 @@ impl Daemon {
     /// Allocate a unique local port for test daemons, avoiding collisions when
     /// several nodes start in parallel during integration runs.
     fn next_port() -> u16 {
-        let listener =
-            TcpListener::bind(("127.0.0.1", 0)).expect("unable to allocate an ephemeral local port for daemon tests");
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("unable to allocate an ephemeral local port for daemon tests");
         listener.local_addr().expect("unable to resolve ephemeral local port").port()
     }
 
