@@ -295,10 +295,7 @@ impl RpcClient {
             )
             .transpose()?;
 
-        let client = Arc::new(
-            KaspaRpcClient::new(encoding, url.as_deref(), resolver.clone().map(Into::into), network_id, None)
-                ?,
-        );
+        let client = Arc::new(KaspaRpcClient::new(encoding, url.as_deref(), resolver.clone().map(Into::into), network_id, None)?);
 
         let rpc_client = RpcClient {
             inner: Arc::new(Inner {

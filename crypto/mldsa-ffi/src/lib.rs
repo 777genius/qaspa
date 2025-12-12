@@ -22,8 +22,8 @@
 //! ```
 
 use kaspa_mldsa::{
-    derive_keypair_from_seed, try_generate_keypair, try_sign, verify, MlDsaLevel, PublicKey as MlDsaPublicKey, SecretKey as MlDsaSecretKey,
-    Signature as MlDsaSignature, MASTER_SEED_LEN,
+    derive_keypair_from_seed, try_generate_keypair, try_sign, verify, MlDsaLevel, PublicKey as MlDsaPublicKey,
+    SecretKey as MlDsaSecretKey, Signature as MlDsaSignature, MASTER_SEED_LEN,
 };
 use std::ptr;
 use std::slice;

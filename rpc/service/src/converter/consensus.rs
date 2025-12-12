@@ -118,11 +118,7 @@ impl ConsensusConverter {
         transaction_ids: &TransactionIdSet,
         transactions: &HashMap<TransactionId, MutableTransaction>,
     ) -> Vec<RpcMempoolEntry> {
-        transaction_ids
-            .iter()
-            .filter_map(|x| transactions.get(x))
-            .map(|tx| self.get_mempool_entry(consensus, tx))
-            .collect()
+        transaction_ids.iter().filter_map(|x| transactions.get(x)).map(|tx| self.get_mempool_entry(consensus, tx)).collect()
     }
 
     /// Converts a consensus [`Transaction`] into an [`RpcTransaction`], optionally including verbose data.

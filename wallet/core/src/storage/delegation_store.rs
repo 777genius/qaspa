@@ -265,11 +265,7 @@ mod tests {
         // Имитация неконсистентного порядка (как после load из стора): last() != max(nonce)
         store.by_id.insert(DelegationId(0), DelegationEntry::new(rec10.clone(), None));
         store.by_id.insert(DelegationId(1), DelegationEntry::new(rec5, None));
-        store
-            .by_anchor_account
-            .entry((anchor, account_id))
-            .or_default()
-            .extend([DelegationId(0), DelegationId(1)]);
+        store.by_anchor_account.entry((anchor, account_id)).or_default().extend([DelegationId(0), DelegationId(1)]);
         store.next_id.store(2, Ordering::SeqCst);
 
         let mut rec6 = rec10;
