@@ -104,7 +104,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run txscript integration tests
-        run: cargo test -p kaspa-txscript --release integration_mldsa -- --ignored --nocapture
+        run: cargo test -p kaspa-txscript --release --test integration_mldsa -- --ignored --nocapture
 
       - name: Run airgap offline delegation integration test
         run: cargo test -p kaspa-testing-integration airgap_mldsa -- --nocapture

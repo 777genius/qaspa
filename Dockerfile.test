@@ -25,7 +25,7 @@ RUN echo "Building kaspad..." && \
     ls -lh target/release/kaspad
 
 RUN echo "Running txscript E2E comprehensive tests..." && \
-    cargo test --locked -p kaspa-txscript --release e2e_comprehensive -- --ignored --nocapture
+    cargo test --locked -p kaspa-txscript --release --test e2e_comprehensive -- --ignored --nocapture --test-threads=1
 
 RUN echo "Running ML-DSA transaction E2E tests..." && \
-    cargo test --locked -p kaspa-txscript --release mldsa_transactions_e2e -- --ignored --nocapture --test-threads=1
+    cargo test --locked -p kaspa-txscript --release --test mldsa_transactions_e2e -- --ignored --nocapture --test-threads=1
