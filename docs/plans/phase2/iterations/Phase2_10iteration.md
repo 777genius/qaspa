@@ -20,6 +20,13 @@
   - Не трогаем консенсус/`OpCheckSigMLDSA` и правила валидации транзакций.
   - Не меняем UX вокруг создания мастер‑аккаунта и делегаций (только добавляем поверх телеметрию и нотификации).
 
+### 0.1. Architectural TL;DR
+
+- **Где живут новые метрики:** только в `wallet/core` через `MasterMetrics` + новый variant `MetricsUpdate::MasterMetrics`, которые уезжают наружу по уже существующему каналу `Events::Metrics`. `metrics/core` и node‑метрики не меняются.
+- **Что наблюдаем:** суммарное количество операций мастера (`sign`, `rotate`, issue/revoke делегаций, airgap‑request/response, healthcheck‑ошибки) и ранние предупреждения об истекающих делегациях (`MasterDelegationExpiringSoon`), без high‑cardinality label’ов (`anchor`, `account_id`).
+- **Как это связано с ранее реализованным:** Iteration 10 **не трогает** семантику `valid_until_daa`/`EphemeralKeyEntry`/orphaned‑UTXO из Iteration 5 и airgap‑протокол из Iteration 6 — только дописывает поверх наблюдаемость (метрики, события, логи).
+- **Интеграция с инфраструктурой:** Docker‑образ кошелька включает `ENABLE_MLDSA_MASTER=1` и healthcheck `kaspa-wallet health --mode=airgap`; внешние экспортёры и дашборды строятся поверх `Events::Metrics` и логов с тегом `master_anchor=<hex8>`, при сбоях телеметрии поведение кошелька остаётся прежним (деградация только в наблюдаемости).
+
 ### 0.2. План доработок (отладка, не выкатываем сейчас)
 
 > Статус: отлаживаем, код не трогаем, готовим безопасный rollout.
@@ -30,13 +37,6 @@
 - **Тесты watcher’а:** покрыть `DelegationExpiryWatcher` (одно срабатывание в warn‑окне, отсутствие дублей, игнор просроченных делегаций).
 - **Документация/дашборды:** описать экспорт master‑метрик и примеры алертов; в `IMPLEMENTATION_STATUS.md` отметить, что итерация 10 в отладке и ждёт выката после тестов.
 - **Smoke‑гейт:** перед выкладкой — целенаправленные тесты: `cargo test -p kaspa-wallet-core metrics delegation_watch stealth_signer` и `cargo test -p kaspa-testing-integration airgap_mldsa`.
-
-### 0.1. Architectural TL;DR
-
-- **Где живут новые метрики:** только в `wallet/core` через `MasterMetrics` + новый variant `MetricsUpdate::MasterMetrics`, которые уезжают наружу по уже существующему каналу `Events::Metrics`. `metrics/core` и node‑метрики не меняются.
-- **Что наблюдаем:** суммарное количество операций мастера (`sign`, `rotate`, issue/revoke делегаций, airgap‑request/response, healthcheck‑ошибки) и ранние предупреждения об истекающих делегациях (`MasterDelegationExpiringSoon`), без high‑cardinality label’ов (`anchor`, `account_id`).
-- **Как это связано с ранее реализованным:** Iteration 10 **не трогает** семантику `valid_until_daa`/`EphemeralKeyEntry`/orphaned‑UTXO из Iteration 5 и airgap‑протокол из Iteration 6 — только дописывает поверх наблюдаемость (метрики, события, логи).
-- **Интеграция с инфраструктурой:** Docker‑образ кошелька включает `ENABLE_MLDSA_MASTER=1` и healthcheck `kaspa-wallet health --mode=airgap`; внешние экспортёры и дашборды строятся поверх `Events::Metrics` и логов с тегом `master_anchor=<hex8>`, при сбоях телеметрии поведение кошелька остаётся прежним (деградация только в наблюдаемости).
 
 ### 1. Область изменений и файлы
 

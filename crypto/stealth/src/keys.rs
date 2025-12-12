@@ -68,12 +68,36 @@ impl StealthSecretKey {
     ///
     /// Uses the system's cryptographically secure RNG.
     pub fn generate() -> Self {
-        use rand::rngs::OsRng;
+        Self::try_generate().unwrap_or_else(|e| panic!("{e}"))
+    }
 
-        let scan = secp256k1::SecretKey::new(&mut OsRng);
-        let spend = secp256k1::SecretKey::new(&mut OsRng);
+    /// Generates a new random stealth secret key (fallible).
+    ///
+    /// This function returns an error instead of panicking if the system RNG is unavailable.
+    pub fn try_generate() -> Result<Self> {
+        const MAX_ATTEMPTS: usize = 128;
 
-        Self { scan_secret: scan.secret_bytes(), spend_secret: spend.secret_bytes() }
+        for _ in 0..MAX_ATTEMPTS {
+            let mut scan = [0u8; SECRET_KEY_SIZE];
+            let mut spend = [0u8; SECRET_KEY_SIZE];
+
+            getrandom::getrandom(&mut scan)
+                .map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
+            getrandom::getrandom(&mut spend)
+                .map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
+
+            // Validate both keys are valid secp256k1 secret keys
+            if secp256k1::SecretKey::from_slice(&scan).is_ok() && secp256k1::SecretKey::from_slice(&spend).is_ok() {
+                return Ok(Self { scan_secret: scan, spend_secret: spend });
+            }
+
+            scan.zeroize();
+            spend.zeroize();
+        }
+
+        Err(StealthError::RandomnessFailed(format!(
+            "failed to generate valid secret keys after {MAX_ATTEMPTS} attempts"
+        )))
     }
 
     /// Returns the scan secret key.
@@ -352,6 +376,12 @@ mod tests {
         let sk2 = StealthSecretKey::from_bytes(*sk1.scan_secret_bytes(), *sk1.spend_secret_bytes()).unwrap();
 
         assert_eq!(sk1.to_address(), sk2.to_address());
+    }
+
+    #[test]
+    fn test_secret_key_try_generate() {
+        let sk = StealthSecretKey::try_generate().unwrap();
+        let _ = sk.to_address();
     }
 
     #[test]

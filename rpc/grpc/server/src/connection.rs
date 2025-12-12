@@ -333,7 +333,9 @@ impl Connection {
     fn unregister_listener(&self) {
         let listener_id = self.inner.mutable_state.lock().listener_id.take();
         if let Some(listener_id) = listener_id {
-            self.inner.server_context.notifier.unregister_listener(listener_id).expect("unregister listener");
+            if let Err(err) = self.inner.server_context.notifier.unregister_listener(listener_id) {
+                debug!("GRPC, Connection {} failed to unregister notification listener {}: {}", self, listener_id, err);
+            }
             debug!("GRPC, Connection {} notification listener {} unregistered", self, listener_id);
         }
     }
@@ -410,12 +412,24 @@ impl ConnectionT for Connection {
     }
 
     fn into_message(notification: &kaspa_rpc_core::Notification, _: &Self::Encoding) -> Self::Message {
-        Arc::new((notification).into())
+        // gRPC protowire does not support all notification types.
+        // For unsupported notifications we return a message with no payload and drop it in `send()`.
+        match notification {
+            kaspa_rpc_core::Notification::MasterDelegationExpiringSoon(_)
+            | kaspa_rpc_core::Notification::StealthUtxosChanged(_) => Arc::new(KaspadResponse { id: 0, payload: None }),
+            _ => Arc::new((notification).into()),
+        }
     }
 
     async fn send(&self, message: Self::Message) -> Result<(), Self::Error> {
         match !self.is_closed() {
-            true => self.enqueue((*message).clone()).await,
+            true => {
+                // Drop unsupported notifications (payload is None) instead of panicking.
+                if message.payload.is_none() {
+                    return Ok(());
+                }
+                self.enqueue((*message).clone()).await
+            }
             false => Err(NotificationError::ConnectionClosed.into()),
         }
     }

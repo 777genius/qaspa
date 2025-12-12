@@ -8,6 +8,10 @@ pub type Result<T> = std::result::Result<T, StealthError>;
 /// Errors that can occur during stealth address operations
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum StealthError {
+    /// Cryptographically secure randomness is unavailable
+    #[error("Randomness failed: {0}")]
+    RandomnessFailed(String),
+
     /// Invalid public key bytes (wrong length or not on curve)
     #[error("Invalid public key: {0}")]
     InvalidPublicKey(String),

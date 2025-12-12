@@ -156,10 +156,30 @@ impl Drop for SecretKey {
 pub type PrivateKey = SecretKey;
 
 /// ML-DSA keypair (public + secret key)
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct MlDsaKeypair {
     pub public_key: PublicKey,
     pub secret_key: SecretKey,
+}
+
+impl<'de> Deserialize<'de> for MlDsaKeypair {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct MlDsaKeypairSerde {
+            public_key: PublicKey,
+            secret_key: SecretKey,
+        }
+
+        let decoded = MlDsaKeypairSerde::deserialize(deserializer)?;
+        if decoded.public_key.level() != decoded.secret_key.level() {
+            return Err(serde::de::Error::custom("public_key.level must match secret_key.level"));
+        }
+
+        Ok(Self { public_key: decoded.public_key, secret_key: decoded.secret_key })
+    }
 }
 
 impl Clone for MlDsaKeypair {
@@ -206,7 +226,9 @@ pub fn try_generate_keypair(level: MlDsaLevel) -> Result<MlDsaKeypair> {
     // Generate 32 bytes of randomness using getrandom
     let mut seed = [0u8; 32];
     getrandom::getrandom(&mut seed).map_err(|e| MlDsaError::KeyGenerationFailed(format!("getrandom failed: {e}")))?;
-    Ok(keypair_from_seed_bytes(&seed, level))
+    let keypair = keypair_from_seed_bytes(&seed, level);
+    seed.zeroize();
+    Ok(keypair)
 }
 
 pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
@@ -216,7 +238,7 @@ pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
 pub(crate) fn keypair_from_seed_bytes(seed: &[u8; 32], level: MlDsaLevel) -> MlDsaKeypair {
     use ml_dsa::KeyGen;
 
-    let seed_bytes = *seed;
+    let mut seed_bytes = *seed;
 
     let (pk, sk) = match level {
         MlDsaLevel::Level2 => {
@@ -239,6 +261,7 @@ pub(crate) fn keypair_from_seed_bytes(seed: &[u8; 32], level: MlDsaLevel) -> MlD
         }
     };
 
+    seed_bytes.zeroize();
     MlDsaKeypair { public_key: PublicKey { bytes: pk, level }, secret_key: SecretKey { bytes: sk, level } }
 }
 
@@ -391,5 +414,19 @@ mod tests {
 
         let result = MlDsaKeypair::from_bytes(&pk_bytes, sk_bytes, MlDsaLevel::Level2);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_keypair_serde_rejects_mismatched_levels() {
+        let kp2 = generate_keypair(MlDsaLevel::Level2);
+        let kp3 = generate_keypair(MlDsaLevel::Level3);
+
+        let json = serde_json::json!({
+            "public_key": { "bytes": kp2.public_key.as_bytes().to_vec(), "level": "Level2" },
+            "secret_key": { "bytes": kp3.secret_key.as_bytes().to_vec(), "level": "Level3" }
+        });
+
+        let decoded: std::result::Result<MlDsaKeypair, _> = serde_json::from_value(json);
+        assert!(decoded.is_err());
     }
 }

@@ -107,6 +107,9 @@ impl BorshDeserialize for AccountKind {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> IoResult<Self> {
         let len = <u8 as BorshDeserialize>::deserialize_reader(reader)? as usize;
         let mut buf = [0; 64];
+        if len > buf.len() {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Invalid AccountKind length ({len})")));
+        }
         reader
             .read_exact(&mut buf[0..len])
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Invalid AccountKind length ({err:?})")))?;
@@ -131,5 +134,14 @@ mod tests {
         assert_eq!(storable_in, storable_out);
 
         Ok(())
+    }
+
+    #[test]
+    fn borsh_rejects_too_long_kind_len() {
+        // len=65 while max is 64 (str64)
+        let mut bytes = vec![65u8];
+        bytes.extend(std::iter::repeat(b'a').take(65));
+        let decoded: std::io::Result<AccountKind> = borsh::from_slice(&bytes);
+        assert!(decoded.is_err());
     }
 }
