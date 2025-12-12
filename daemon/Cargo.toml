@@ -27,5 +27,8 @@ workflow-node.workspace = true
 workflow-nw.workspace = true
 workflow-store.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom03.workspace = true
+
 [lints]
 workspace = true

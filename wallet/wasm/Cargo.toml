@@ -25,5 +25,8 @@ workflow-log.workspace = true
 workflow-terminal.workspace = true
 workflow-wasm.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom03.workspace = true
+
 [lints]
 workspace = true

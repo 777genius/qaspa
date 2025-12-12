@@ -133,8 +133,8 @@ impl StealthTestEnv {
         let rpc = Rpc::new(Arc::new(rpc_client.clone()), rpc_ctl);
         wallet.utxo_processor().bind_rpc(Some(rpc)).await.expect("Failed to bind RPC");
 
-        // Start the UtxoProcessor to enable stealth notifications
-        wallet.utxo_processor().start().await.expect("Failed to start UtxoProcessor");
+        // Запускаем кошелёк: поднимет внутренние таски и UtxoProcessor (включая подписку на DAA)
+        wallet.start().await.expect("Failed to start wallet");
 
         let wallet_secret = Secret::new(b"test-wallet-secret-12345".to_vec());
         let coinbase_maturity = SIMNET_PARAMS.coinbase_maturity().before();

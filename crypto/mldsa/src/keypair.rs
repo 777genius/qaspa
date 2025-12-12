@@ -3,6 +3,7 @@
 use crate::{error::*, params::MlDsaLevel};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use zeroize::Zeroize;
 
 /// ML-DSA public key
 ///
@@ -10,7 +11,7 @@ use std::fmt;
 /// - Level 2: 1312 bytes
 /// - Level 3: 1952 bytes
 /// - Level 5: 2592 bytes
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct PublicKey {
     pub(crate) bytes: Vec<u8>,
     pub(crate) level: MlDsaLevel,
@@ -51,6 +52,22 @@ impl PublicKey {
     }
 }
 
+impl<'de> Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PublicKeySerde {
+            bytes: Vec<u8>,
+            level: MlDsaLevel,
+        }
+
+        let decoded = PublicKeySerde::deserialize(deserializer)?;
+        PublicKey::from_bytes(&decoded.bytes, decoded.level).map_err(serde::de::Error::custom)
+    }
+}
+
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "PublicKey({}..{} [{} bytes])", &self.to_hex()[..8], &self.to_hex()[self.to_hex().len() - 8..], self.len())
@@ -72,7 +89,7 @@ impl fmt::Display for PublicKey {
 ///
 /// **Security Notice**: This type does not implement Clone or Debug to prevent
 /// accidental exposure of secret key material.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct SecretKey {
     pub(crate) bytes: Vec<u8>,
     pub(crate) level: MlDsaLevel,
@@ -111,15 +128,27 @@ impl SecretKey {
     }
 }
 
+impl<'de> Deserialize<'de> for SecretKey {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct SecretKeySerde {
+            bytes: Vec<u8>,
+            level: MlDsaLevel,
+        }
+
+        let decoded = SecretKeySerde::deserialize(deserializer)?;
+        SecretKey::from_bytes(&decoded.bytes, decoded.level).map_err(serde::de::Error::custom)
+    }
+}
+
 // Explicitly NOT implementing Clone for SecretKey (security)
 // Explicitly NOT implementing Debug for SecretKey (security)
 impl Drop for SecretKey {
     fn drop(&mut self) {
-        // Zero out secret key memory on drop
-        use std::ptr;
-        unsafe {
-            ptr::write_bytes(self.bytes.as_mut_ptr(), 0, self.bytes.len());
-        }
+        self.bytes.zeroize();
     }
 }
 
@@ -293,6 +322,13 @@ mod tests {
     }
 
     #[test]
+    fn test_public_key_serde_rejects_wrong_length() {
+        let json = r#"{"bytes":[1,2,3],"level":"Level2"}"#;
+        let decoded: std::result::Result<PublicKey, _> = serde_json::from_str(json);
+        assert!(decoded.is_err());
+    }
+
+    #[test]
     fn test_secret_key_zeroization() {
         let kp = generate_keypair(MlDsaLevel::Level2);
         let sk_bytes = kp.secret_key.as_bytes().to_vec();
@@ -302,6 +338,13 @@ mod tests {
         // After drop, the secret key should be zeroized (we can't directly verify
         // but we're testing that drop doesn't panic and the zeroization logic runs)
         assert_eq!(sk_bytes.len(), 2560);
+    }
+
+    #[test]
+    fn test_secret_key_serde_rejects_wrong_length() {
+        let json = r#"{"bytes":[1,2,3],"level":"Level2"}"#;
+        let decoded: std::result::Result<SecretKey, _> = serde_json::from_str(json);
+        assert!(decoded.is_err());
     }
 
     #[test]

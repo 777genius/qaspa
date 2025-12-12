@@ -11,6 +11,32 @@ if [ $status -ne 0 ]; then
     exit $status
 fi
 
+# wasm32 toolchain helpers (mainly for macOS where Apple clang may not support wasm targets)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # If a wasm-capable clang is available (usually from Homebrew llvm), prefer it for C deps (e.g. secp256k1-sys).
+    if ! clang --target=wasm32-unknown-unknown -c -x c /dev/null -o /tmp/wasm32-clang-check.o 2>/dev/null; then
+        for candidate in /opt/homebrew/opt/llvm/bin/clang /usr/local/opt/llvm/bin/clang; do
+            if [[ -x "$candidate" ]] && "$candidate" --target=wasm32-unknown-unknown -c -x c /dev/null -o /tmp/wasm32-clang-check.o 2>/dev/null; then
+                export CC_wasm32_unknown_unknown="$candidate"
+                # Prefer matching llvm-ar when available
+                if [[ -x "${candidate%/clang}/llvm-ar" ]]; then
+                    export AR="${candidate%/clang}/llvm-ar"
+                fi
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "${CC_wasm32_unknown_unknown:-}" ]] && ! clang --target=wasm32-unknown-unknown -c -x c /dev/null -o /tmp/wasm32-clang-check.o 2>/dev/null; then
+        echo
+        echo "--> wasm32 build requires a wasm-capable clang on macOS (Apple clang обычно не поддерживает wasm32)."
+        echo "    Установи LLVM (например, 'brew install llvm') и повтори:"
+        echo "      CC_wasm32_unknown_unknown=/path/to/clang ./check"
+        echo
+        exit 1
+    fi
+fi
+
 declare -a crates=(
     "kaspa-wasm"
 )
