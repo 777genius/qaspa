@@ -75,13 +75,14 @@ impl Mnemonic {
     }
 
     #[wasm_bindgen(setter, js_name = entropy)]
-    pub fn set_entropy(&mut self, entropy: String) {
-        let vec = Vec::<u8>::from_hex(&entropy).unwrap_or_else(|err| panic!("invalid entropy `{entropy}`: {err}"));
+    pub fn set_entropy(&mut self, entropy: String) -> Result<()> {
+        let vec = Vec::<u8>::from_hex(&entropy).map_err(|err| Error::String(format!("invalid entropy `{entropy}`: {err}")))?;
         let len = vec.len();
         if len != 16 && len != 32 {
-            panic!("Invalid entropy: `{entropy}`")
+            return Err(Error::String(format!("Entropy length should be 16 or 32 (got {len}).")));
         }
         self.entropy = vec;
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = random)]
@@ -247,10 +248,22 @@ impl Drop for Mnemonic {
 #[cfg(test)]
 mod tests {
     use super::Mnemonic;
+    use crate::Error;
     use crate::ExtendedPrivateKey;
     use crate::Language;
     use crate::Prefix;
     use crate::SecretKey;
+
+    #[test]
+    fn set_entropy_rejects_invalid_hex_and_length() {
+        let mut mnemonic = Mnemonic::random(12.try_into().unwrap(), Language::English).unwrap();
+
+        let err = mnemonic.set_entropy("not-hex".to_string()).unwrap_err();
+        assert!(matches!(err, Error::String(_)));
+
+        let err = mnemonic.set_entropy("00".to_string()).unwrap_err(); // 1 byte
+        assert!(matches!(err, Error::String(_)));
+    }
 
     #[test]
     pub fn tests() {

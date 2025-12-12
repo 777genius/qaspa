@@ -1,6 +1,12 @@
-#!/bin/sh
-set -euo pipefail
+#!/bin/bash
+set -e
 
-echo "→ cargo fmt --all -- --check"
-cargo fmt --all -- --check
+echo "🔧 Running cargo fmt..."
+cargo fmt --all
 
+if ! git diff --exit-code --quiet; then
+    echo "✨ Code formatted. Adding changes to commit..."
+    git add -u
+fi
+
+echo "✅ Pre-commit checks passed!"

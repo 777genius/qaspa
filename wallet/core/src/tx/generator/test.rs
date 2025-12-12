@@ -744,6 +744,52 @@ fn test_generator_inputs_100_outputs_1_fees_include_success() -> Result<()> {
 }
 
 #[test]
+fn test_generator_receiver_pays_tiny_output_does_not_underflow() -> Result<()> {
+    // Regression: receiver-pays fee adjustment must not underflow when the destination amount is smaller than the computed fees.
+    generator(test_network_id(), &[10.0], &[], None, Fees::receiver(Kaspa(5.0)), [(output_address, Kaspa(1.0))].as_slice())
+        .unwrap()
+        .harness()
+        .insufficient_funds();
+
+    Ok(())
+}
+
+#[test]
+fn test_generator_receiver_pays_requires_at_least_one_output() -> Result<()> {
+    let network_id = test_network_id();
+    let network_type = NetworkType::from(network_id);
+    let change_address = change_address(network_type);
+    let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(1.0))];
+    let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
+
+    let settings = GeneratorSettings {
+        network_id,
+        multiplexer: None,
+        sig_op_count: 1,
+        minimum_signatures: 1,
+        change_address,
+        utxo_iterator,
+        source_utxo_context: None,
+        priority_utxo_entries: None,
+        destination_utxo_context: None,
+        fee_rate: None,
+        final_transaction_priority_fee: Fees::ReceiverPays(0),
+        final_transaction_destination: PaymentDestination::PaymentOutputs(PaymentOutputs { outputs: vec![] }),
+        final_transaction_payload: None,
+        stealth_change_creator: None,
+        random_fee_settings: RandomFeeSettings::default(),
+        include_delegation_id: true,
+    };
+
+    let err = match Generator::try_new(settings, None, None) {
+        Ok(_) => panic!("receiver-pays without outputs must be rejected"),
+        Err(err) => err,
+    };
+    assert!(matches!(err, Error::GeneratorIncludeFeesRequiresOneOutput));
+    Ok(())
+}
+
+#[test]
 fn test_generator_inputs_100_outputs_1_fees_exclude_insufficient_funds() -> Result<()> {
     // With new mass parameters, all 100 inputs fit in a single transaction
     // but 1000 KAS output + 5 KAS fees > 1000 KAS available

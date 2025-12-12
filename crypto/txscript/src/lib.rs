@@ -209,7 +209,12 @@ fn get_sig_op_count_by_opcodes<T: VerifiableTransaction, Reused: SigHashReusedVa
                             continue;
                         }
 
-                        let prev_opcode = opcodes[i - 1].as_ref().expect("they were checked before");
+                        let prev_opcode = match opcodes[i - 1].as_ref() {
+                            Ok(op) => op,
+                            // If parsing failed for the previous opcode, return the current count
+                            // (conservative upper bound on malformed scripts).
+                            Err(_) => return num_sigs,
+                        };
                         if prev_opcode.value() >= codes::OpTrue && prev_opcode.value() <= codes::Op16 {
                             num_sigs += to_small_int(prev_opcode) as u64;
                         } else {
@@ -810,6 +815,21 @@ mod tests {
             let mut vm = TxScriptEngine::from_transaction_input(&populated_tx, &input, 0, &utxo_entry, &reused_values, &sig_cache);
             assert_eq!(vm.execute(), test.expected_result);
         }
+    }
+
+    #[test]
+    fn sigop_count_upper_bound_does_not_panic_when_prev_opcode_is_err() {
+        // Regression test: get_sig_op_count_by_opcodes used to `expect()` previous opcode to be Ok,
+        // but parse_script can yield Err values while still continuing iteration.
+        let script = [codes::OpCheckMultiSig];
+        let mut it = script.iter();
+        let multisig =
+            super::deserialize_next_opcode::<_, VerifiableTransactionMock, SigHashReusedValuesUnsync>(&mut it).unwrap().unwrap();
+
+        let opcodes: Vec<Result<DynOpcodeImplementation<VerifiableTransactionMock, SigHashReusedValuesUnsync>, TxScriptError>> =
+            vec![Err(TxScriptError::NotATransactionInput), Ok(multisig)];
+
+        let _count = super::get_sig_op_count_by_opcodes::<VerifiableTransactionMock, SigHashReusedValuesUnsync>(&opcodes);
     }
 
     #[test]

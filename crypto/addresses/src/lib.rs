@@ -285,8 +285,8 @@ impl Address {
 #[wasm_bindgen]
 impl Address {
     #[wasm_bindgen(constructor)]
-    pub fn constructor(address: &str) -> Address {
-        address.try_into().unwrap_or_else(|err| panic!("Address::constructor() - address error `{}`: {err}", address))
+    pub fn constructor(address: &str) -> std::result::Result<Address, JsValue> {
+        address.try_into().map_err(|err| JsValue::from_str(&format!("invalid address `{address}`: {err}")))
     }
 
     #[wasm_bindgen(js_name=validate)]
@@ -311,8 +311,9 @@ impl Address {
     }
 
     #[wasm_bindgen(setter, js_name = "setPrefix")]
-    pub fn set_prefix_from_str(&mut self, prefix: &str) {
-        self.prefix = Prefix::try_from(prefix).unwrap_or_else(|err| panic!("Address::prefix() - invalid prefix `{prefix}`: {err}"));
+    pub fn set_prefix_from_str(&mut self, prefix: &str) -> std::result::Result<(), JsValue> {
+        self.prefix = Prefix::try_from(prefix).map_err(|err| JsValue::from_str(&format!("invalid prefix `{prefix}`: {err}")))?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter, js_name = "payload")]

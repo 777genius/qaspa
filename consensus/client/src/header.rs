@@ -191,8 +191,11 @@ impl Header {
     }
 
     #[wasm_bindgen(setter = hashMerkleRoot)]
-    pub fn set_hash_merkle_root_from_js_value(&mut self, js_value: JsValue) {
-        self.inner_mut().hash_merkle_root = Hash::from_slice(&js_value.try_as_vec_u8().expect("hash merkle root"));
+    pub fn set_hash_merkle_root_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
+        let bytes = js_value.try_as_vec_u8()?;
+        self.inner_mut().hash_merkle_root =
+            Hash::try_from_slice(&bytes).map_err(|err| Error::custom(format!("hashMerkleRoot: {err}")))?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = acceptedIdMerkleRoot)]
@@ -201,8 +204,11 @@ impl Header {
     }
 
     #[wasm_bindgen(setter = acceptedIdMerkleRoot)]
-    pub fn set_accepted_id_merkle_root_from_js_value(&mut self, js_value: JsValue) {
-        self.inner_mut().accepted_id_merkle_root = Hash::from_slice(&js_value.try_as_vec_u8().expect("accepted id merkle root"));
+    pub fn set_accepted_id_merkle_root_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
+        let bytes = js_value.try_as_vec_u8()?;
+        self.inner_mut().accepted_id_merkle_root =
+            Hash::try_from_slice(&bytes).map_err(|err| Error::custom(format!("acceptedIdMerkleRoot: {err}")))?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = utxoCommitment)]
@@ -211,8 +217,11 @@ impl Header {
     }
 
     #[wasm_bindgen(setter = utxoCommitment)]
-    pub fn set_utxo_commitment_from_js_value(&mut self, js_value: JsValue) {
-        self.inner_mut().utxo_commitment = Hash::from_slice(&js_value.try_as_vec_u8().expect("utxo commitment"));
+    pub fn set_utxo_commitment_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
+        let bytes = js_value.try_as_vec_u8()?;
+        self.inner_mut().utxo_commitment =
+            Hash::try_from_slice(&bytes).map_err(|err| Error::custom(format!("utxoCommitment: {err}")))?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = pruningPoint)]
@@ -221,8 +230,10 @@ impl Header {
     }
 
     #[wasm_bindgen(setter = pruningPoint)]
-    pub fn set_pruning_point_from_js_value(&mut self, js_value: JsValue) {
-        self.inner_mut().pruning_point = Hash::from_slice(&js_value.try_as_vec_u8().expect("pruning point"));
+    pub fn set_pruning_point_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
+        let bytes = js_value.try_as_vec_u8()?;
+        self.inner_mut().pruning_point = Hash::try_from_slice(&bytes).map_err(|err| Error::custom(format!("pruning point: {err}")))?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = parentsByLevel)]
@@ -231,7 +242,7 @@ impl Header {
     }
 
     #[wasm_bindgen(setter = parentsByLevel)]
-    pub fn set_parents_by_level_from_js_value(&mut self, js_value: JsValue) {
+    pub fn set_parents_by_level_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
         let array = Array::from(&js_value);
         let parents = array
             .iter()
@@ -242,12 +253,10 @@ impl Header {
                     .map(|hash| Ok(hash.try_into_owned()?))
                     .collect::<std::result::Result<Vec<Hash>, Error>>()
             })
-            .collect::<std::result::Result<Vec<Vec<Hash>>, Error>>()
-            .unwrap_or_else(|err| {
-                panic!("{}", err);
-            });
+            .collect::<std::result::Result<Vec<Vec<Hash>>, Error>>()?;
 
-        self.inner_mut().parents_by_level = parents.try_into().unwrap();
+        self.inner_mut().parents_by_level = parents.try_into()?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = blueWork)]
@@ -261,8 +270,9 @@ impl Header {
     }
 
     #[wasm_bindgen(setter = blueWork)]
-    pub fn set_blue_work_from_js_value(&mut self, js_value: JsValue) {
-        self.inner_mut().blue_work = js_value.try_into().unwrap_or_else(|err| panic!("invalid blue work: {err}"));
+    pub fn set_blue_work_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
+        self.inner_mut().blue_work = js_value.try_into()?;
+        Ok(())
     }
 }
 

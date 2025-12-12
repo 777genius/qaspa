@@ -211,6 +211,19 @@ To build WASM on MacOS you need to install `llvm` from homebrew (at the time of 
   In order to use `build-docker-multi-arch.sh`, you need Docker with Buildx enabled.
  </details>
 
+ <details>
+ <summary>Development Setup</summary>
+
+ After cloning the repository, set up git hooks to ensure code formatting before commits:
+
+ ```bash
+ git config core.hooksPath githooks
+ ```
+
+ This enables automatic code formatting with `cargo fmt` on every commit.
+
+ </details>
+
   <details>
 
   <summary>Building WASM32 SDK</summary>

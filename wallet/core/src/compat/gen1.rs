@@ -6,16 +6,29 @@ pub fn decrypt_mnemonic<T: AsRef<[u8]>>(
     EncryptedMnemonic { cipher, salt }: EncryptedMnemonic<T>,
     pass: &[u8],
 ) -> Result<String> {
-    let params = argon2::ParamsBuilder::new().t_cost(1).m_cost(64 * 1024).p_cost(num_threads).output_len(32).build().unwrap();
+    let cipher_bytes = cipher.as_ref();
+    if cipher_bytes.len() < 24 {
+        return Err(Error::Custom("invalid encrypted mnemonic: cipher too short".to_owned()));
+    }
+
+    let params = argon2::ParamsBuilder::new()
+        .t_cost(1)
+        .m_cost(64 * 1024)
+        .p_cost(num_threads)
+        .output_len(32)
+        .build()
+        .map_err(|e| Error::Custom(format!("argon2 params error: {e}")))?;
     let mut key = [0u8; 32];
     argon2::Argon2::new(argon2::Algorithm::Argon2id, Default::default(), params)
         .hash_password_into(pass, salt.as_ref(), &mut key[..])
-        .unwrap();
+        .map_err(|e| Error::Custom(format!("argon2 error: {e}")))?;
     let mut aead = chacha20poly1305::XChaCha20Poly1305::new(Key::from_slice(&key));
-    let (nonce, ciphertext) = cipher.as_ref().split_at(24);
+    let nonce = cipher_bytes.get(..24).ok_or_else(|| Error::Custom("invalid encrypted mnemonic: missing nonce".to_owned()))?;
+    let ciphertext =
+        cipher_bytes.get(24..).ok_or_else(|| Error::Custom("invalid encrypted mnemonic: missing ciphertext".to_owned()))?;
 
     let decrypted = aead.decrypt(nonce.into(), ciphertext)?;
-    Ok(unsafe { String::from_utf8_unchecked(decrypted) })
+    String::from_utf8(decrypted).map_err(|_| Error::Custom("invalid decrypted mnemonic: non-UTF8".to_owned()))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -40,6 +53,14 @@ mod test {
         log_info!("decrypted: {decrypted:?}");
         assert!(decrypted.is_ok(), "decrypt error");
         assert_eq!("dizzy uncover funny time weapon chat volume squirrel comic motion until diamond response remind hurt spider door strategy entire oyster hawk marriage soon fabric", decrypted.unwrap());
+    }
+
+    #[test]
+    fn decrypt_rejects_short_cipher() {
+        // 24-byte nonce is required (cipher format: [nonce|ciphertext])
+        let file = EncryptedMnemonic { cipher: [0u8; 10].as_slice(), salt: [1u8; 16].as_slice() };
+        let res = decrypt_mnemonic(8, file, b"");
+        assert!(res.is_err());
     }
 
     #[tokio::test]

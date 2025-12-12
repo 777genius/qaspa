@@ -333,14 +333,13 @@ impl UtxoEntries {
     }
 
     #[wasm_bindgen(setter = items)]
-    pub fn set_items_from_js_array(&mut self, js_value: &JsValue) {
+    pub fn set_items_from_js_array(&mut self, js_value: &JsValue) -> Result<()> {
         let items = Array::from(js_value)
             .iter()
-            .map(|js_value| {
-                UtxoEntryReference::try_owned_from(&js_value).unwrap_or_else(|err| panic!("invalid UtxoEntryReference: {err}"))
-            })
-            .collect::<Vec<_>>();
+            .map(|js_value| UtxoEntryReference::try_owned_from(&js_value))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         self.0 = Arc::new(items);
+        Ok(())
     }
 
     /// Sort the contained entries by amount. Please note that

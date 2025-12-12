@@ -191,14 +191,13 @@ impl Transaction {
     }
 
     #[wasm_bindgen(setter = inputs)]
-    pub fn set_inputs_from_js_array(&mut self, js_value: &TransactionInputArrayAsArgT) {
+    pub fn set_inputs_from_js_array(&mut self, js_value: &TransactionInputArrayAsArgT) -> Result<()> {
         let inputs = Array::from(js_value)
             .iter()
-            .map(|js_value| {
-                TransactionInput::try_owned_from(&js_value).unwrap_or_else(|err| panic!("invalid transaction input: {err}"))
-            })
-            .collect::<Vec<_>>();
+            .map(|js_value| TransactionInput::try_owned_from(&js_value))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         self.inner().inputs = inputs;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = outputs)]
@@ -208,12 +207,13 @@ impl Transaction {
     }
 
     #[wasm_bindgen(setter = outputs)]
-    pub fn set_outputs_from_js_array(&mut self, js_value: &TransactionOutputArrayAsArgT) {
+    pub fn set_outputs_from_js_array(&mut self, js_value: &TransactionOutputArrayAsArgT) -> Result<()> {
         let outputs = Array::from(js_value)
             .iter()
-            .map(|js_value| TryCastFromJs::try_owned_from(&js_value).unwrap_or_else(|err| panic!("invalid transaction output: {err}")))
-            .collect::<Vec<_>>();
+            .map(|js_value| TryCastFromJs::try_owned_from(&js_value))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         self.inner().outputs = outputs;
+        Ok(())
     }
 
     #[wasm_bindgen(getter, js_name = version)]
@@ -252,9 +252,11 @@ impl Transaction {
     }
 
     #[wasm_bindgen(setter = subnetworkId)]
-    pub fn set_subnetwork_id_from_js_value(&mut self, js_value: JsValue) {
-        let subnetwork_id = js_value.try_as_vec_u8().unwrap_or_else(|err| panic!("subnetwork id error: {err}"));
-        self.inner().subnetwork_id = subnetwork_id.as_slice().try_into().unwrap_or_else(|err| panic!("subnetwork id error: {err}"));
+    pub fn set_subnetwork_id_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
+        let subnetwork_id = js_value.try_as_vec_u8()?;
+        self.inner().subnetwork_id =
+            subnetwork_id.as_slice().try_into().map_err(|err| Error::custom(format!("subnetwork id error: {err}")))?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = payload)]
@@ -263,8 +265,9 @@ impl Transaction {
     }
 
     #[wasm_bindgen(setter = payload)]
-    pub fn set_payload_from_js_value(&mut self, js_value: JsValue) {
-        self.inner.lock().unwrap().payload = js_value.try_as_vec_u8().unwrap_or_else(|err| panic!("payload value error: {err}"));
+    pub fn set_payload_from_js_value(&mut self, js_value: JsValue) -> Result<()> {
+        self.inner.lock().unwrap().payload = js_value.try_as_vec_u8()?;
+        Ok(())
     }
 
     #[wasm_bindgen(getter = mass)]

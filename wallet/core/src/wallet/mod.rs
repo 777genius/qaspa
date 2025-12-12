@@ -2537,9 +2537,8 @@ impl Wallet {
         if file.xpublic_keys.iter().any(|k| k.get(..kaspa_bip32::Prefix::LENGTH).is_none()) {
             return Err(Error::Custom("invalid xpublic_key prefix".to_owned()));
         }
-        let prefix = first_pub_key
-            .get(..kaspa_bip32::Prefix::LENGTH)
-            .ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
+        let prefix =
+            first_pub_key.get(..kaspa_bip32::Prefix::LENGTH).ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
         let prefix = kaspa_bip32::Prefix::try_from(prefix)?;
 
         let mnemonics_and_secrets: Vec<(Mnemonic, Option<Secret>)> = file
@@ -2586,9 +2585,8 @@ impl Wallet {
         if file.xpublic_keys.iter().any(|k| k.get(..kaspa_bip32::Prefix::LENGTH).is_none()) {
             return Err(Error::Custom("invalid xpublic_key prefix".to_owned()));
         }
-        let prefix = first_pub_key
-            .get(..kaspa_bip32::Prefix::LENGTH)
-            .ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
+        let prefix =
+            first_pub_key.get(..kaspa_bip32::Prefix::LENGTH).ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
         let prefix = kaspa_bip32::Prefix::try_from(prefix)?;
 
         let mnemonics_and_secrets: Vec<(Mnemonic, Option<Secret>)> = file
@@ -2603,7 +2601,9 @@ impl Wallet {
 
         let mut all_pub_keys = file.xpublic_keys;
         all_pub_keys.sort_unstable_by(|left, right| {
-            left.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default().cmp(right.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default())
+            left.get(kaspa_bip32::Prefix::LENGTH..)
+                .unwrap_or_default()
+                .cmp(right.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default())
         });
 
         let mut pubkeys_from_mnemonics = Vec::with_capacity(mnemonics_and_secrets.len());
@@ -2613,7 +2613,9 @@ impl Wallet {
             pubkeys_from_mnemonics.push(xpub_key);
         }
         pubkeys_from_mnemonics.sort_unstable_by(|left, right| {
-            left.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default().cmp(right.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default())
+            left.get(kaspa_bip32::Prefix::LENGTH..)
+                .unwrap_or_default()
+                .cmp(right.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default())
         });
         all_pub_keys.retain(|v| {
             let found = pubkeys_from_mnemonics.binary_search_by_key(v, |xpub| xpub.as_str());

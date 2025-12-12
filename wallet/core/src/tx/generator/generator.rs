@@ -702,7 +702,9 @@ impl Generator {
             return Err(Error::InvalidArgument("Fee randomization requires a priority fee".to_string()));
         }
 
-        let (min, max) = random_fee_settings.range().expect("active random fee settings must provide a range");
+        let (min, max) = random_fee_settings
+            .range()
+            .ok_or_else(|| Error::InvalidArgument("Fee randomization is active but range is missing".to_string()))?;
 
         let offset = if min == max { min } else { OsRng.gen_range(min..=max) };
 
@@ -1135,12 +1137,15 @@ impl Generator {
                 let mut final_outputs = self.inner.final_transaction_outputs.clone();
 
                 if self.inner.final_transaction_priority_fee.receiver_pays() {
-                    let output = final_outputs.get_mut(0).expect("include fees requires one output");
-                    if aggregate_input_value < output.value {
-                        output.value = aggregate_input_value - transaction_fees;
-                    } else {
-                        output.value -= transaction_fees;
-                    }
+                    let output = final_outputs
+                        .get_mut(0)
+                        .ok_or_else(|| Error::InvalidArgument("ReceiverPays fee policy requires at least one output".to_string()))?;
+
+                    let base_value = aggregate_input_value.min(output.value);
+                    output.value = base_value.checked_sub(transaction_fees).ok_or(Error::InsufficientFunds {
+                        additional_needed: transaction_fees.saturating_sub(base_value),
+                        origin: "final",
+                    })?;
                 }
 
                 // Create change output - special handling for Stealth addresses

@@ -1,4 +1,4 @@
-use crate::{Address, AddressError, Prefix};
+use crate::{Address, AddressError, Prefix, Version};
 
 const CHARSET: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 const REV_CHARSET: [u8; 123] = [
@@ -122,11 +122,12 @@ impl Address {
             })
             .collect::<Vec<u8>>();
         err?;
-        if address.len() < 8 {
+        if address_u5.len() < 8 {
             return Err(AddressError::BadPayload);
         }
 
-        let (payload_u5, checksum_u5) = address_u5.split_at(address.len() - 8);
+        let payload_split_idx = address_u5.len().saturating_sub(8);
+        let (payload_u5, checksum_u5) = address_u5.split_at(payload_split_idx);
         let fivebit_prefix = prefix.as_str().as_bytes().iter().copied().map(|c| c & 0x1fu8);
 
         // Convert to number
@@ -138,6 +139,35 @@ impl Address {
         }
 
         let payload_u8 = conv5to8(payload_u5);
-        Ok(Self::new(prefix, payload_u8[0].try_into()?, payload_u8[1..].into()))
+        let (version_byte, payload) = payload_u8.split_first().ok_or(AddressError::BadPayload)?;
+        let version: Version = (*version_byte).try_into()?;
+
+        // Address::new enforces payload length via assert (except for special test prefixes),
+        // so validate here and return a proper error instead of panicking on malformed input.
+        if (version == Version::PubKeyMLDSA || !prefix.is_test()) && payload.len() != version.public_key_len() {
+            return Err(AddressError::BadPayload);
+        }
+
+        Ok(Self::new(prefix, version, payload))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_payload_rejects_checksum_only_string() {
+        // Construct a bech32 payload string that contains ONLY the checksum for an empty payload.
+        // Previously this could panic (payload_u8[0]) if checksum happened to match.
+        let prefix = Prefix::Mainnet;
+        let payload_u5: Vec<u8> = vec![];
+        let fivebit_prefix = prefix.as_str().as_bytes().iter().copied().map(|c| c & 0x1fu8);
+        let check = checksum(payload_u5.as_slice(), fivebit_prefix);
+        let checksum_u5 = conv8to5(&check.to_be_bytes()[3..]);
+        let address = String::from_utf8(checksum_u5.iter().map(|c| CHARSET[*c as usize]).collect()).unwrap();
+
+        let decoded = Address::decode_payload(prefix, &address);
+        assert_eq!(decoded, Err(AddressError::BadPayload));
     }
 }

@@ -273,11 +273,11 @@ impl PendingTransaction {
     /// Signs regular (non-stealth) inputs using the standard signer.
     /// If the transaction has stealth inputs, they will remain unsigned.
     pub fn try_sign(&self) -> Result<()> {
-        let signer = self.inner.generator.signer().as_ref().expect("no signer in tx generator");
+        let signer = self.inner.generator.signer().as_ref().ok_or_else(|| Error::Custom("no signer in tx generator".to_string()))?;
         // If transaction has stealth inputs, use partial signing (stealth inputs will be signed separately)
         let has_stealth = self.has_stealth_inputs();
         let signed_tx = signer.try_sign_partial(self.inner.signable_tx.lock()?.clone(), self.addresses(), !has_stealth)?;
-        *self.inner.signable_tx.lock().unwrap() = signed_tx;
+        *self.inner.signable_tx.lock()? = signed_tx;
         Ok(())
     }
 
@@ -289,7 +289,7 @@ impl PendingTransaction {
         let signable_tx = self.inner.signable_tx.lock()?.clone();
         let include = self.inner.generator.include_delegation_id();
         let signed = signer.sign(signable_tx, include).await?;
-        *self.inner.signable_tx.lock().unwrap() = signed.unwrap();
+        *self.inner.signable_tx.lock()? = signed.unwrap();
         Ok(())
     }
 
