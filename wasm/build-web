@@ -3,7 +3,10 @@ set -e
 
 # Workaround for Rust 1.87.0
 # https://github.com/rust-lang/rust/issues/141048
-export RUSTFLAGS='-Ctarget-cpu=mvp --cfg getrandom_backend="wasm_js"'
+#
+# wasm-pack uses wasm-bindgen with --weak-refs. This requires reference-types
+# to be enabled in the generated wasm module.
+export RUSTFLAGS='-Ctarget-cpu=mvp -Ctarget-feature=+reference-types --cfg getrandom_backend="wasm_js"'
 
 if [ "$1" == "--keygen" ]; then
     echo "building wasm32-keygen"
