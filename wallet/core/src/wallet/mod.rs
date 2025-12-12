@@ -565,22 +565,14 @@ impl Wallet {
         let master_pubkey = master_payload.master_pubkey;
 
         let store = self.delegation_store().clone();
-        if store.has_request(&request.request_id) {
-            let existing = store.records_for_request(&request.request_id);
-            if response.delegations.iter().all(|record| existing.iter().any(|stored| stored == record)) {
-                return Ok(MasterDelegationApplyResponse {
-                    applied: 0,
-                    skipped: response.delegations.len(),
-                    missing_accounts: Vec::new(),
-                });
-            }
-        }
 
         let mut header_map = HashMap::new();
         let mut expected_keys = HashSet::new();
         for header in request.delegations.iter() {
             let key = (header.account_id, header.nonce);
-            header_map.insert(key, header);
+            if header_map.insert(key, header).is_some() {
+                return Err(Error::Custom("delegation request contains duplicate account_id/nonce".to_string()));
+            }
             expected_keys.insert(key);
         }
 
@@ -592,7 +584,10 @@ impl Wallet {
         let mut skipped = 0usize;
         let mut missing_accounts = Vec::new();
 
-        let mut matched_keys = HashSet::new();
+        // Сначала валидируем ответ целиком (полноту + сигнатуры) без изменения стора.
+        // Это защищает от частичного применения при ошибках и от "полных" ответов с битой подписью/полями.
+        let mut validated_keys = HashSet::new();
+        let mut validated_records = Vec::new();
 
         for record in response.delegations.iter() {
             if record.anchor != response.master_anchor || record.level != response.master_level {
@@ -605,7 +600,6 @@ impl Wallet {
                 skipped += 1;
                 continue;
             };
-            matched_keys.insert(key);
 
             let expected = DelegationRecordV1::from(*header);
             if expected.anchor != record.anchor
@@ -616,22 +610,46 @@ impl Wallet {
                 || expected.scan_pubkey != record.scan_pubkey
                 || expected.status != record.status
             {
-                skipped += 1;
-                continue;
+                return Err(Error::Custom(format!(
+                    "delegation response record mismatch (account_id={}, nonce={})",
+                    record.account_id, record.nonce
+                )));
             }
 
             let verified = crate::account::delegation::verify_against_anchor(&anchor, &master_pubkey, record)?;
             if !verified {
-                skipped += 1;
-                continue;
+                return Err(Error::Custom(format!(
+                    "delegation response signature invalid (account_id={}, nonce={})",
+                    record.account_id, record.nonce
+                )));
             }
 
+            if !validated_keys.insert(key) {
+                return Err(Error::Custom(format!(
+                    "delegation response contains duplicate record (account_id={}, nonce={})",
+                    record.account_id, record.nonce
+                )));
+            }
+            validated_records.push(record.clone());
+        }
+        if validated_keys.len() != expected_keys.len() {
+            return Err(Error::Custom("delegation response missing records from request".to_string()));
+        }
+
+        for record in validated_records.iter() {
             if let Some(existing) = store.find_by_anchor_account_nonce(&response.master_anchor, &record.account_id, record.nonce) {
                 if existing == *record {
                     skipped += 1;
                     continue;
                 }
                 return Err(Error::MasterDelegationNonceConflict { account_id: record.account_id, nonce: record.nonce });
+            }
+
+            if let Some(current_nonce) = store.latest_nonce(&response.master_anchor, &record.account_id) {
+                if record.nonce <= current_nonce {
+                    skipped += 1;
+                    continue;
+                }
             }
 
             let Some(account) = self.get_account_by_id(&record.account_id, &guard).await? else {
@@ -662,11 +680,6 @@ impl Wallet {
             applied += 1;
         }
         drop(guard);
-
-        // Все заголовки из запроса должны присутствовать в ответе.
-        if matched_keys.len() != expected_keys.len() {
-            return Err(Error::Custom("delegation response missing records from request".to_string()));
-        }
 
         self.save_delegations(wallet_secret).await?;
         self.inner.store.commit(wallet_secret).await?;

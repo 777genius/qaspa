@@ -85,5 +85,8 @@ features = [
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom03.workspace = true
+
 [lints]
 workspace = true

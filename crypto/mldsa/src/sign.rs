@@ -10,7 +10,7 @@ use std::fmt;
 /// - Level 2: 2420 bytes
 /// - Level 3: 3309 bytes
 /// - Level 5: 4627 bytes
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct Signature {
     pub(crate) bytes: Vec<u8>,
     pub(crate) level: MlDsaLevel,
@@ -48,6 +48,22 @@ impl Signature {
     /// Converts to hex string for display
     pub fn to_hex(&self) -> String {
         hex::encode(&self.bytes)
+    }
+}
+
+impl<'de> Deserialize<'de> for Signature {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct SignatureSerde {
+            bytes: Vec<u8>,
+            level: MlDsaLevel,
+        }
+
+        let decoded = SignatureSerde::deserialize(deserializer)?;
+        Signature::from_bytes(&decoded.bytes, decoded.level).map_err(serde::de::Error::custom)
     }
 }
 
@@ -234,5 +250,12 @@ mod tests {
         let json = serde_json::to_string(&sig).unwrap();
         let deserialized: Signature = serde_json::from_str(&json).unwrap();
         assert_eq!(sig, deserialized);
+    }
+
+    #[test]
+    fn test_signature_serde_rejects_wrong_length() {
+        let json = r#"{"bytes":[1,2,3],"level":"Level2"}"#;
+        let decoded: std::result::Result<Signature, _> = serde_json::from_str(json);
+        assert!(decoded.is_err());
     }
 }

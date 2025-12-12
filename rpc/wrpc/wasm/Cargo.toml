@@ -43,5 +43,8 @@ futures.workspace = true
 getrandom03.workspace = true
 ring = { version = "0.17", features = ["wasm32_unknown_unknown_js"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom03.workspace = true
+
 [lints]
 workspace = true

@@ -2702,6 +2702,7 @@ dependencies = [
  "downcast",
  "faster-hex",
  "futures",
+ "getrandom 0.3.4",
  "hex",
  "js-sys",
  "kaspa-addresses",
@@ -2959,6 +2960,7 @@ dependencies = [
  "cfg-if 1.0.4",
  "downcast-rs",
  "futures",
+ "getrandom 0.3.4",
  "kaspa-addresses",
  "kaspa-consensus-core",
  "kaspa-wallet-core",
@@ -3753,6 +3755,7 @@ name = "kaspa-wallet-cli-wasm"
 version = "1.0.1"
 dependencies = [
  "async-trait",
+ "getrandom 0.3.4",
  "js-sys",
  "kaspa-cli",
  "wasm-bindgen",

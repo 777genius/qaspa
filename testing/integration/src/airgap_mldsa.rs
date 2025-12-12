@@ -397,6 +397,52 @@ async fn test_airgap_delegation_missing_record_rejected_online() {
     let result = env.wallet.apply_master_delegation_response(&env.wallet_secret, request, tampered_response, false).await;
     assert!(result.is_err(), "response missing records must be rejected");
 
+    // Ошибка apply не должна оставлять частично применённые изменения в памяти/сторе.
+    assert!(!env.wallet.delegation_store().has_request(&signed.response.request_id), "request id must not be stored on failure");
+    assert!(env.wallet.delegation_store().by_anchor(&master_anchor).is_empty(), "no delegations should be stored on failure");
+    assert!(stealth_a.delegation_id().is_none(), "stealth A must not be linked on failure");
+    assert!(stealth_b.delegation_id().is_none(), "stealth B must not be linked on failure");
+
+    env.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_airgap_delegation_tampered_signature_rejected_online() {
+    let env = StealthTestEnv::new().await;
+    env.mine_blocks(env.coinbase_maturity + 4).await;
+    let network_id = env.wallet.network_id().expect("network id");
+
+    let master_mnemonic = Mnemonic::random(WordCount::Words12, Language::English).unwrap();
+    let master_secret = Secret::new(master_mnemonic.phrase_string().into_bytes());
+    let master_level = MlDsaLevel::Level2;
+
+    let (master_anchor, master_account_id) =
+        create_master_with_secret(&env.wallet, &env.wallet_secret, &master_secret, master_level, "tampered-sig-online").await;
+
+    let stealth_account = env.create_stealth_account("tampered-sig-stealth").await;
+    stealth_account.unlock(&env.wallet_secret, None).await.expect("unlock stealth");
+    stealth_account.clone().connect().await.expect("connect stealth");
+    attach_stealth_to_master(&env.wallet, &env.wallet_secret, stealth_account.id(), &master_account_id).await;
+
+    let request = build_delegation_request(&env, master_anchor, master_level as u8, &stealth_account, Some(1)).await;
+
+    let offline_wallet_secret = Secret::new(b"offline-wallet-secret-13".to_vec());
+    let offline_wallet = create_offline_wallet(network_id, &offline_wallet_secret, &master_secret, master_level).await;
+    let signed =
+        offline_wallet.sign_master_delegation_request(&offline_wallet_secret, request.clone(), false).await.expect("offline sign");
+
+    let mut tampered_response = signed.response.clone();
+    assert!(!tampered_response.delegations.is_empty(), "expected at least one signed delegation");
+    assert!(!tampered_response.delegations[0].signature.is_empty(), "expected non-empty signature");
+    tampered_response.delegations[0].signature[0] ^= 0xFF;
+
+    let result = env.wallet.apply_master_delegation_response(&env.wallet_secret, request, tampered_response, false).await;
+    assert!(result.is_err(), "tampered signature must be rejected online");
+
+    // Ошибка apply не должна оставлять частично применённые изменения в памяти/сторе.
+    assert!(env.wallet.delegation_store().by_anchor(&master_anchor).is_empty(), "no delegations should be stored on failure");
+    assert!(stealth_account.delegation_id().is_none(), "stealth must not be linked on failure");
+
     env.shutdown().await;
 }
 

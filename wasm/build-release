@@ -11,6 +11,21 @@ set -e
 # to be enabled in the generated wasm module.
 export RUSTFLAGS='-Ctarget-cpu=mvp -Ctarget-feature=+reference-types --cfg getrandom_backend="wasm_js"'
 
+# Prefer wasm-capable clang on macOS (Apple clang may not support wasm32 targets).
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if ! clang --target=wasm32-unknown-unknown -c -x c /dev/null -o /tmp/wasm32-clang-check.o 2>/dev/null; then
+        for candidate in /opt/homebrew/opt/llvm/bin/clang /usr/local/opt/llvm/bin/clang; do
+            if [[ -x "$candidate" ]] && "$candidate" --target=wasm32-unknown-unknown -c -x c /dev/null -o /tmp/wasm32-clang-check.o 2>/dev/null; then
+                export CC_wasm32_unknown_unknown="$candidate"
+                if [[ -x "${candidate%/clang}/llvm-ar" ]]; then
+                    export AR="${candidate%/clang}/llvm-ar"
+                fi
+                break
+            fi
+        done
+    fi
+fi
+
 rm -rf release/*
 rm -rf web/*
 rm -rf nodejs/*
