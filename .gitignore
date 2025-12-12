@@ -10,6 +10,10 @@ web-root
 analyzer-target
 .DS_Store
 *.code-workspace
+
+# Flutter tooling caches
+wallet/flutter/.dart_tool/
+wallet/flutter/build/
 /setup
 testing/integration/perflogs*
 Servers.toml

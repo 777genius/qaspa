@@ -4,6 +4,19 @@
 target/
 !target/release/kaspad
 
+# Flutter wallet (huge, not needed for Rust tests)
+wallet/flutter/
+
+# WASM build outputs
+wasm/web/
+wasm/nodejs/
+wasm/release/
+wasm/docs/
+wasm/examples/nodejs/typescript/lib/
+
+# Node / JS deps
+**/node_modules/
+
 # Git
 .git/
 .gitignore
