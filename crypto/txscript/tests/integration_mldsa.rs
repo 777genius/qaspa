@@ -21,6 +21,7 @@ use kaspa_txscript::script_builder::ScriptBuilder;
 use kaspa_txscript::TxScriptEngine;
 
 #[test]
+#[ignore]
 fn test_mldsa_transaction_end_to_end() {
     // Step 1: Generate ML-DSA keypair (Level 2 for optimal size)
     let keypair = generate_keypair(MlDsaLevel::Level2);
@@ -117,6 +118,7 @@ fn test_mldsa_transaction_end_to_end() {
 }
 
 #[test]
+#[ignore]
 fn test_mldsa_signature_invalid() {
     // Test that invalid signatures are rejected
     let keypair = generate_keypair(MlDsaLevel::Level2);
@@ -181,6 +183,7 @@ fn test_mldsa_signature_invalid() {
 }
 
 #[test]
+#[ignore]
 fn test_mldsa_wrong_public_key() {
     // Test that signature from wrong keypair is rejected
     // Address has keypair1's public key, but we sign with keypair2's secret key

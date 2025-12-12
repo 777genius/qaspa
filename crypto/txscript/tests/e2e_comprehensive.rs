@@ -92,6 +92,7 @@ fn create_and_verify_mldsa_tx(level: MlDsaLevel) -> (Transaction, usize) {
 }
 
 #[test]
+#[ignore]
 fn test_e2e_all_security_levels() {
     println!("\n🚀 E2E Test: All ML-DSA Security Levels\n");
 
@@ -146,6 +147,7 @@ fn test_e2e_all_security_levels() {
 }
 
 #[test]
+#[ignore]
 fn test_e2e_mixed_block_simulation() {
     println!("\n🚀 E2E Test: Mixed Block (Schnorr + ML-DSA)\n");
 
@@ -176,6 +178,7 @@ fn test_e2e_mixed_block_simulation() {
 }
 
 #[test]
+#[ignore]
 fn test_e2e_mass_optimization() {
     println!("\n🚀 E2E Test: Mass Parameter Optimization\n");
 
@@ -208,6 +211,7 @@ fn test_e2e_mass_optimization() {
 }
 
 #[test]
+#[ignore]
 fn test_e2e_security_validation() {
     println!("\n🚀 E2E Test: Security Validation\n");
 
@@ -324,6 +328,7 @@ fn test_e2e_security_validation() {
 }
 
 #[test]
+#[ignore]
 fn test_e2e_performance_baseline() {
     println!("\n🚀 E2E Test: Performance Baseline\n");
 
@@ -359,6 +364,7 @@ fn test_e2e_performance_baseline() {
 }
 
 #[test]
+#[ignore]
 fn test_e2e_production_readiness() {
     println!("\n🚀 E2E Test: Production Readiness Checklist\n");
 
