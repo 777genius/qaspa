@@ -22,7 +22,7 @@
 //! ```
 
 use kaspa_mldsa::{
-    derive_keypair_from_seed, verify, MlDsaLevel, PublicKey as MlDsaPublicKey, SecretKey as MlDsaSecretKey,
+    derive_keypair_from_seed, try_generate_keypair, try_sign, verify, MlDsaLevel, PublicKey as MlDsaPublicKey, SecretKey as MlDsaSecretKey,
     Signature as MlDsaSignature, MASTER_SEED_LEN,
 };
 use std::ptr;
@@ -200,6 +200,23 @@ pub unsafe extern "C" fn kaspa_mldsa_generate_keypair(
     secret_key_out: *mut u8,
     secret_key_len: usize,
 ) -> bool {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        kaspa_mldsa_generate_keypair_inner(level, public_key_out, public_key_len, secret_key_out, secret_key_len)
+    }));
+
+    match result {
+        Ok(v) => v,
+        Err(_) => false,
+    }
+}
+
+unsafe fn kaspa_mldsa_generate_keypair_inner(
+    level: u8,
+    public_key_out: *mut u8,
+    public_key_len: usize,
+    secret_key_out: *mut u8,
+    secret_key_len: usize,
+) -> bool {
     // Null pointer checks
     if public_key_out.is_null() || secret_key_out.is_null() {
         return false;
@@ -214,7 +231,10 @@ pub unsafe extern "C" fn kaspa_mldsa_generate_keypair(
     };
 
     // Generate keypair
-    let keypair = kaspa_mldsa::generate_keypair(mldsa_level);
+    let keypair = match try_generate_keypair(mldsa_level) {
+        Ok(kp) => kp,
+        Err(_) => return false,
+    };
 
     // Check buffer sizes
     if public_key_len < keypair.public_key.len() || secret_key_len < keypair.secret_key.len() {
@@ -296,6 +316,24 @@ pub unsafe extern "C" fn kaspa_mldsa_sign(
     signature_out: *mut u8,
     signature_len: usize,
 ) -> bool {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+        kaspa_mldsa_sign_inner(message, message_len, secret_key, secret_key_len, signature_out, signature_len)
+    }));
+
+    match result {
+        Ok(v) => v,
+        Err(_) => false,
+    }
+}
+
+unsafe fn kaspa_mldsa_sign_inner(
+    message: *const u8,
+    message_len: usize,
+    secret_key: *const u8,
+    secret_key_len: usize,
+    signature_out: *mut u8,
+    signature_len: usize,
+) -> bool {
     // Null pointer checks
     if message.is_null() || secret_key.is_null() || signature_out.is_null() {
         return false;
@@ -318,7 +356,10 @@ pub unsafe extern "C" fn kaspa_mldsa_sign(
     };
 
     // Sign
-    let signature = kaspa_mldsa::sign(message_slice, &sk);
+    let signature = match try_sign(message_slice, &sk) {
+        Ok(sig) => sig,
+        Err(_) => return false,
+    };
 
     // Check buffer size
     if signature_len < signature.len() {

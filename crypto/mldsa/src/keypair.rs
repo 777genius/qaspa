@@ -202,11 +202,15 @@ impl MlDsaKeypair {
 /// assert_eq!(keypair.public_key.len(), 1312);
 /// assert_eq!(keypair.secret_key.len(), 2560);
 /// ```
-pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
+pub fn try_generate_keypair(level: MlDsaLevel) -> Result<MlDsaKeypair> {
     // Generate 32 bytes of randomness using getrandom
     let mut seed = [0u8; 32];
-    getrandom::getrandom(&mut seed).expect("failed to generate random seed");
-    keypair_from_seed_bytes(&seed, level)
+    getrandom::getrandom(&mut seed).map_err(|e| MlDsaError::KeyGenerationFailed(format!("getrandom failed: {e}")))?;
+    Ok(keypair_from_seed_bytes(&seed, level))
+}
+
+pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
+    try_generate_keypair(level).unwrap_or_else(|e| panic!("{e}"))
 }
 
 pub(crate) fn keypair_from_seed_bytes(seed: &[u8; 32], level: MlDsaLevel) -> MlDsaKeypair {

@@ -40,10 +40,10 @@ mod sign;
 mod verify;
 
 pub use error::{MlDsaError, Result};
-pub use keypair::{generate_keypair, MlDsaKeypair, PrivateKey, PublicKey, SecretKey};
+pub use keypair::{generate_keypair, try_generate_keypair, MlDsaKeypair, PrivateKey, PublicKey, SecretKey};
 pub use master::{derive_keypair_from_master_seed, derive_keypair_from_seed, MasterSeed, MASTER_SEED_LEN};
 pub use params::{MlDsaLevel, MASTER_SIGN_DOMAIN_DELEGATION};
-pub use sign::{sign, Signature};
+pub use sign::{sign, try_sign, Signature};
 pub use verify::verify;
 
 #[cfg(test)]

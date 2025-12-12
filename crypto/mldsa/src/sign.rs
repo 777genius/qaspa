@@ -108,7 +108,7 @@ impl fmt::Display for Signature {
 ///
 /// assert!(verify(message, &signature, &keypair.public_key));
 /// ```
-pub fn sign(message: &[u8], secret_key: &SecretKey) -> Signature {
+pub fn try_sign(message: &[u8], secret_key: &SecretKey) -> Result<Signature> {
     use ml_dsa::{MlDsa44, MlDsa65, MlDsa87};
     use signature::Signer;
 
@@ -116,26 +116,33 @@ pub fn sign(message: &[u8], secret_key: &SecretKey) -> Signature {
 
     let sig_bytes = match level {
         MlDsaLevel::Level2 => {
-            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa44>::try_from(secret_key.as_bytes()).expect("valid secret key bytes");
+            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa44>::try_from(secret_key.as_bytes())
+                .map_err(|e| MlDsaError::SigningFailed(format!("invalid secret key bytes: {e:?}")))?;
             let sk = ml_dsa::SigningKey::<MlDsa44>::decode(&sk_encoded);
             let sig: ml_dsa::Signature<MlDsa44> = sk.sign(message);
             sig.encode()[..].to_vec()
         }
         MlDsaLevel::Level3 => {
-            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa65>::try_from(secret_key.as_bytes()).expect("valid secret key bytes");
+            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa65>::try_from(secret_key.as_bytes())
+                .map_err(|e| MlDsaError::SigningFailed(format!("invalid secret key bytes: {e:?}")))?;
             let sk = ml_dsa::SigningKey::<MlDsa65>::decode(&sk_encoded);
             let sig: ml_dsa::Signature<MlDsa65> = sk.sign(message);
             sig.encode()[..].to_vec()
         }
         MlDsaLevel::Level5 => {
-            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa87>::try_from(secret_key.as_bytes()).expect("valid secret key bytes");
+            let sk_encoded = ml_dsa::EncodedSigningKey::<MlDsa87>::try_from(secret_key.as_bytes())
+                .map_err(|e| MlDsaError::SigningFailed(format!("invalid secret key bytes: {e:?}")))?;
             let sk = ml_dsa::SigningKey::<MlDsa87>::decode(&sk_encoded);
             let sig: ml_dsa::Signature<MlDsa87> = sk.sign(message);
             sig.encode()[..].to_vec()
         }
     };
 
-    Signature { bytes: sig_bytes, level }
+    Ok(Signature { bytes: sig_bytes, level })
+}
+
+pub fn sign(message: &[u8], secret_key: &SecretKey) -> Signature {
+    try_sign(message, secret_key).unwrap_or_else(|e| panic!("{e}"))
 }
 
 #[cfg(test)]
@@ -257,5 +264,12 @@ mod tests {
         let json = r#"{"bytes":[1,2,3],"level":"Level2"}"#;
         let decoded: std::result::Result<Signature, _> = serde_json::from_str(json);
         assert!(decoded.is_err());
+    }
+
+    #[test]
+    fn test_try_sign_rejects_invalid_secret_key_length() {
+        let sk = SecretKey { bytes: vec![0u8; 1], level: MlDsaLevel::Level2 };
+        let result = try_sign(b"msg", &sk);
+        assert!(result.is_err());
     }
 }
