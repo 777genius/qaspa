@@ -17,6 +17,7 @@ crate-type = ["cdylib"]
 [dependencies]
 cfg-if.workspace = true
 js-sys.workspace = true
+getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 kaspa-addresses.workspace = true
 kaspa-bip32.workspace = true
 kaspa-consensus-core.workspace = true

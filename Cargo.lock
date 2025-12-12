@@ -3935,6 +3935,7 @@ name = "kaspa-wasm"
 version = "1.0.1"
 dependencies = [
  "cfg-if 1.0.4",
+ "getrandom 0.3.4",
  "js-sys",
  "kaspa-addresses",
  "kaspa-bip32",
@@ -4096,6 +4097,7 @@ dependencies = [
  "async-std",
  "cfg-if 1.0.4",
  "futures",
+ "getrandom 0.3.4",
  "js-sys",
  "kaspa-addresses",
  "kaspa-consensus-client",
