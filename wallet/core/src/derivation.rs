@@ -537,7 +537,7 @@ pub async fn create_xpub_from_xprv(
         LEGACY_ACCOUNT_KIND => WalletDerivationManagerV0::derive_extended_key_from_master_key(xprv, false, account_index)?,
         MULTISIG_ACCOUNT_KIND => WalletDerivationManager::derive_extended_key_from_master_key(xprv, true, account_index)?,
         BIP32_ACCOUNT_KIND => WalletDerivationManager::derive_extended_key_from_master_key(xprv, false, account_index)?,
-        _ => panic!("create_xpub_from_xprv not supported for account kind: {:?}", account_kind),
+        _ => return Err(Error::InvalidAccountKind),
     };
 
     let xkey = ExtendedPublicKey { public_key: secret_key.get_public_key(), attrs };
@@ -557,9 +557,7 @@ pub fn build_derivate_path(
         MULTISIG_ACCOUNT_KIND => {
             Ok(WalletDerivationManager::build_derivate_path(true, account_index, Some(cosigner_index), Some(address_type))?)
         }
-        _ => {
-            panic!("build derivate path not supported for account kind: {:?}", account_kind);
-        }
+        _ => Err(Error::InvalidAccountKind),
     }
 }
 

@@ -920,7 +920,7 @@ impl Inner {
 
     /// Start sending notifications of some type to the client.
     async fn start_notify_to_client(&self, scope: Scope) -> RpcResult<()> {
-        let request = kaspad_request::Payload::from_notification_type(&scope, Command::Start);
+        let request = kaspad_request::Payload::try_from_notification_type(&scope, Command::Start)?;
         self.call((&request).into(), request).await?;
         Ok(())
     }
@@ -928,7 +928,7 @@ impl Inner {
     /// Stop sending notifications of some type to the client.
     async fn stop_notify_to_client(&self, scope: Scope) -> RpcResult<()> {
         if self.handle_stop_notify() {
-            let request = kaspad_request::Payload::from_notification_type(&scope, Command::Stop);
+            let request = kaspad_request::Payload::try_from_notification_type(&scope, Command::Stop)?;
             self.call((&request).into(), request).await?;
         }
         Ok(())

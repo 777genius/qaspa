@@ -156,7 +156,7 @@ from!(item: RpcResult<&kaspa_rpc_core::SubmitBlockResponse>, protowire::SubmitBl
 from!(item: &kaspa_rpc_core::GetBlockTemplateRequest, protowire::GetBlockTemplateRequestMessage, {
     Self {
         pay_address: (&item.pay_address).into(),
-        extra_data: String::from_utf8(item.extra_data.clone()).expect("extra data has to be valid UTF-8"),
+        extra_data: String::from_utf8_lossy(&item.extra_data).into_owned(),
     }
 });
 from!(item: RpcResult<&kaspa_rpc_core::GetBlockTemplateResponse>, protowire::GetBlockTemplateResponseMessage, {

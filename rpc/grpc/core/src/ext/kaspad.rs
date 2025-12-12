@@ -1,4 +1,5 @@
 use kaspa_notify::{scope::Scope, subscription::Command};
+use kaspa_rpc_core::RpcError;
 
 use crate::protowire::{
     kaspad_request, kaspad_response, KaspadRequest, KaspadResponse, NotifyBlockAddedRequestMessage,
@@ -12,6 +13,10 @@ impl KaspadRequest {
         KaspadRequest { id: 0, payload: Some(kaspad_request::Payload::from_notification_type(scope, command)) }
     }
 
+    pub fn try_from_notification_type(scope: &Scope, command: Command) -> Result<Self, RpcError> {
+        Ok(KaspadRequest { id: 0, payload: Some(kaspad_request::Payload::try_from_notification_type(scope, command)?) })
+    }
+
     pub fn is_subscription(&self) -> bool {
         self.payload.as_ref().is_some_and(|x| x.is_subscription())
     }
@@ -19,29 +24,25 @@ impl KaspadRequest {
 
 impl kaspad_request::Payload {
     pub fn from_notification_type(scope: &Scope, command: Command) -> Self {
-        match scope {
+        Self::try_from_notification_type(scope, command)
+            .unwrap_or_else(|_| panic!("MasterDelegationExpiringSoon notification is not supported over gRPC. Use wRPC instead."))
+    }
+
+    pub fn try_from_notification_type(scope: &Scope, command: Command) -> Result<Self, RpcError> {
+        Ok(match scope {
             Scope::BlockAdded(ref scope) => kaspad_request::Payload::NotifyBlockAddedRequest(NotifyBlockAddedRequestMessage {
                 command: command.into(),
                 include_stealth_outputs: scope.include_stealth_outputs,
             }),
-            Scope::NewBlockTemplate(_) => {
-                kaspad_request::Payload::NotifyNewBlockTemplateRequest(NotifyNewBlockTemplateRequestMessage {
-                    command: command.into(),
-                })
-            }
+            Scope::NewBlockTemplate(_) => kaspad_request::Payload::NotifyNewBlockTemplateRequest(NotifyNewBlockTemplateRequestMessage {
+                command: command.into(),
+            }),
 
-            Scope::VirtualChainChanged(ref scope) => {
-                kaspad_request::Payload::NotifyVirtualChainChangedRequest(NotifyVirtualChainChangedRequestMessage {
-                    command: command.into(),
-                    include_accepted_transaction_ids: scope.include_accepted_transaction_ids,
-                })
-            }
-            Scope::FinalityConflict(_) => {
-                kaspad_request::Payload::NotifyFinalityConflictRequest(NotifyFinalityConflictRequestMessage {
-                    command: command.into(),
-                })
-            }
-            Scope::FinalityConflictResolved(_) => {
+            Scope::VirtualChainChanged(ref scope) => kaspad_request::Payload::NotifyVirtualChainChangedRequest(NotifyVirtualChainChangedRequestMessage {
+                command: command.into(),
+                include_accepted_transaction_ids: scope.include_accepted_transaction_ids,
+            }),
+            Scope::FinalityConflict(_) | Scope::FinalityConflictResolved(_) => {
                 kaspad_request::Payload::NotifyFinalityConflictRequest(NotifyFinalityConflictRequestMessage {
                     command: command.into(),
                 })
@@ -50,16 +51,12 @@ impl kaspad_request::Payload {
                 addresses: scope.addresses.iter().map(|x| x.into()).collect::<Vec<String>>(),
                 command: command.into(),
             }),
-            Scope::SinkBlueScoreChanged(_) => {
-                kaspad_request::Payload::NotifySinkBlueScoreChangedRequest(NotifySinkBlueScoreChangedRequestMessage {
-                    command: command.into(),
-                })
-            }
-            Scope::VirtualDaaScoreChanged(_) => {
-                kaspad_request::Payload::NotifyVirtualDaaScoreChangedRequest(NotifyVirtualDaaScoreChangedRequestMessage {
-                    command: command.into(),
-                })
-            }
+            Scope::SinkBlueScoreChanged(_) => kaspad_request::Payload::NotifySinkBlueScoreChangedRequest(NotifySinkBlueScoreChangedRequestMessage {
+                command: command.into(),
+            }),
+            Scope::VirtualDaaScoreChanged(_) => kaspad_request::Payload::NotifyVirtualDaaScoreChangedRequest(NotifyVirtualDaaScoreChangedRequestMessage {
+                command: command.into(),
+            }),
             Scope::PruningPointUtxoSetOverride(_) => {
                 kaspad_request::Payload::NotifyPruningPointUtxoSetOverrideRequest(NotifyPruningPointUtxoSetOverrideRequestMessage {
                     command: command.into(),
@@ -73,11 +70,8 @@ impl kaspad_request::Payload {
                     command: command.into(),
                 })
             }
-            Scope::MasterDelegationExpiringSoon(_) => {
-                // gRPC пока не поддерживает MasterDelegationExpiringSoon; используйте wRPC
-                panic!("MasterDelegationExpiringSoon notification is not supported over gRPC. Use wRPC instead.")
-            }
-        }
+            Scope::MasterDelegationExpiringSoon(_) => return Err(RpcError::UnsupportedFeature),
+        })
     }
 
     pub fn is_subscription(&self) -> bool {

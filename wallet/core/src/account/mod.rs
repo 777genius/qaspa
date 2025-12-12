@@ -643,7 +643,7 @@ pub trait Account: AnySync + Send + Sync + 'static {
         payment_secret: &Option<Secret>,
         addresses: &[&'l Address],
     ) -> Result<Vec<(&'l Address, secp256k1::SecretKey)>> {
-        let account = self.clone().as_derivation_capable().expect("expecting derivation capable account");
+        let account = self.clone().as_derivation_capable()?;
         let (receive, change) = account.derivation().addresses_indexes(addresses)?;
         let private_keys = account.create_private_keys(key_data, payment_secret, &receive, &change)?;
         Ok(private_keys)

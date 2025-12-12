@@ -353,6 +353,12 @@ impl BorshDeserialize for Address {
         let prefix: Prefix = borsh::BorshDeserialize::deserialize_reader(reader)?;
         let version: Version = borsh::BorshDeserialize::deserialize_reader(reader)?;
         let payload: Vec<u8> = borsh::BorshDeserialize::deserialize_reader(reader)?;
+        if (version == Version::PubKeyMLDSA || !prefix.is_test()) && payload.len() != version.public_key_len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid address payload length: expected {}, got {}", version.public_key_len(), payload.len()),
+            ));
+        }
         Ok(Self::new(prefix, version, &payload))
     }
 }

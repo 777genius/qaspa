@@ -65,7 +65,7 @@ impl ConsensusConverter {
     ) -> RpcResult<RpcBlock> {
         let hash = block.hash();
         let ghostdag_data = consensus.async_get_ghostdag_data(hash).await?;
-        let block_status = consensus.async_get_block_status(hash).await.unwrap();
+        let block_status = consensus.async_get_block_status(hash).await.ok_or(RpcError::InvalidBlock(hash))?;
         let children = consensus.async_get_block_children(hash).await.unwrap_or_default();
         let is_chain_block = consensus.async_is_chain_block(hash).await?;
         let verbose_data = Some(RpcBlockVerboseData {
@@ -118,7 +118,11 @@ impl ConsensusConverter {
         transaction_ids: &TransactionIdSet,
         transactions: &HashMap<TransactionId, MutableTransaction>,
     ) -> Vec<RpcMempoolEntry> {
-        transaction_ids.iter().map(|x| self.get_mempool_entry(consensus, transactions.get(x).expect("transaction exists"))).collect()
+        transaction_ids
+            .iter()
+            .filter_map(|x| transactions.get(x))
+            .map(|tx| self.get_mempool_entry(consensus, tx))
+            .collect()
     }
 
     /// Converts a consensus [`Transaction`] into an [`RpcTransaction`], optionally including verbose data.
@@ -174,7 +178,7 @@ impl ConsensusConverter {
         chain_path: &ChainPath,
         merged_blocks_limit: Option<usize>,
     ) -> RpcResult<Vec<RpcAcceptedTransactionIds>> {
-        let acceptance_data = consensus.async_get_blocks_acceptance_data(chain_path.added.clone(), merged_blocks_limit).await.unwrap();
+        let acceptance_data = consensus.async_get_blocks_acceptance_data(chain_path.added.clone(), merged_blocks_limit).await?;
         Ok(chain_path
             .added
             .iter()
@@ -612,7 +616,7 @@ impl ConsensusConverter {
         }
 
         let chain_block_mergeset_acceptance_data_vec =
-            consensus.async_get_blocks_acceptance_data(chain_path.added.clone(), merged_blocks_limit).await.unwrap();
+            consensus.async_get_blocks_acceptance_data(chain_path.added.clone(), merged_blocks_limit).await?;
         let mut rpc_acceptance_data =
             Vec::<RpcChainBlockAcceptedTransactions>::with_capacity(chain_block_mergeset_acceptance_data_vec.len());
 
