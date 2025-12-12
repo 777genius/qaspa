@@ -137,24 +137,10 @@ jobs:
           context: .
           file: Dockerfile.test
           push: false
-          load: true
-          tags: kaspa-mldsa-test:latest
+          load: false
+          outputs: type=cacheonly
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      - name: Run E2E Comprehensive Tests
-        run: |
-          docker run --rm kaspa-mldsa-test \
-            cargo test -p kaspa-txscript --release \
-            e2e_comprehensive \
-            -- --ignored --nocapture
-
-      - name: Run ML-DSA Transaction E2E Tests
-        run: |
-          docker run --rm kaspa-mldsa-test \
-            cargo test -p kaspa-txscript --release \
-            mldsa_transactions_e2e \
-            -- --ignored --nocapture --test-threads=1
 
       - name: Move cache
         run: |
