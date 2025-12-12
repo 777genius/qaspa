@@ -89,15 +89,13 @@ impl DelegationStore {
         let key = (record.anchor, record.account_id);
         let mut list = self.by_anchor_account.entry(key).or_default();
 
-        if let Some(last_id) = list.last() {
-            if let Some(prev) = self.by_id.get(last_id) {
-                if record.nonce <= prev.record.nonce {
-                    return Err(Error::MasterDelegationStaleNonce {
-                        account_id: record.account_id,
-                        current: prev.record.nonce,
-                        received: record.nonce,
-                    });
-                }
+        // Нельзя полагаться на `last()` как на "последний nonce":
+        // порядок `list` может быть нарушен после загрузки из стора (dashmap итерация/сериализация не гарантирует порядок).
+        // Поэтому проверяем против максимального nonce среди уже известных записей.
+        let current_max = list.iter().filter_map(|id| self.by_id.get(id).map(|e| e.record.nonce)).max();
+        if let Some(current) = current_max {
+            if record.nonce <= current {
+                return Err(Error::MasterDelegationStaleNonce { account_id: record.account_id, current, received: record.nonce });
             }
         }
 
@@ -233,5 +231,54 @@ impl DelegationStore {
 
     fn storage_path(wallet_folder: &str, network_id: NetworkId) -> PathBuf {
         PathBuf::from(wallet_folder).join("delegations").join(network_id.to_string()).join("delegations.dlgt")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaspa_hashes::Hash;
+    use kaspa_mldsa::MlDsaLevel;
+
+    #[test]
+    fn upsert_rejects_stale_even_when_list_order_is_unsorted() {
+        let store = DelegationStore::new();
+        let anchor = [7u8; 32];
+        let account_id = AccountId(Hash::from_u64_word(1));
+
+        let mut rec10 = DelegationRecordV1::new(
+            MlDsaLevel::Level2,
+            anchor,
+            account_id,
+            [1u8; 32],
+            [2u8; 32],
+            0,
+            None,
+            10,
+            DelegationStatus::Active,
+        );
+        rec10.signature = vec![0u8; MlDsaLevel::Level2.signature_len()];
+
+        let mut rec5 = rec10.clone();
+        rec5.nonce = 5;
+
+        // Имитация неконсистентного порядка (как после load из стора): last() != max(nonce)
+        store.by_id.insert(DelegationId(0), DelegationEntry::new(rec10.clone(), None));
+        store.by_id.insert(DelegationId(1), DelegationEntry::new(rec5, None));
+        store
+            .by_anchor_account
+            .entry((anchor, account_id))
+            .or_default()
+            .extend([DelegationId(0), DelegationId(1)]);
+        store.next_id.store(2, Ordering::SeqCst);
+
+        let mut rec6 = rec10;
+        rec6.nonce = 6;
+
+        let err = store.upsert(rec6, None).unwrap_err();
+        assert!(matches!(
+            err,
+            Error::MasterDelegationStaleNonce { account_id: a, current: 10, received: 6 } if a == account_id
+        ));
     }
 }

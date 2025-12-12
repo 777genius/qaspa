@@ -315,6 +315,24 @@ impl Account for MldsaMasterAccount {
     }
 
     fn receive_address(&self) -> Result<Address> {
+        // `Version::PubKeyMLDSA` in kaspa addresses is currently fixed to ML-DSA Level 2 (1312 bytes).
+        // Master accounts may use higher ML-DSA levels for off-chain protocols (delegations), so
+        // we must not panic here. Instead, return a clear error when an on-chain address cannot
+        // be constructed for the current master level.
+        if self.level != MlDsaLevel::Level2 {
+            return Err(Error::Custom(format!(
+                "MLDSA master receive address is only supported for Level2; current level is {:?}",
+                self.level
+            )));
+        }
+        if self.master_pubkey.len() != MlDsaLevel::Level2.public_key_len() {
+            return Err(Error::Custom(format!(
+                "invalid MLDSA master pubkey length: expected {}, got {}",
+                MlDsaLevel::Level2.public_key_len(),
+                self.master_pubkey.len()
+            )));
+        }
+
         Ok(Address::new(self.inner().wallet.network_id()?.into(), Version::PubKeyMLDSA, &self.master_pubkey))
     }
 
