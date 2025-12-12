@@ -415,8 +415,9 @@ impl ConnectionT for Connection {
         // gRPC protowire does not support all notification types.
         // For unsupported notifications we return a message with no payload and drop it in `send()`.
         match notification {
-            kaspa_rpc_core::Notification::MasterDelegationExpiringSoon(_)
-            | kaspa_rpc_core::Notification::StealthUtxosChanged(_) => Arc::new(KaspadResponse { id: 0, payload: None }),
+            kaspa_rpc_core::Notification::MasterDelegationExpiringSoon(_) | kaspa_rpc_core::Notification::StealthUtxosChanged(_) => {
+                Arc::new(KaspadResponse { id: 0, payload: None })
+            }
             _ => Arc::new((notification).into()),
         }
     }

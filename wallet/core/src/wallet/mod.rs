@@ -905,7 +905,7 @@ impl Wallet {
         self.reset(true).await?;
 
         let accounts: Option<Vec<Arc<dyn Account>>> = if args.load_account_descriptors() {
-            let stored_accounts = self.inner.store.as_account_store().unwrap().iter(None).await?.try_collect::<Vec<_>>().await?;
+            let stored_accounts = self.inner.store.as_account_store()?.iter(None).await?.try_collect::<Vec<_>>().await?;
             let stored_accounts = if !args.is_legacy_only() {
                 stored_accounts
             } else {
@@ -976,9 +976,9 @@ impl Wallet {
         // let _guard = self.inner.guard.lock().await;
 
         let stored_accounts = if let Some(ids) = account_ids {
-            self.inner.store.as_account_store().unwrap().load_multiple(ids).await?
+            self.inner.store.as_account_store()?.load_multiple(ids).await?
         } else {
-            self.inner.store.as_account_store().unwrap().iter(None).await?.try_collect::<Vec<_>>().await?
+            self.inner.store.as_account_store()?.iter(None).await?.try_collect::<Vec<_>>().await?
         };
 
         let ids = stored_accounts.iter().map(|(account, _)| *account.id()).collect::<Vec<_>>();
@@ -1035,14 +1035,14 @@ impl Wallet {
     pub async fn account_descriptors(self: Arc<Self>, _guard: &WalletGuard<'_>) -> Result<Vec<AccountDescriptor>> {
         // let _guard = self.inner.guard.lock().await;
 
-        let iter = self.inner.store.as_account_store().unwrap().iter(None).await.unwrap();
+        let iter = self.inner.store.as_account_store()?.iter(None).await?;
         let wallet = self.clone();
 
         let stream = iter.then(move |stored| {
             let wallet = wallet.clone();
 
             async move {
-                let (stored_account, stored_metadata) = stored.unwrap();
+                let (stored_account, stored_metadata) = stored?;
                 if let Some(account) = wallet.legacy_accounts().get(&stored_account.id) {
                     account.descriptor()
                 } else if let Some(account) = wallet.active_accounts().get(&stored_account.id) {
@@ -2262,13 +2262,13 @@ impl Wallet {
                 }
             }
 
-            task_ctl_sender.send(()).await.unwrap();
+            let _ = task_ctl_sender.send(()).await;
         });
         Ok(())
     }
 
     async fn stop_task(&self) -> Result<()> {
-        self.inner.task_ctl.signal(()).await.expect("Wallet::stop_task() `signal` error");
+        let _ = self.inner.task_ctl.signal(()).await;
         Ok(())
     }
 
@@ -2327,14 +2327,14 @@ impl Wallet {
         filter: Option<PrvKeyDataId>,
         _guard: &WalletGuard<'_>,
     ) -> Result<impl Stream<Item = Result<Arc<dyn Account>>>> {
-        let iter = self.inner.store.as_account_store().unwrap().iter(filter).await.unwrap();
+        let iter = self.inner.store.as_account_store()?.iter(filter).await?;
         let wallet = self.clone();
 
         let stream = iter.then(move |stored| {
             let wallet = wallet.clone();
 
             async move {
-                let (stored_account, stored_metadata) = stored.unwrap();
+                let (stored_account, stored_metadata) = stored?;
                 if let Some(account) = wallet.legacy_accounts().get(&stored_account.id) {
                     if !wallet.active_accounts().contains(account.id()) {
                         account.clone().start().await?;
@@ -2482,7 +2482,10 @@ impl Wallet {
         let mnemonic = decrypt_mnemonic(SingleWalletFileV1::<T>::NUM_THREADS, file.encrypted_mnemonic, import_secret.as_ref())?;
         let mnemonic = Mnemonic::new(mnemonic.trim(), Language::English)?;
         let prv_key_data = storage::PrvKeyData::try_new_from_mnemonic(mnemonic.clone(), None, self.store().encryption_kind()?)?;
-        let prefix = file.xpublic_key.split_at(kaspa_bip32::Prefix::LENGTH).0;
+        let prefix = file
+            .xpublic_key
+            .get(..kaspa_bip32::Prefix::LENGTH)
+            .ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
         let prefix = kaspa_bip32::Prefix::try_from(prefix)?;
 
         if prv_key_data.create_xpub(None, BIP32_ACCOUNT_KIND.into(), 0).await?.to_string(Some(prefix)) != file.xpublic_key {
@@ -2504,9 +2507,12 @@ impl Wallet {
         let mnemonic = decrypt_mnemonic(file.num_threads, file.encrypted_mnemonic, import_secret.as_ref())?;
         let mnemonic = Mnemonic::new(mnemonic.trim(), Language::English)?;
         let prv_key_data = storage::PrvKeyData::try_new_from_mnemonic(mnemonic.clone(), None, self.store().encryption_kind()?)?;
-        let prefix = file.xpublic_key.split_at(kaspa_bip32::Prefix::LENGTH).0;
+        let prefix = file
+            .xpublic_key
+            .get(..kaspa_bip32::Prefix::LENGTH)
+            .ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
         let prefix = kaspa_bip32::Prefix::try_from(prefix)?;
-        if prv_key_data.create_xpub(None, BIP32_ACCOUNT_KIND.into(), 0).await.unwrap().to_string(Some(prefix)) != file.xpublic_key {
+        if prv_key_data.create_xpub(None, BIP32_ACCOUNT_KIND.into(), 0).await?.to_string(Some(prefix)) != file.xpublic_key {
             return Err(Custom("imported xpub does not equal derived one".to_owned()));
         }
         self.import_with_mnemonic(wallet_secret, None, mnemonic, BIP32_ACCOUNT_KIND.into()).await
@@ -2525,7 +2531,15 @@ impl Wallet {
         let Some(first_pub_key) = file.xpublic_keys.first() else {
             return Err(Error::Custom("no public keys".to_owned()));
         };
-        let prefix = first_pub_key.split_at(kaspa_bip32::Prefix::LENGTH).0;
+        if first_pub_key.get(..kaspa_bip32::Prefix::LENGTH).is_none() {
+            return Err(Error::Custom("invalid xpublic_key prefix".to_owned()));
+        }
+        if file.xpublic_keys.iter().any(|k| k.get(..kaspa_bip32::Prefix::LENGTH).is_none()) {
+            return Err(Error::Custom("invalid xpublic_key prefix".to_owned()));
+        }
+        let prefix = first_pub_key
+            .get(..kaspa_bip32::Prefix::LENGTH)
+            .ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
         let prefix = kaspa_bip32::Prefix::try_from(prefix)?;
 
         let mnemonics_and_secrets: Vec<(Mnemonic, Option<Secret>)> = file
@@ -2544,7 +2558,7 @@ impl Wallet {
         let mut pubkeys_from_mnemonics = Vec::with_capacity(mnemonics_and_secrets.len());
         for (mnemonic, _) in mnemonics_and_secrets.iter() {
             let priv_key = storage::PrvKeyData::try_new_from_mnemonic(mnemonic.clone(), None, self.store().encryption_kind()?)?;
-            let xpub_key = priv_key.create_xpub(None, BIP32_ACCOUNT_KIND.into(), 0).await.unwrap().to_string(Some(prefix));
+            let xpub_key = priv_key.create_xpub(None, BIP32_ACCOUNT_KIND.into(), 0).await?.to_string(Some(prefix));
             pubkeys_from_mnemonics.push(xpub_key);
         }
         pubkeys_from_mnemonics.sort_unstable();
@@ -2566,7 +2580,15 @@ impl Wallet {
         let Some(first_pub_key) = file.xpublic_keys.first() else {
             return Err(Error::Custom("no public keys".to_owned()));
         };
-        let prefix = first_pub_key.split_at(kaspa_bip32::Prefix::LENGTH).0;
+        if first_pub_key.get(..kaspa_bip32::Prefix::LENGTH).is_none() {
+            return Err(Error::Custom("invalid xpublic_key prefix".to_owned()));
+        }
+        if file.xpublic_keys.iter().any(|k| k.get(..kaspa_bip32::Prefix::LENGTH).is_none()) {
+            return Err(Error::Custom("invalid xpublic_key prefix".to_owned()));
+        }
+        let prefix = first_pub_key
+            .get(..kaspa_bip32::Prefix::LENGTH)
+            .ok_or_else(|| Error::Custom("invalid xpublic_key prefix".to_owned()))?;
         let prefix = kaspa_bip32::Prefix::try_from(prefix)?;
 
         let mnemonics_and_secrets: Vec<(Mnemonic, Option<Secret>)> = file
@@ -2581,17 +2603,17 @@ impl Wallet {
 
         let mut all_pub_keys = file.xpublic_keys;
         all_pub_keys.sort_unstable_by(|left, right| {
-            left.split_at(kaspa_bip32::Prefix::LENGTH).1.cmp(right.split_at(kaspa_bip32::Prefix::LENGTH).1)
+            left.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default().cmp(right.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default())
         });
 
         let mut pubkeys_from_mnemonics = Vec::with_capacity(mnemonics_and_secrets.len());
         for (mnemonic, _) in mnemonics_and_secrets.iter() {
             let priv_key = storage::PrvKeyData::try_new_from_mnemonic(mnemonic.clone(), None, self.store().encryption_kind()?)?;
-            let xpub_key = priv_key.create_xpub(None, MULTISIG_ACCOUNT_KIND.into(), 0).await.unwrap().to_string(Some(prefix));
+            let xpub_key = priv_key.create_xpub(None, MULTISIG_ACCOUNT_KIND.into(), 0).await?.to_string(Some(prefix));
             pubkeys_from_mnemonics.push(xpub_key);
         }
         pubkeys_from_mnemonics.sort_unstable_by(|left, right| {
-            left.split_at(kaspa_bip32::Prefix::LENGTH).1.cmp(right.split_at(kaspa_bip32::Prefix::LENGTH).1)
+            left.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default().cmp(right.get(kaspa_bip32::Prefix::LENGTH..).unwrap_or_default())
         });
         all_pub_keys.retain(|v| {
             let found = pubkeys_from_mnemonics.binary_search_by_key(v, |xpub| xpub.as_str());

@@ -81,10 +81,8 @@ impl StealthSecretKey {
             let mut scan = [0u8; SECRET_KEY_SIZE];
             let mut spend = [0u8; SECRET_KEY_SIZE];
 
-            getrandom::getrandom(&mut scan)
-                .map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
-            getrandom::getrandom(&mut spend)
-                .map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
+            getrandom::getrandom(&mut scan).map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
+            getrandom::getrandom(&mut spend).map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
 
             // Validate both keys are valid secp256k1 secret keys
             if secp256k1::SecretKey::from_slice(&scan).is_ok() && secp256k1::SecretKey::from_slice(&spend).is_ok() {
@@ -95,9 +93,7 @@ impl StealthSecretKey {
             spend.zeroize();
         }
 
-        Err(StealthError::RandomnessFailed(format!(
-            "failed to generate valid secret keys after {MAX_ATTEMPTS} attempts"
-        )))
+        Err(StealthError::RandomnessFailed(format!("failed to generate valid secret keys after {MAX_ATTEMPTS} attempts")))
     }
 
     /// Returns the scan secret key.
