@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mobx/mobx.dart';
 import 'package:send_domain/send_domain.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -19,6 +21,9 @@ abstract class _SendStoreBase with Store {
   })  : _estimateTransactionUseCase = estimateTransactionUseCase,
         _sendTransactionUseCase = sendTransactionUseCase,
         _validateAddressUseCase = validateAddressUseCase;
+
+  Timer? _debounceTimer;
+  static const _debounceDuration = Duration(milliseconds: 300);
 
   @observable
   String recipientAddress = '';
@@ -67,14 +72,19 @@ abstract class _SendStoreBase with Store {
   void setRecipientAddress(String value) {
     recipientAddress = value;
     errorMessage = null;
-    _estimateFee();
+    _scheduleEstimateFee();
   }
 
   @action
   void setAmount(String value) {
     amount = value;
     errorMessage = null;
-    _estimateFee();
+    _scheduleEstimateFee();
+  }
+
+  void _scheduleEstimateFee() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(_debounceDuration, _estimateFee);
   }
 
   @action
@@ -140,6 +150,8 @@ abstract class _SendStoreBase with Store {
   }
 
   void dispose() {
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
     reset();
   }
 }

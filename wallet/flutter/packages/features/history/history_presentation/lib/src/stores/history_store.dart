@@ -65,11 +65,16 @@ abstract class _HistoryStoreBase with Store {
 
     _transactionSubscription = _watchTransactionHistoryUseCase(
       accountId: currentAccountId!,
-    ).listen((newTransactions) {
-      transactions
-        ..clear()
-        ..addAll(newTransactions);
-    });
+    ).listen(
+      (newTransactions) {
+        transactions
+          ..clear()
+          ..addAll(newTransactions);
+      },
+      onError: (error) {
+        errorMessage = error.toString();
+      },
+    );
   }
 
   @action

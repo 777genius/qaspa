@@ -3,7 +3,7 @@ use crate::prelude::*;
 use crate::pskt::{Inner as PSKTInner, PSKT};
 // use crate::wasm::result;
 
-use kaspa_addresses::{Address, Prefix};
+use kaspa_addresses::{Address, Prefix, Version};
 // use kaspa_bip32::Prefix;
 use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use kaspa_consensus_core::tx::{ScriptPublicKey, TransactionOutpoint, UtxoEntry};
@@ -251,6 +251,17 @@ pub fn unlock_utxo_outputs_as_batch_transaction_pskb(
     script_sig: &[u8],
     destination_outputs: Vec<(Address, u64)>,
 ) -> Result<Bundle, Error> {
+    if start_address.version == Version::Stealth {
+        return Err(Error::from(
+            "Stealth addresses require ephemeral output data and are not supported by unlock_utxo_outputs_as_batch_transaction_pskb",
+        ));
+    }
+    if destination_outputs.iter().any(|(a, _)| a.version == Version::Stealth) {
+        return Err(Error::from(
+            "Stealth destination outputs require ephemeral output data and are not supported by unlock_utxo_outputs_as_batch_transaction_pskb",
+        ));
+    }
+
     let origin_spk = pay_to_address_script(start_address);
 
     let utxo_entry = UtxoEntry { amount, script_public_key: origin_spk, block_daa_score: UNACCEPTED_DAA_SCORE, is_coinbase: false };
@@ -293,6 +304,19 @@ mod tests {
 
     fn mock_context() -> &'static ([Keypair; 2], Vec<u8>) {
         CONTEXT.as_ref()
+    }
+
+    #[test]
+    fn unlock_utxo_outputs_rejects_stealth_addresses() {
+        let stealth = Address::new(Prefix::StealthTestnet, kaspa_addresses::Version::Stealth, &[7u8; 64]);
+        let err = unlock_utxo_outputs_as_batch_transaction_pskb(1000, &stealth, &[0u8], vec![]).expect_err("must fail");
+        assert!(err.to_string().to_lowercase().contains("stealth"));
+
+        let regular = Address::new(Prefix::Testnet, kaspa_addresses::Version::PubKey, &[0u8; 32]);
+        let stealth_dest = Address::new(Prefix::StealthTestnet, kaspa_addresses::Version::Stealth, &[9u8; 64]);
+        let err =
+            unlock_utxo_outputs_as_batch_transaction_pskb(1000, &regular, &[0u8], vec![(stealth_dest, 1)]).expect_err("must fail");
+        assert!(err.to_string().to_lowercase().contains("stealth"));
     }
 
     // Mock multisig PSKT from example

@@ -14,7 +14,7 @@
 //! let public_key = keypair.public_key();
 //!
 //! // Create an address
-//! let address = keypair.to_address(kaspa_addresses::Prefix::Mainnet);
+//! let address = keypair.to_address(kaspa_addresses::Prefix::Mainnet).unwrap();
 //! ```
 //!
 
@@ -137,10 +137,28 @@ impl MlDsaKeypair {
     /// use kaspa_mldsa::MlDsaLevel;
     ///
     /// let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
-    /// let address = keypair.to_address(Prefix::Mainnet);
+    /// let address = keypair.to_address(Prefix::Mainnet).unwrap();
     /// ```
-    pub fn to_address(&self, prefix: Prefix) -> Address {
-        Address::new(prefix, Version::PubKeyMLDSA, self.keypair.public_key.as_bytes())
+    pub fn to_address(&self, prefix: Prefix) -> Result<Address, Error> {
+        // `Version::PubKeyMLDSA` в Kaspa адресах фиксирован на ML-DSA Level 2 (1312 bytes).
+        // Для уровней 3/5 on-chain адрес сформировать нельзя — возвращаем ошибку вместо panic.
+        if self.level != MlDsaLevel::Level2 {
+            return Err(Error::custom(format!(
+                "MLDSA address generation is only supported for Level2; current level is {:?}",
+                self.level
+            )));
+        }
+
+        let bytes = self.keypair.public_key.as_bytes();
+        if bytes.len() != Version::PubKeyMLDSA.public_key_len() {
+            return Err(Error::custom(format!(
+                "invalid MLDSA public key length for PubKeyMLDSA address: expected {}, got {}",
+                Version::PubKeyMLDSA.public_key_len(),
+                bytes.len()
+            )));
+        }
+
+        Ok(Address::new(prefix, Version::PubKeyMLDSA, bytes))
     }
 
     /// Get the public key as bytes.
@@ -265,7 +283,7 @@ mod tests {
 
         // Test address generation for all network types
         for prefix in [Prefix::Mainnet, Prefix::Testnet, Prefix::Simnet, Prefix::Devnet] {
-            let address = keypair.to_address(prefix);
+            let address = keypair.to_address(prefix).expect("address");
 
             // Verify address properties
             assert_eq!(address.prefix, prefix);
@@ -274,6 +292,13 @@ mod tests {
 
             println!("✓ Generated address for {:?}: {}", prefix, address);
         }
+    }
+
+    #[test]
+    fn to_address_rejects_non_level2() {
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level3);
+        let err = keypair.to_address(Prefix::Mainnet).expect_err("must fail");
+        assert!(err.to_string().contains("only supported for Level2"));
     }
 
     #[test]

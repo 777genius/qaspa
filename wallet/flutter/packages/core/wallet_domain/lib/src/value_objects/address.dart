@@ -11,8 +11,14 @@ enum AddressType {
   /// Pay-to-Public-Key-ECDSA
   p2pkEcdsa,
 
+  /// Pay-to-Public-Key-MLDSA (post-quantum)
+  p2pkMldsa,
+
   /// Pay-to-Script-Hash (P2SH)
   p2sh,
+
+  /// Stealth address (private payments)
+  stealth,
 }
 
 /// Kaspa address value object.
@@ -29,7 +35,14 @@ class Address extends Equatable {
   });
 
   /// Valid Kaspa address prefixes
-  static const validPrefixes = ['kaspa', 'kaspatest', 'kaspadev', 'kaspasim'];
+  static const validPrefixes = [
+    'kaspa',
+    'kaspatest',
+    'kaspadev',
+    'kaspasim',
+    'qs',
+    'qstest',
+  ];
 
   /// Bech32 character set
   static const _bech32Charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
@@ -66,6 +79,14 @@ class Address extends Equatable {
       network = NetworkId.simnet;
       prefix = 'kaspasim';
       payload = lower.substring(9);
+    } else if (lower.startsWith('qs:')) {
+      network = NetworkId.mainnet;
+      prefix = 'qs';
+      payload = lower.substring(3);
+    } else if (lower.startsWith('qstest:')) {
+      network = NetworkId.testnet10;
+      prefix = 'qstest';
+      payload = lower.substring(7);
     } else {
       final actualPrefix = lower.contains(':')
           ? lower.split(':').first
@@ -101,13 +122,13 @@ class Address extends Equatable {
       );
     }
 
-    // 5. Validate bech32 checksum
-    if (!_verifyBech32Checksum(prefix, payload)) {
+    // 5. Validate checksum (Kaspa bech32 variant with 8-char checksum)
+    if (!_verifyKaspaChecksum(prefix, payload)) {
       throw InvalidAddressException.invalidChecksum(address);
     }
 
-    // 6. Determine type from payload version byte
-    final type = _detectAddressType(payload);
+    // 6. Determine type from decoded version byte and validate payload length
+    final type = _detectAddressType(prefix, payload, address);
 
     return Address._(
       value: address,
@@ -140,73 +161,178 @@ class Address extends Equatable {
     return _bech32Charset.indexOf(char);
   }
 
-  /// Expand prefix for checksum calculation
-  static List<int> _expandPrefix(String prefix) {
-    final result = <int>[];
-    for (final char in prefix.split('')) {
-      result.add(char.codeUnitAt(0) >> 5);
-    }
-    result.add(0);
-    for (final char in prefix.split('')) {
-      result.add(char.codeUnitAt(0) & 31);
-    }
-    return result;
+  // --------------------------------------------------------------------------
+  // Kaspa address payload decoding (40-bit checksum, 8 chars)
+  // Matches Rust implementation in `crypto/addresses/src/bech32.rs`.
+  // --------------------------------------------------------------------------
+
+  static const int _checksumLengthU5 = 8;
+
+  static final BigInt _polyMask = BigInt.parse('0x07ffffffff');
+  static final BigInt _gen0 = BigInt.parse('0x98f2bc8e61');
+  static final BigInt _gen1 = BigInt.parse('0x79b76d99e2');
+  static final BigInt _gen2 = BigInt.parse('0xf33e5fb3c4');
+  static final BigInt _gen3 = BigInt.parse('0xae2eabe2a8');
+  static final BigInt _gen4 = BigInt.parse('0x1e4f43e470');
+
+  static List<int> _prefixToU5(String prefix) {
+    // Same as Rust: prefix bytes masked to 5-bit values.
+    return prefix.codeUnits.map((c) => c & 0x1f).toList(growable: false);
   }
 
-  /// Bech32 polymod function
-  static int _polymod(List<int> values) {
-    const generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
-    var chk = 1;
-    for (final v in values) {
-      final top = chk >> 25;
-      chk = (chk & 0x1ffffff) << 5 ^ v;
-      for (var i = 0; i < 5; i++) {
-        if (((top >> i) & 1) != 0) {
-          chk ^= generator[i];
-        }
+  static BigInt _polymodKaspa(List<int> values) {
+    var c = BigInt.one;
+    for (final d in values) {
+      final c0 = c >> 35;
+      c = ((c & _polyMask) << 5) ^ BigInt.from(d);
+      if ((c0 & BigInt.one) != BigInt.zero) c ^= _gen0;
+      if ((c0 & BigInt.from(2)) != BigInt.zero) c ^= _gen1;
+      if ((c0 & BigInt.from(4)) != BigInt.zero) c ^= _gen2;
+      if ((c0 & BigInt.from(8)) != BigInt.zero) c ^= _gen3;
+      if ((c0 & BigInt.from(16)) != BigInt.zero) c ^= _gen4;
+    }
+    return c ^ BigInt.one;
+  }
+
+  static List<int> _convert8to5(List<int> payload) {
+    final padding = payload.length % 5 == 0 ? 0 : 1;
+    final outLen = (payload.length * 8) ~/ 5 + padding;
+    final out = List<int>.filled(outLen, 0);
+
+    var currentIdx = 0;
+    var buff = 0;
+    var bits = 0;
+    for (final c in payload) {
+      buff = (buff << 8) | (c & 0xff);
+      bits += 8;
+      while (bits >= 5) {
+        bits -= 5;
+        out[currentIdx] = (buff >> bits) & 0x1f;
+        buff &= (1 << bits) - 1;
+        currentIdx += 1;
       }
     }
-    return chk;
+    if (bits > 0 && currentIdx < out.length) {
+      out[currentIdx] = (buff << (5 - bits)) & 0x1f;
+    }
+    return out;
   }
 
-  /// Verify bech32 checksum
-  static bool _verifyBech32Checksum(String prefix, String payload) {
-    final data = <int>[];
-    data.addAll(_expandPrefix(prefix));
-    for (final char in payload.split('')) {
-      data.add(_bech32CharToValue(char));
+  static List<int> _convert5to8(List<int> payload) {
+    final outLen = (payload.length * 5) ~/ 8;
+    final out = List<int>.filled(outLen, 0);
+
+    var currentIdx = 0;
+    var buff = 0;
+    var bits = 0;
+    for (final c in payload) {
+      buff = (buff << 5) | (c & 0x1f);
+      bits += 5;
+      while (bits >= 8) {
+        bits -= 8;
+        out[currentIdx] = (buff >> bits) & 0xff;
+        buff &= (1 << bits) - 1;
+        currentIdx += 1;
+      }
     }
-    return _polymod(data) == 1;
+    return out;
   }
 
-  /// Detect address type from payload version byte
-  static AddressType _detectAddressType(String payload) {
-    if (payload.isEmpty) {
-      throw InvalidAddressException.unknownType('');
+  static List<int> _checksumU5(String prefix, List<int> payloadU5) {
+    final prefixU5 = _prefixToU5(prefix);
+    final values = <int>[
+      ...prefixU5,
+      0,
+      ...payloadU5,
+      ...List<int>.filled(_checksumLengthU5, 0),
+    ];
+
+    final check = _polymodKaspa(values);
+    var tmp = check;
+    final checksumBytes = List<int>.filled(5, 0);
+    for (var i = 4; i >= 0; i--) {
+      checksumBytes[i] = (tmp & BigInt.from(0xff)).toInt();
+      tmp >>= 8;
+    }
+    return _convert8to5(checksumBytes);
+  }
+
+  static bool _listEquals(List<int> a, List<int> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static bool _verifyKaspaChecksum(String prefix, String payload) {
+    final values = payload.split('').map(_bech32CharToValue).toList(growable: false);
+    if (values.length < _checksumLengthU5) return false;
+    final split = values.length - _checksumLengthU5;
+    final payloadU5 = values.sublist(0, split);
+    final checksumU5 = values.sublist(split);
+    final expected = _checksumU5(prefix, payloadU5);
+    return _listEquals(expected, checksumU5);
+  }
+
+  static AddressType _detectAddressType(String prefix, String payload, String address) {
+    final values = payload.split('').map(_bech32CharToValue).toList(growable: false);
+    if (values.length < _checksumLengthU5) {
+      throw InvalidAddressException(
+        message: 'Invalid address payload',
+        address: address,
+        reason: 'Payload too short',
+      );
     }
 
-    // Kaspa address types based on version byte:
-    // 'q' prefix (version 0) = P2PK (Schnorr)
-    // 'p' prefix = P2SH
-    // Other prefixes need proper mapping from Kaspa spec
-
-    final firstChar = payload[0];
-    switch (firstChar) {
-      case 'q':
-        // Version 0 - P2PK Schnorr (32-byte pubkey)
-        return AddressType.p2pk;
-      case 'p':
-        // P2SH
-        return AddressType.p2sh;
-      case 'r':
-      case 's':
-      case 't':
-        // ECDSA variants
-        return AddressType.p2pkEcdsa;
-      default:
-        // Do NOT fallback - throw for unknown types
-        throw InvalidAddressException.unknownType(payload);
+    final split = values.length - _checksumLengthU5;
+    final payloadU5 = values.sublist(0, split);
+    final checksumU5 = values.sublist(split);
+    final expectedChecksum = _checksumU5(prefix, payloadU5);
+    if (!_listEquals(expectedChecksum, checksumU5)) {
+      throw InvalidAddressException.invalidChecksum(address);
     }
+
+    final payloadU8 = _convert5to8(payloadU5);
+    if (payloadU8.isEmpty) {
+      throw InvalidAddressException(
+        message: 'Invalid address payload',
+        address: address,
+        reason: 'Missing version byte',
+      );
+    }
+
+    final version = payloadU8.first;
+    final payloadLen = payloadU8.length - 1;
+    final expectedLen = switch (version) {
+      0 => 32, // PubKey (Schnorr)
+      1 => 33, // PubKeyECDSA
+      2 => 1312, // PubKeyMLDSA (Level2)
+      8 => 32, // ScriptHash
+      16 => 64, // Stealth
+      _ => null,
+    };
+
+    if (expectedLen == null) {
+      throw InvalidAddressException.unknownType(address);
+    }
+    if (payloadLen != expectedLen) {
+      throw InvalidAddressException(
+        message: 'Invalid address payload length',
+        address: address,
+        reason: 'Expected $expectedLen bytes, got $payloadLen',
+      );
+    }
+
+    return switch (version) {
+      0 => AddressType.p2pk,
+      1 => AddressType.p2pkEcdsa,
+      2 => AddressType.p2pkMldsa,
+      8 => AddressType.p2sh,
+      16 => AddressType.stealth,
+      _ => AddressType.p2pk, // unreachable due to checks above
+    };
   }
 
   /// Whether this is a mainnet address

@@ -1,0 +1,1820 @@
+﻿2025-12-13T16:01:10.2343794Z Current runner version: '2.329.0'
+2025-12-13T16:01:10.2367887Z ##[group]Runner Image Provisioner
+2025-12-13T16:01:10.2368874Z Hosted Compute Agent
+2025-12-13T16:01:10.2369420Z Version: 20251202.455
+2025-12-13T16:01:10.2370023Z Commit: 6c10caca4910e198df60de23adf20ad317c474e3
+2025-12-13T16:01:10.2370819Z Build Date: 2025-12-02T15:56:59Z
+2025-12-13T16:01:10.2371683Z Worker ID: {8dcb5405-27a8-4b5b-ac48-52cc9c91234f}
+2025-12-13T16:01:10.2372353Z ##[endgroup]
+2025-12-13T16:01:10.2372989Z ##[group]Operating System
+2025-12-13T16:01:10.2373574Z Ubuntu
+2025-12-13T16:01:10.2374039Z 24.04.3
+2025-12-13T16:01:10.2374615Z LTS
+2025-12-13T16:01:10.2375060Z ##[endgroup]
+2025-12-13T16:01:10.2375575Z ##[group]Runner Image
+2025-12-13T16:01:10.2376152Z Image: ubuntu-24.04
+2025-12-13T16:01:10.2376711Z Version: 20251208.163.1
+2025-12-13T16:01:10.2377736Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251208.163/images/ubuntu/Ubuntu2404-Readme.md
+2025-12-13T16:01:10.2379337Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251208.163
+2025-12-13T16:01:10.2380323Z ##[endgroup]
+2025-12-13T16:01:10.2383361Z ##[group]GITHUB_TOKEN Permissions
+2025-12-13T16:01:10.2385323Z Actions: write
+2025-12-13T16:01:10.2386040Z ArtifactMetadata: write
+2025-12-13T16:01:10.2386612Z Attestations: write
+2025-12-13T16:01:10.2387147Z Checks: write
+2025-12-13T16:01:10.2387698Z Contents: write
+2025-12-13T16:01:10.2388220Z Deployments: write
+2025-12-13T16:01:10.2388754Z Discussions: write
+2025-12-13T16:01:10.2389265Z Issues: write
+2025-12-13T16:01:10.2389855Z Metadata: read
+2025-12-13T16:01:10.2390327Z Models: read
+2025-12-13T16:01:10.2390817Z Packages: write
+2025-12-13T16:01:10.2391731Z Pages: write
+2025-12-13T16:01:10.2392282Z PullRequests: write
+2025-12-13T16:01:10.2392940Z RepositoryProjects: write
+2025-12-13T16:01:10.2394011Z SecurityEvents: write
+2025-12-13T16:01:10.2394589Z Statuses: write
+2025-12-13T16:01:10.2395076Z ##[endgroup]
+2025-12-13T16:01:10.2397276Z Secret source: Actions
+2025-12-13T16:01:10.2397976Z Prepare workflow directory
+2025-12-13T16:01:10.2856317Z Prepare all required actions
+2025-12-13T16:01:10.2894784Z Getting action download info
+2025-12-13T16:01:10.7773744Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2025-12-13T16:01:10.8934820Z Download action repository 'arduino/setup-protoc@v3' (SHA:c65c819552d16ad3c9b72d9dfd5ba5237b9c906b)
+2025-12-13T16:01:11.5072082Z Download action repository 'dtolnay/rust-toolchain@stable' (SHA:6d9817901c499d6b02debbb57edb38d33daa680b)
+2025-12-13T16:01:11.9044766Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2025-12-13T16:01:12.0380782Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2025-12-13T16:01:12.1568695Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-12-13T16:01:12.4612272Z Complete job name: Build WASM32 SDK
+2025-12-13T16:01:12.5449396Z ##[group]Run actions/checkout@v4
+2025-12-13T16:01:12.5450736Z with:
+2025-12-13T16:01:12.5451650Z   repository: 777genius/qaspa
+2025-12-13T16:01:12.5452867Z   token: ***
+2025-12-13T16:01:12.5453593Z   ssh-strict: true
+2025-12-13T16:01:12.5454360Z   ssh-user: git
+2025-12-13T16:01:12.5455138Z   persist-credentials: true
+2025-12-13T16:01:12.5456006Z   clean: true
+2025-12-13T16:01:12.5456782Z   sparse-checkout-cone-mode: true
+2025-12-13T16:01:12.5457731Z   fetch-depth: 1
+2025-12-13T16:01:12.5458489Z   fetch-tags: false
+2025-12-13T16:01:12.5459252Z   show-progress: true
+2025-12-13T16:01:12.5460034Z   lfs: false
+2025-12-13T16:01:12.5460751Z   submodules: false
+2025-12-13T16:01:12.5461647Z   set-safe-directory: true
+2025-12-13T16:01:12.5462741Z env:
+2025-12-13T16:01:12.5463483Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:12.5464446Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:12.5465388Z ##[endgroup]
+2025-12-13T16:01:12.6572935Z Syncing repository: 777genius/qaspa
+2025-12-13T16:01:12.6575800Z ##[group]Getting Git version info
+2025-12-13T16:01:12.6577542Z Working directory is '/home/runner/work/qaspa/qaspa'
+2025-12-13T16:01:12.6579340Z [command]/usr/bin/git version
+2025-12-13T16:01:12.6630279Z git version 2.52.0
+2025-12-13T16:01:12.6658582Z ##[endgroup]
+2025-12-13T16:01:12.6674020Z Temporarily overriding HOME='/home/runner/work/_temp/a806e552-85dd-4139-963e-a1284f264ed1' before making global git config changes
+2025-12-13T16:01:12.6676570Z Adding repository directory to the temporary git global config as a safe directory
+2025-12-13T16:01:12.6687391Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/qaspa/qaspa
+2025-12-13T16:01:12.6727828Z Deleting the contents of '/home/runner/work/qaspa/qaspa'
+2025-12-13T16:01:12.6732073Z ##[group]Initializing the repository
+2025-12-13T16:01:12.6736058Z [command]/usr/bin/git init /home/runner/work/qaspa/qaspa
+2025-12-13T16:01:12.6855331Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-12-13T16:01:12.6858455Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2025-12-13T16:01:12.6860857Z hint: to use in all of your new repositories, which will suppress this warning,
+2025-12-13T16:01:12.6862497Z hint: call:
+2025-12-13T16:01:12.6863204Z hint:
+2025-12-13T16:01:12.6864173Z hint: 	git config --global init.defaultBranch <name>
+2025-12-13T16:01:12.6865752Z hint:
+2025-12-13T16:01:12.6866805Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-12-13T16:01:12.6868656Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-12-13T16:01:12.6870252Z hint:
+2025-12-13T16:01:12.6871467Z hint: 	git branch -m <name>
+2025-12-13T16:01:12.6872328Z hint:
+2025-12-13T16:01:12.6873434Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-12-13T16:01:12.6875242Z Initialized empty Git repository in /home/runner/work/qaspa/qaspa/.git/
+2025-12-13T16:01:12.6878116Z [command]/usr/bin/git remote add origin https://github.com/777genius/qaspa
+2025-12-13T16:01:12.6907754Z ##[endgroup]
+2025-12-13T16:01:12.6909053Z ##[group]Disabling automatic garbage collection
+2025-12-13T16:01:12.6911395Z [command]/usr/bin/git config --local gc.auto 0
+2025-12-13T16:01:12.6941958Z ##[endgroup]
+2025-12-13T16:01:12.6943225Z ##[group]Setting up auth
+2025-12-13T16:01:12.6948198Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-12-13T16:01:12.6980376Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-12-13T16:01:12.7313978Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-12-13T16:01:12.7345927Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-12-13T16:01:12.7575031Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-12-13T16:01:12.7608945Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-12-13T16:01:12.7846828Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-12-13T16:01:12.7881922Z ##[endgroup]
+2025-12-13T16:01:12.7889927Z ##[group]Fetching the repository
+2025-12-13T16:01:12.7892878Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +a25747198849f160a99817638fd6ce8ae4c50532:refs/remotes/origin/master
+2025-12-13T16:01:15.9087262Z From https://github.com/777genius/qaspa
+2025-12-13T16:01:15.9088218Z  * [new ref]         a25747198849f160a99817638fd6ce8ae4c50532 -> origin/master
+2025-12-13T16:01:15.9121959Z ##[endgroup]
+2025-12-13T16:01:15.9122702Z ##[group]Determining the checkout info
+2025-12-13T16:01:15.9123828Z ##[endgroup]
+2025-12-13T16:01:15.9129487Z [command]/usr/bin/git sparse-checkout disable
+2025-12-13T16:01:15.9171737Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-12-13T16:01:15.9199695Z ##[group]Checking out the ref
+2025-12-13T16:01:15.9205618Z [command]/usr/bin/git checkout --progress --force -B master refs/remotes/origin/master
+2025-12-13T16:01:16.9842864Z Updating files:  77% (1328/1723)
+2025-12-13T16:01:17.0156613Z Updating files:  78% (1344/1723)
+2025-12-13T16:01:17.0171738Z Updating files:  79% (1362/1723)
+2025-12-13T16:01:17.0564130Z Updating files:  80% (1379/1723)
+2025-12-13T16:01:17.1988458Z Updating files:  81% (1396/1723)
+2025-12-13T16:01:17.2462039Z Updating files:  82% (1413/1723)
+2025-12-13T16:01:17.3779492Z Updating files:  83% (1431/1723)
+2025-12-13T16:01:17.4344578Z Updating files:  84% (1448/1723)
+2025-12-13T16:01:17.4439258Z Updating files:  85% (1465/1723)
+2025-12-13T16:01:17.6163354Z Updating files:  86% (1482/1723)
+2025-12-13T16:01:17.6175208Z Updating files:  87% (1500/1723)
+2025-12-13T16:01:17.6471454Z Updating files:  88% (1517/1723)
+2025-12-13T16:01:17.6478285Z Updating files:  89% (1534/1723)
+2025-12-13T16:01:17.6492972Z Updating files:  90% (1551/1723)
+2025-12-13T16:01:17.6500774Z Updating files:  91% (1568/1723)
+2025-12-13T16:01:17.6511547Z Updating files:  92% (1586/1723)
+2025-12-13T16:01:17.6521500Z Updating files:  93% (1603/1723)
+2025-12-13T16:01:17.6529806Z Updating files:  94% (1620/1723)
+2025-12-13T16:01:17.6538883Z Updating files:  95% (1637/1723)
+2025-12-13T16:01:17.6548094Z Updating files:  96% (1655/1723)
+2025-12-13T16:01:17.6557257Z Updating files:  97% (1672/1723)
+2025-12-13T16:01:17.6566215Z Updating files:  98% (1689/1723)
+2025-12-13T16:01:17.6574181Z Updating files:  99% (1706/1723)
+2025-12-13T16:01:17.6574879Z Updating files: 100% (1723/1723)
+2025-12-13T16:01:17.6575415Z Updating files: 100% (1723/1723), done.
+2025-12-13T16:01:17.6609933Z Reset branch 'master'
+2025-12-13T16:01:17.6613581Z branch 'master' set up to track 'origin/master'.
+2025-12-13T16:01:17.6646669Z ##[endgroup]
+2025-12-13T16:01:17.6692271Z [command]/usr/bin/git log -1 --format=%H
+2025-12-13T16:01:17.6717477Z a25747198849f160a99817638fd6ce8ae4c50532
+2025-12-13T16:01:17.6938088Z ##[group]Run echo "SHORT_SHA=`git rev-parse --short HEAD`" >> $GITHUB_ENV
+2025-12-13T16:01:17.6938644Z [36;1mecho "SHORT_SHA=`git rev-parse --short HEAD`" >> $GITHUB_ENV[0m
+2025-12-13T16:01:17.6974761Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:17.6975083Z env:
+2025-12-13T16:01:17.6975260Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:17.6975499Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:17.6975734Z ##[endgroup]
+2025-12-13T16:01:17.7115652Z ##[group]Run arduino/setup-protoc@v3
+2025-12-13T16:01:17.7115929Z with:
+2025-12-13T16:01:17.7116326Z   repo-token: ***
+2025-12-13T16:01:17.7116515Z   version: 23.x
+2025-12-13T16:01:17.7116708Z   include-pre-releases: false
+2025-12-13T16:01:17.7116918Z env:
+2025-12-13T16:01:17.7117090Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:17.7117334Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:17.7117558Z   SHORT_SHA: a257471
+2025-12-13T16:01:17.7117736Z ##[endgroup]
+2025-12-13T16:01:24.0099740Z Getting protoc version: v23.4
+2025-12-13T16:01:24.0115966Z Downloading archive: https://github.com/protocolbuffers/protobuf/releases/download/v23.4/protoc-23.4-linux-x86_64.zip
+2025-12-13T16:01:24.3829283Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/d96b3bb5-e13b-4827-9866-9a134fd91d49
+2025-12-13T16:01:24.4834724Z Protoc cached under /opt/hostedtoolcache/protoc/v23.4/x64
+2025-12-13T16:01:24.5067439Z ##[group]Run dtolnay/rust-toolchain@stable
+2025-12-13T16:01:24.5067714Z with:
+2025-12-13T16:01:24.5067897Z   targets: wasm32-unknown-unknown
+2025-12-13T16:01:24.5068116Z   toolchain: stable
+2025-12-13T16:01:24.5068289Z env:
+2025-12-13T16:01:24.5068448Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:24.5068673Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:24.5068892Z   SHORT_SHA: a257471
+2025-12-13T16:01:24.5069066Z ##[endgroup]
+2025-12-13T16:01:24.5164202Z ##[group]Run : parse toolchain version
+2025-12-13T16:01:24.5164520Z [36;1m: parse toolchain version[0m
+2025-12-13T16:01:24.5164773Z [36;1mif [[ -z $toolchain ]]; then[0m
+2025-12-13T16:01:24.5165243Z [36;1m  # GitHub does not enforce `required: true` inputs itself. https://github.com/actions/runner/issues/1070[0m
+2025-12-13T16:01:24.5165725Z [36;1m  echo "'toolchain' is a required input" >&2[0m
+2025-12-13T16:01:24.5165989Z [36;1m  exit 1[0m
+2025-12-13T16:01:24.5166315Z [36;1melif [[ $toolchain =~ ^stable' '[0-9]+' '(year|month|week|day)s?' 'ago$ ]]; then[0m
+2025-12-13T16:01:24.5166662Z [36;1m  if [[ Linux == macOS ]]; then[0m
+2025-12-13T16:01:24.5167096Z [36;1m    echo "toolchain=1.$((($(date -v-$(sed 's/stable \([0-9]*\) \(.\).*/\1\2/' <<< $toolchain) +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5167519Z [36;1m  else[0m
+2025-12-13T16:01:24.5167852Z [36;1m    echo "toolchain=1.$((($(date --date "${toolchain#stable }" +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5168242Z [36;1m  fi[0m
+2025-12-13T16:01:24.5168495Z [36;1melif [[ $toolchain =~ ^stable' 'minus' '[0-9]+' 'releases?$ ]]; then[0m
+2025-12-13T16:01:24.5168952Z [36;1m  echo "toolchain=1.$((($(date +%s)/60/60/24-16569)/7/6-${toolchain//[^0-9]/}))" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5169339Z [36;1melif [[ $toolchain =~ ^1\.[0-9]+$ ]]; then[0m
+2025-12-13T16:01:24.5169775Z [36;1m  echo "toolchain=1.$((i=${toolchain#1.}, c=($(date +%s)/60/60/24-16569)/7/6, i+9*i*(10*i<=c)+90*i*(100*i<=c)))" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5170190Z [36;1melse[0m
+2025-12-13T16:01:24.5170399Z [36;1m  echo "toolchain=$toolchain" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5170662Z [36;1mfi[0m
+2025-12-13T16:01:24.5204340Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:24.5204663Z env:
+2025-12-13T16:01:24.5204837Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:24.5205083Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:24.5205322Z   SHORT_SHA: a257471
+2025-12-13T16:01:24.5205502Z   toolchain: stable
+2025-12-13T16:01:24.5205668Z ##[endgroup]
+2025-12-13T16:01:24.5321052Z ##[group]Run : construct rustup command line
+2025-12-13T16:01:24.5321611Z [36;1m: construct rustup command line[0m
+2025-12-13T16:01:24.5322010Z [36;1mecho "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5322560Z [36;1mecho "components=$(for c in ${components//,/ }; do echo -n ' --component' $c; done)" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5323013Z [36;1mecho "downgrade=" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:24.5354505Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:24.5354813Z env:
+2025-12-13T16:01:24.5354986Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:24.5355218Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:24.5355441Z   SHORT_SHA: a257471
+2025-12-13T16:01:24.5355631Z   targets: wasm32-unknown-unknown
+2025-12-13T16:01:24.5355862Z   components: 
+2025-12-13T16:01:24.5356028Z ##[endgroup]
+2025-12-13T16:01:24.5437309Z ##[group]Run : set $CARGO_HOME
+2025-12-13T16:01:24.5437538Z [36;1m: set $CARGO_HOME[0m
+2025-12-13T16:01:24.5437825Z [36;1mecho CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"} >> $GITHUB_ENV[0m
+2025-12-13T16:01:24.5468829Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:24.5469137Z env:
+2025-12-13T16:01:24.5469307Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:24.5469536Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:24.5469959Z   SHORT_SHA: a257471
+2025-12-13T16:01:24.5470153Z ##[endgroup]
+2025-12-13T16:01:24.5547614Z ##[group]Run : install rustup if needed
+2025-12-13T16:01:24.5547890Z [36;1m: install rustup if needed[0m
+2025-12-13T16:01:24.5548156Z [36;1mif ! command -v rustup &>/dev/null; then[0m
+2025-12-13T16:01:24.5548813Z [36;1m  curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://sh.rustup.rs | sh -s -- --default-toolchain none -y[0m
+2025-12-13T16:01:24.5549606Z [36;1m  echo "$CARGO_HOME/bin" >> $GITHUB_PATH[0m
+2025-12-13T16:01:24.5549860Z [36;1mfi[0m
+2025-12-13T16:01:24.5580137Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:24.5580501Z env:
+2025-12-13T16:01:24.5580668Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:24.5580914Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:24.5581130Z   SHORT_SHA: a257471
+2025-12-13T16:01:24.5581555Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:24.5581767Z ##[endgroup]
+2025-12-13T16:01:24.5657762Z ##[group]Run rustup toolchain install stable --target wasm32-unknown-unknown --profile minimal --no-self-update
+2025-12-13T16:01:24.5658487Z [36;1mrustup toolchain install stable --target wasm32-unknown-unknown --profile minimal --no-self-update[0m
+2025-12-13T16:01:24.5688550Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:24.5689063Z env:
+2025-12-13T16:01:24.5689360Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:24.5689614Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:24.5689837Z   SHORT_SHA: a257471
+2025-12-13T16:01:24.5690032Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:24.5690247Z ##[endgroup]
+2025-12-13T16:01:25.5887155Z info: syncing channel updates for 'stable-x86_64-unknown-linux-gnu'
+2025-12-13T16:01:25.8865323Z info: latest update on 2025-12-11, rust version 1.92.0 (ded5c06cf 2025-12-08)
+2025-12-13T16:01:25.9242840Z info: downloading component 'rust-std' for 'wasm32-unknown-unknown'
+2025-12-13T16:01:26.2978284Z info: downloading component 'clippy'
+2025-12-13T16:01:26.4758981Z info: downloading component 'rustfmt'
+2025-12-13T16:01:26.6275176Z info: downloading component 'cargo'
+2025-12-13T16:01:26.8859335Z info: downloading component 'rust-std'
+2025-12-13T16:01:27.3619106Z info: downloading component 'rustc'
+2025-12-13T16:01:28.4447126Z info: removing previous version of component 'clippy'
+2025-12-13T16:01:28.4463353Z info: removing previous version of component 'rustfmt'
+2025-12-13T16:01:28.4520420Z info: removing previous version of component 'cargo'
+2025-12-13T16:01:28.4612653Z info: removing previous version of component 'rust-std'
+2025-12-13T16:01:28.4681992Z info: removing previous version of component 'rustc'
+2025-12-13T16:01:28.4735641Z info: installing component 'rust-std' for 'wasm32-unknown-unknown'
+2025-12-13T16:01:29.8568446Z info: installing component 'clippy'
+2025-12-13T16:01:30.2310876Z info: installing component 'rustfmt'
+2025-12-13T16:01:30.4639327Z info: installing component 'cargo'
+2025-12-13T16:01:31.1687362Z info: installing component 'rust-std'
+2025-12-13T16:01:33.0654588Z info: installing component 'rustc'
+2025-12-13T16:01:37.7534668Z 
+2025-12-13T16:01:37.7628556Z   stable-x86_64-unknown-linux-gnu updated - rustc 1.92.0 (ded5c06cf 2025-12-08) (from rustc 1.91.1 (ed61e7d7e 2025-11-07))
+2025-12-13T16:01:37.7629278Z 
+2025-12-13T16:01:37.7678549Z ##[group]Run rustup default stable
+2025-12-13T16:01:37.7678840Z [36;1mrustup default stable[0m
+2025-12-13T16:01:37.7711682Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:37.7712074Z env:
+2025-12-13T16:01:37.7712253Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.7712487Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.7712711Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.7712899Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.7713108Z ##[endgroup]
+2025-12-13T16:01:37.7839059Z info: using existing install for 'stable-x86_64-unknown-linux-gnu'
+2025-12-13T16:01:37.8206264Z info: default toolchain set to 'stable-x86_64-unknown-linux-gnu'
+2025-12-13T16:01:37.8206651Z 
+2025-12-13T16:01:37.8294748Z   stable-x86_64-unknown-linux-gnu unchanged - rustc 1.92.0 (ded5c06cf 2025-12-08)
+2025-12-13T16:01:37.8295130Z 
+2025-12-13T16:01:37.8338763Z ##[group]Run : create cachekey
+2025-12-13T16:01:37.8339012Z [36;1m: create cachekey[0m
+2025-12-13T16:01:37.8339444Z [36;1mDATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')[0m
+2025-12-13T16:01:37.8340207Z [36;1mHASH=$(rustc +stable --version --verbose | sed -ne 's/^commit-hash: //p')[0m
+2025-12-13T16:01:37.8340644Z [36;1mecho "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT[0m
+2025-12-13T16:01:37.8372973Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:37.8373269Z env:
+2025-12-13T16:01:37.8373435Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.8373674Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.8373891Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.8374107Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.8374319Z ##[endgroup]
+2025-12-13T16:01:37.8769785Z ##[group]Run : disable incremental compilation
+2025-12-13T16:01:37.8770104Z [36;1m: disable incremental compilation[0m
+2025-12-13T16:01:37.8770383Z [36;1mif [ -z "${CARGO_INCREMENTAL+set}" ]; then[0m
+2025-12-13T16:01:37.8770675Z [36;1m  echo CARGO_INCREMENTAL=0 >> $GITHUB_ENV[0m
+2025-12-13T16:01:37.8770916Z [36;1mfi[0m
+2025-12-13T16:01:37.8803258Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:37.8803576Z env:
+2025-12-13T16:01:37.8803742Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.8803979Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.8804196Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.8804390Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.8804603Z ##[endgroup]
+2025-12-13T16:01:37.8870477Z ##[group]Run : enable colors in Cargo output
+2025-12-13T16:01:37.8870773Z [36;1m: enable colors in Cargo output[0m
+2025-12-13T16:01:37.8871058Z [36;1mif [ -z "${CARGO_TERM_COLOR+set}" ]; then[0m
+2025-12-13T16:01:37.8871638Z [36;1m  echo CARGO_TERM_COLOR=always >> $GITHUB_ENV[0m
+2025-12-13T16:01:37.8871900Z [36;1mfi[0m
+2025-12-13T16:01:37.8900405Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:37.8900703Z env:
+2025-12-13T16:01:37.8900869Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.8901106Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.8901444Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.8901653Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.8901871Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:01:37.8902049Z ##[endgroup]
+2025-12-13T16:01:37.8968565Z ##[group]Run : enable Cargo sparse registry
+2025-12-13T16:01:37.8968857Z [36;1m: enable Cargo sparse registry[0m
+2025-12-13T16:01:37.8969180Z [36;1m# implemented in 1.66, stabilized in 1.68, made default in 1.70[0m
+2025-12-13T16:01:37.8969829Z [36;1mif [ -z "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL+set}" -o -f "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol ]; then[0m
+2025-12-13T16:01:37.8970470Z [36;1m  if rustc +stable --version --verbose | grep -q '^release: 1\.6[89]\.'; then[0m
+2025-12-13T16:01:37.8970973Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2025-12-13T16:01:37.8971679Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse >> $GITHUB_ENV[0m
+2025-12-13T16:01:37.8972117Z [36;1m  elif rustc +stable --version --verbose | grep -q '^release: 1\.6[67]\.'; then[0m
+2025-12-13T16:01:37.8972614Z [36;1m    touch "/home/runner/work/_temp"/.implicit_cargo_registries_crates_io_protocol || true[0m
+2025-12-13T16:01:37.8973065Z [36;1m    echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git >> $GITHUB_ENV[0m
+2025-12-13T16:01:37.8973364Z [36;1m  fi[0m
+2025-12-13T16:01:37.8973527Z [36;1mfi[0m
+2025-12-13T16:01:37.9002144Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:37.9002436Z env:
+2025-12-13T16:01:37.9002604Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.9003008Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.9003235Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.9003428Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.9003643Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:01:37.9003827Z   CARGO_TERM_COLOR: always
+2025-12-13T16:01:37.9004019Z ##[endgroup]
+2025-12-13T16:01:37.9372736Z ##[group]Run : work around spurious network errors in curl 8.0
+2025-12-13T16:01:37.9373120Z [36;1m: work around spurious network errors in curl 8.0[0m
+2025-12-13T16:01:37.9373778Z [36;1m# https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation[0m
+2025-12-13T16:01:37.9374322Z [36;1mif rustc +stable --version --verbose | grep -q '^release: 1\.7[01]\.'; then[0m
+2025-12-13T16:01:37.9374724Z [36;1m  echo CARGO_HTTP_MULTIPLEXING=false >> $GITHUB_ENV[0m
+2025-12-13T16:01:37.9374988Z [36;1mfi[0m
+2025-12-13T16:01:37.9406534Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:37.9406838Z env:
+2025-12-13T16:01:37.9407020Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.9407260Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.9407480Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.9407676Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.9407884Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:01:37.9408072Z   CARGO_TERM_COLOR: always
+2025-12-13T16:01:37.9408258Z ##[endgroup]
+2025-12-13T16:01:37.9624490Z ##[group]Run rustc +stable --version --verbose
+2025-12-13T16:01:37.9624821Z [36;1mrustc +stable --version --verbose[0m
+2025-12-13T16:01:37.9656466Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2025-12-13T16:01:37.9656772Z env:
+2025-12-13T16:01:37.9656944Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.9657177Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.9657398Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.9657590Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.9657825Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:01:37.9658020Z   CARGO_TERM_COLOR: always
+2025-12-13T16:01:37.9658221Z ##[endgroup]
+2025-12-13T16:01:37.9843978Z rustc 1.92.0 (ded5c06cf 2025-12-08)
+2025-12-13T16:01:37.9844808Z binary: rustc
+2025-12-13T16:01:37.9845475Z commit-hash: ded5c06cf21d2b93bffd5d884aa6e96934ee4234
+2025-12-13T16:01:37.9846953Z commit-date: 2025-12-08
+2025-12-13T16:01:37.9847700Z host: x86_64-unknown-linux-gnu
+2025-12-13T16:01:37.9848422Z release: 1.92.0
+2025-12-13T16:01:37.9849593Z LLVM version: 21.1.3
+2025-12-13T16:01:37.9916317Z ##[group]Run sudo apt-get update
+2025-12-13T16:01:37.9916658Z [36;1msudo apt-get update[0m
+2025-12-13T16:01:37.9916942Z [36;1msudo apt-get install -y clang llvm lld gcc-multilib[0m
+2025-12-13T16:01:37.9948432Z shell: /usr/bin/bash -e {0}
+2025-12-13T16:01:37.9948645Z env:
+2025-12-13T16:01:37.9948818Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:01:37.9949045Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:01:37.9949268Z   SHORT_SHA: a257471
+2025-12-13T16:01:37.9949458Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:01:37.9949674Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:01:37.9949860Z   CARGO_TERM_COLOR: always
+2025-12-13T16:01:37.9950055Z ##[endgroup]
+2025-12-13T16:01:38.0746423Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2025-12-13T16:01:38.1056421Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2025-12-13T16:01:38.1060652Z Get:6 https://packages.microsoft.com/repos/azure-cli noble InRelease [3564 B]
+2025-12-13T16:01:38.1079106Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2025-12-13T16:01:38.1106654Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2025-12-13T16:01:38.1129294Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2025-12-13T16:01:38.1135133Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2025-12-13T16:01:38.2237723Z Get:8 https://packages.microsoft.com/repos/azure-cli noble/main amd64 Packages [1884 B]
+2025-12-13T16:01:38.2727317Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1675 kB]
+2025-12-13T16:01:38.2816474Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [309 kB]
+2025-12-13T16:01:38.2839961Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [175 kB]
+2025-12-13T16:01:38.2854832Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 c-n-f Metadata [15.8 kB]
+2025-12-13T16:01:38.2864436Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1501 kB]
+2025-12-13T16:01:38.2981728Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [304 kB]
+2025-12-13T16:01:38.2993338Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [378 kB]
+2025-12-13T16:01:38.3018850Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 c-n-f Metadata [31.4 kB]
+2025-12-13T16:01:38.3064924Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2404 kB]
+2025-12-13T16:01:38.3182609Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [549 kB]
+2025-12-13T16:01:38.3689221Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Components [212 B]
+2025-12-13T16:01:38.3706586Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+2025-12-13T16:01:38.3717617Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [7148 B]
+2025-12-13T16:01:38.3727881Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [11.0 kB]
+2025-12-13T16:01:38.3748914Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-backports/restricted amd64 Components [216 B]
+2025-12-13T16:01:38.3777061Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Components [212 B]
+2025-12-13T16:01:38.4140407Z Get:25 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [11.4 kB]
+2025-12-13T16:01:38.4177179Z Get:26 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [75.5 kB]
+2025-12-13T16:01:38.4216868Z Get:27 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [56.9 kB]
+2025-12-13T16:01:38.4666272Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1378 kB]
+2025-12-13T16:01:38.4758203Z Get:29 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [224 kB]
+2025-12-13T16:01:38.4776007Z Get:30 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [21.6 kB]
+2025-12-13T16:01:38.4784224Z Get:31 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 c-n-f Metadata [9488 B]
+2025-12-13T16:01:38.4792872Z Get:32 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [916 kB]
+2025-12-13T16:01:38.4852064Z Get:33 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [207 kB]
+2025-12-13T16:01:38.4871369Z Get:34 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [71.5 kB]
+2025-12-13T16:01:38.4883058Z Get:35 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 c-n-f Metadata [19.4 kB]
+2025-12-13T16:01:38.5326106Z Get:36 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2266 kB]
+2025-12-13T16:01:38.5459646Z Get:37 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [518 kB]
+2025-12-13T16:01:38.5487065Z Get:38 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Components [212 B]
+2025-12-13T16:01:38.5494719Z Get:39 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Components [212 B]
+2025-12-13T16:01:48.6211605Z Fetched 13.5 MB in 2s (8631 kB/s)
+2025-12-13T16:01:49.4247711Z Reading package lists...
+2025-12-13T16:01:49.4578251Z Reading package lists...
+2025-12-13T16:01:49.6499408Z Building dependency tree...
+2025-12-13T16:01:49.6506977Z Reading state information...
+2025-12-13T16:01:49.8260338Z The following additional packages will be installed:
+2025-12-13T16:01:49.8261099Z   gcc-13-multilib lib32asan8 lib32atomic1 lib32gcc-13-dev lib32gomp1 lib32itm1
+2025-12-13T16:01:49.8264657Z   lib32quadmath0 lib32ubsan1 libc6-dev-i386 libc6-dev-x32 libc6-x32
+2025-12-13T16:01:49.8265366Z   libx32asan8 libx32atomic1 libx32gcc-13-dev libx32gcc-s1 libx32gomp1
+2025-12-13T16:01:49.8267983Z   libx32itm1 libx32quadmath0 libx32stdc++6 libx32ubsan1 llvm-runtime
+2025-12-13T16:01:49.8911971Z The following NEW packages will be installed:
+2025-12-13T16:01:49.8913198Z   clang gcc-13-multilib gcc-multilib lib32asan8 lib32atomic1 lib32gcc-13-dev
+2025-12-13T16:01:49.8914087Z   lib32gomp1 lib32itm1 lib32quadmath0 lib32ubsan1 libc6-dev-i386 libc6-dev-x32
+2025-12-13T16:01:49.8918145Z   libc6-x32 libx32asan8 libx32atomic1 libx32gcc-13-dev libx32gcc-s1
+2025-12-13T16:01:49.8919079Z   libx32gomp1 libx32itm1 libx32quadmath0 libx32stdc++6 libx32ubsan1 lld llvm
+2025-12-13T16:01:49.8921628Z   llvm-runtime
+2025-12-13T16:01:49.9109160Z 0 upgraded, 25 newly installed, 0 to remove and 54 not upgraded.
+2025-12-13T16:01:49.9109782Z Need to get 20.3 MB of archives.
+2025-12-13T16:01:49.9110322Z After this operation, 75.3 MB of additional disk space will be used.
+2025-12-13T16:01:49.9110964Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2025-12-13T16:01:49.9785272Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 clang amd64 1:18.0-59~exp2 [5846 B]
+2025-12-13T16:01:50.0257091Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libc6-dev-i386 amd64 2.39-0ubuntu8.6 [1447 kB]
+2025-12-13T16:01:50.1597202Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libc6-x32 amd64 2.39-0ubuntu8.6 [2913 kB]
+2025-12-13T16:01:50.2737866Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libc6-dev-x32 amd64 2.39-0ubuntu8.6 [1637 kB]
+2025-12-13T16:01:50.3343660Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32gcc-s1 amd64 14.2.0-4ubuntu2~24.04 [78.5 kB]
+2025-12-13T16:01:50.3821072Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 lib32gomp1 amd64 14.2.0-4ubuntu2~24.04 [141 kB]
+2025-12-13T16:01:50.4327307Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32gomp1 amd64 14.2.0-4ubuntu2~24.04 [145 kB]
+2025-12-13T16:01:50.4810844Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 lib32itm1 amd64 14.2.0-4ubuntu2~24.04 [29.6 kB]
+2025-12-13T16:01:50.5283169Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32itm1 amd64 14.2.0-4ubuntu2~24.04 [29.8 kB]
+2025-12-13T16:01:50.5757046Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 lib32atomic1 amd64 14.2.0-4ubuntu2~24.04 [8586 B]
+2025-12-13T16:01:50.6229460Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32atomic1 amd64 14.2.0-4ubuntu2~24.04 [10.3 kB]
+2025-12-13T16:01:50.6701937Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 lib32asan8 amd64 14.2.0-4ubuntu2~24.04 [2879 kB]
+2025-12-13T16:01:50.7421554Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32asan8 amd64 14.2.0-4ubuntu2~24.04 [2893 kB]
+2025-12-13T16:01:50.8156857Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 lib32ubsan1 amd64 14.2.0-4ubuntu2~24.04 [1150 kB]
+2025-12-13T16:01:50.8746162Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32stdc++6 amd64 14.2.0-4ubuntu2~24.04 [778 kB]
+2025-12-13T16:01:50.9283125Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32ubsan1 amd64 14.2.0-4ubuntu2~24.04 [1169 kB]
+2025-12-13T16:01:50.9857665Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 lib32quadmath0 amd64 14.2.0-4ubuntu2~24.04 [227 kB]
+2025-12-13T16:01:51.0346336Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32quadmath0 amd64 14.2.0-4ubuntu2~24.04 [157 kB]
+2025-12-13T16:01:51.0833507Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 lib32gcc-13-dev amd64 13.3.0-6ubuntu2~24.04 [2380 kB]
+2025-12-13T16:01:51.1556417Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libx32gcc-13-dev amd64 13.3.0-6ubuntu2~24.04 [2190 kB]
+2025-12-13T16:01:51.2244318Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 gcc-13-multilib amd64 13.3.0-6ubuntu2~24.04 [878 B]
+2025-12-13T16:01:51.2713131Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 gcc-multilib amd64 4:13.2.0-7ubuntu1 [1474 B]
+2025-12-13T16:01:51.3181519Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 lld amd64 1:18.0-59~exp2 [5494 B]
+2025-12-13T16:01:51.3652396Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 llvm-runtime amd64 1:18.0-59~exp2 [5496 B]
+2025-12-13T16:01:51.4123883Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 llvm amd64 1:18.0-59~exp2 [4146 B]
+2025-12-13T16:01:51.6898053Z Fetched 20.3 MB in 2s (13.4 MB/s)
+2025-12-13T16:01:51.8054207Z Selecting previously unselected package clang.
+2025-12-13T16:01:51.8938113Z (Reading database ... 
+2025-12-13T16:01:51.8938525Z (Reading database ... 5%
+2025-12-13T16:01:51.8938799Z (Reading database ... 10%
+2025-12-13T16:01:51.8939048Z (Reading database ... 15%
+2025-12-13T16:01:51.8939282Z (Reading database ... 20%
+2025-12-13T16:01:51.8939505Z (Reading database ... 25%
+2025-12-13T16:01:51.8939734Z (Reading database ... 30%
+2025-12-13T16:01:51.8939959Z (Reading database ... 35%
+2025-12-13T16:01:51.8940212Z (Reading database ... 40%
+2025-12-13T16:01:51.8940453Z (Reading database ... 45%
+2025-12-13T16:01:51.8940672Z (Reading database ... 50%
+2025-12-13T16:01:51.9810566Z (Reading database ... 55%
+2025-12-13T16:01:52.3233296Z (Reading database ... 60%
+2025-12-13T16:01:52.4977359Z (Reading database ... 65%
+2025-12-13T16:01:52.5748973Z (Reading database ... 70%
+2025-12-13T16:01:52.6737481Z (Reading database ... 75%
+2025-12-13T16:01:53.1661602Z (Reading database ... 80%
+2025-12-13T16:01:53.8162979Z (Reading database ... 85%
+2025-12-13T16:01:54.4509085Z (Reading database ... 90%
+2025-12-13T16:01:55.0464276Z (Reading database ... 95%
+2025-12-13T16:01:55.0464770Z (Reading database ... 100%
+2025-12-13T16:01:55.0465393Z (Reading database ... 217067 files and directories currently installed.)
+2025-12-13T16:01:55.0511916Z Preparing to unpack .../00-clang_1%3a18.0-59~exp2_amd64.deb ...
+2025-12-13T16:01:55.0561949Z Unpacking clang (1:18.0-59~exp2) ...
+2025-12-13T16:01:55.1078973Z Selecting previously unselected package libc6-dev-i386.
+2025-12-13T16:01:55.1214994Z Preparing to unpack .../01-libc6-dev-i386_2.39-0ubuntu8.6_amd64.deb ...
+2025-12-13T16:01:55.1225990Z Unpacking libc6-dev-i386 (2.39-0ubuntu8.6) ...
+2025-12-13T16:01:55.2170353Z Selecting previously unselected package libc6-x32.
+2025-12-13T16:01:55.2305788Z Preparing to unpack .../02-libc6-x32_2.39-0ubuntu8.6_amd64.deb ...
+2025-12-13T16:01:55.2363113Z Unpacking libc6-x32 (2.39-0ubuntu8.6) ...
+2025-12-13T16:01:55.3518757Z Selecting previously unselected package libc6-dev-x32.
+2025-12-13T16:01:55.3654254Z Preparing to unpack .../03-libc6-dev-x32_2.39-0ubuntu8.6_amd64.deb ...
+2025-12-13T16:01:55.3664388Z Unpacking libc6-dev-x32 (2.39-0ubuntu8.6) ...
+2025-12-13T16:01:55.4297582Z Selecting previously unselected package libx32gcc-s1.
+2025-12-13T16:01:55.4432332Z Preparing to unpack .../04-libx32gcc-s1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.4442006Z Unpacking libx32gcc-s1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.4672725Z Selecting previously unselected package lib32gomp1.
+2025-12-13T16:01:55.4806462Z Preparing to unpack .../05-lib32gomp1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.4818004Z Unpacking lib32gomp1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.5060906Z Selecting previously unselected package libx32gomp1.
+2025-12-13T16:01:55.5194398Z Preparing to unpack .../06-libx32gomp1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.5204195Z Unpacking libx32gomp1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.5442063Z Selecting previously unselected package lib32itm1.
+2025-12-13T16:01:55.5574287Z Preparing to unpack .../07-lib32itm1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.5587265Z Unpacking lib32itm1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.5873326Z Selecting previously unselected package libx32itm1.
+2025-12-13T16:01:55.6005758Z Preparing to unpack .../08-libx32itm1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.6016575Z Unpacking libx32itm1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.6255614Z Selecting previously unselected package lib32atomic1.
+2025-12-13T16:01:55.6388460Z Preparing to unpack .../09-lib32atomic1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.6398825Z Unpacking lib32atomic1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.6616432Z Selecting previously unselected package libx32atomic1.
+2025-12-13T16:01:55.6749085Z Preparing to unpack .../10-libx32atomic1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.6759744Z Unpacking libx32atomic1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.6985505Z Selecting previously unselected package lib32asan8.
+2025-12-13T16:01:55.7118327Z Preparing to unpack .../11-lib32asan8_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.7130146Z Unpacking lib32asan8 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.7773890Z Selecting previously unselected package libx32asan8.
+2025-12-13T16:01:55.7908999Z Preparing to unpack .../12-libx32asan8_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.7920182Z Unpacking libx32asan8 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.8558219Z Selecting previously unselected package lib32ubsan1.
+2025-12-13T16:01:55.8691498Z Preparing to unpack .../13-lib32ubsan1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.8703594Z Unpacking lib32ubsan1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.9088613Z Selecting previously unselected package libx32stdc++6.
+2025-12-13T16:01:55.9222912Z Preparing to unpack .../14-libx32stdc++6_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.9234143Z Unpacking libx32stdc++6 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:55.9583646Z Selecting previously unselected package libx32ubsan1.
+2025-12-13T16:01:55.9718192Z Preparing to unpack .../15-libx32ubsan1_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:55.9728747Z Unpacking libx32ubsan1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.0117636Z Selecting previously unselected package lib32quadmath0.
+2025-12-13T16:01:56.0255144Z Preparing to unpack .../16-lib32quadmath0_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:56.0266948Z Unpacking lib32quadmath0 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.0536887Z Selecting previously unselected package libx32quadmath0.
+2025-12-13T16:01:56.0674868Z Preparing to unpack .../17-libx32quadmath0_14.2.0-4ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:56.0685661Z Unpacking libx32quadmath0 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.0919705Z Selecting previously unselected package lib32gcc-13-dev.
+2025-12-13T16:01:56.1055694Z Preparing to unpack .../18-lib32gcc-13-dev_13.3.0-6ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:56.1066049Z Unpacking lib32gcc-13-dev (13.3.0-6ubuntu2~24.04) ...
+2025-12-13T16:01:56.1648047Z Selecting previously unselected package libx32gcc-13-dev.
+2025-12-13T16:01:56.1786706Z Preparing to unpack .../19-libx32gcc-13-dev_13.3.0-6ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:56.1797511Z Unpacking libx32gcc-13-dev (13.3.0-6ubuntu2~24.04) ...
+2025-12-13T16:01:56.2303404Z Selecting previously unselected package gcc-13-multilib.
+2025-12-13T16:01:56.2437724Z Preparing to unpack .../20-gcc-13-multilib_13.3.0-6ubuntu2~24.04_amd64.deb ...
+2025-12-13T16:01:56.2446754Z Unpacking gcc-13-multilib (13.3.0-6ubuntu2~24.04) ...
+2025-12-13T16:01:56.2643976Z Selecting previously unselected package gcc-multilib.
+2025-12-13T16:01:56.2781604Z Preparing to unpack .../21-gcc-multilib_4%3a13.2.0-7ubuntu1_amd64.deb ...
+2025-12-13T16:01:56.2800009Z Unpacking gcc-multilib (4:13.2.0-7ubuntu1) ...
+2025-12-13T16:01:56.2999349Z Selecting previously unselected package lld:amd64.
+2025-12-13T16:01:56.3132675Z Preparing to unpack .../22-lld_1%3a18.0-59~exp2_amd64.deb ...
+2025-12-13T16:01:56.3142812Z Unpacking lld:amd64 (1:18.0-59~exp2) ...
+2025-12-13T16:01:56.3482578Z Selecting previously unselected package llvm-runtime:amd64.
+2025-12-13T16:01:56.3673186Z Preparing to unpack .../23-llvm-runtime_1%3a18.0-59~exp2_amd64.deb ...
+2025-12-13T16:01:56.3683785Z Unpacking llvm-runtime:amd64 (1:18.0-59~exp2) ...
+2025-12-13T16:01:56.3902655Z Selecting previously unselected package llvm.
+2025-12-13T16:01:56.4037212Z Preparing to unpack .../24-llvm_1%3a18.0-59~exp2_amd64.deb ...
+2025-12-13T16:01:56.4070039Z Unpacking llvm (1:18.0-59~exp2) ...
+2025-12-13T16:01:56.5902048Z Setting up libc6-dev-i386 (2.39-0ubuntu8.6) ...
+2025-12-13T16:01:56.5925559Z Setting up lib32itm1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.5945579Z Setting up lld:amd64 (1:18.0-59~exp2) ...
+2025-12-13T16:01:56.5966378Z Setting up lib32ubsan1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.5986640Z Setting up libc6-x32 (2.39-0ubuntu8.6) ...
+2025-12-13T16:01:56.6034297Z Setting up libc6-dev-x32 (2.39-0ubuntu8.6) ...
+2025-12-13T16:01:56.6054868Z Setting up lib32gomp1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6075105Z Setting up clang (1:18.0-59~exp2) ...
+2025-12-13T16:01:56.6312282Z Setting up llvm-runtime:amd64 (1:18.0-59~exp2) ...
+2025-12-13T16:01:56.6334561Z Setting up lib32asan8 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6356235Z Setting up llvm (1:18.0-59~exp2) ...
+2025-12-13T16:01:56.6375858Z Setting up libx32gomp1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6395500Z Setting up lib32quadmath0 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6415462Z Setting up libx32quadmath0 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6436434Z Setting up lib32atomic1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6456221Z Setting up libx32atomic1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6477725Z Setting up libx32gcc-s1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6497415Z Setting up libx32itm1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6518905Z Setting up libx32asan8 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6540368Z Setting up libx32stdc++6 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6561427Z Setting up libx32ubsan1 (14.2.0-4ubuntu2~24.04) ...
+2025-12-13T16:01:56.6582339Z Setting up lib32gcc-13-dev (13.3.0-6ubuntu2~24.04) ...
+2025-12-13T16:01:56.6603232Z Setting up libx32gcc-13-dev (13.3.0-6ubuntu2~24.04) ...
+2025-12-13T16:01:56.6623867Z Setting up gcc-13-multilib (13.3.0-6ubuntu2~24.04) ...
+2025-12-13T16:01:56.6644697Z Setting up gcc-multilib (4:13.2.0-7ubuntu1) ...
+2025-12-13T16:01:56.6671947Z Processing triggers for man-db (2.12.0-4build2) ...
+2025-12-13T16:01:56.6783894Z Not building database; man-db/auto-update is not 'true'.
+2025-12-13T16:01:56.6800898Z Processing triggers for libc-bin (2.39-0ubuntu8.6) ...
+2025-12-13T16:01:59.8849951Z 
+2025-12-13T16:01:59.8850466Z Running kernel seems to be up-to-date.
+2025-12-13T16:01:59.8850886Z 
+2025-12-13T16:01:59.8851066Z No services need to be restarted.
+2025-12-13T16:01:59.8851637Z 
+2025-12-13T16:01:59.8851825Z No containers need to be restarted.
+2025-12-13T16:01:59.8852077Z 
+2025-12-13T16:01:59.8852224Z No user sessions are running outdated binaries.
+2025-12-13T16:01:59.8852471Z 
+2025-12-13T16:01:59.8852697Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2025-12-13T16:02:00.9332450Z ##[group]Run cargo install wasm-pack
+2025-12-13T16:02:00.9333287Z [36;1mcargo install wasm-pack[0m
+2025-12-13T16:02:00.9376464Z shell: /usr/bin/bash -e {0}
+2025-12-13T16:02:00.9376903Z env:
+2025-12-13T16:02:00.9377159Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:02:00.9377504Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:02:00.9430438Z   SHORT_SHA: a257471
+2025-12-13T16:02:00.9430790Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:02:00.9431368Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:02:00.9431691Z   CARGO_TERM_COLOR: always
+2025-12-13T16:02:00.9432012Z ##[endgroup]
+2025-12-13T16:02:01.0138754Z [1m[92m    Updating[0m crates.io index
+2025-12-13T16:02:01.1859334Z [1m[92m Downloading[0m crates ...
+2025-12-13T16:02:01.5247818Z [1m[92m  Downloaded[0m wasm-pack v0.13.1
+2025-12-13T16:02:01.5527874Z [1m[92m  Installing[0m wasm-pack v0.13.1
+2025-12-13T16:02:01.5734091Z [1m[92m    Updating[0m crates.io index
+2025-12-13T16:02:02.6810586Z [1m[92m     Locking[0m 264 packages to latest compatible versions
+2025-12-13T16:02:02.6835701Z [1m[92m      Adding[0m cargo_metadata v0.15.4 [1m[33m(available: v0.23.1)[0m
+2025-12-13T16:02:02.6868267Z [1m[92m      Adding[0m console v0.15.11 [1m[33m(available: v0.16.1)[0m
+2025-12-13T16:02:02.6872880Z [1m[92m      Adding[0m dialoguer v0.10.4 [1m[33m(available: v0.12.0)[0m
+2025-12-13T16:02:02.6898231Z [1m[92m      Adding[0m env_logger v0.10.2 [1m[33m(available: v0.11.8)[0m
+2025-12-13T16:02:02.6905174Z [1m[92m      Adding[0m generic-array v0.14.7 [1m[33m(available: v0.14.9)[0m
+2025-12-13T16:02:02.6916497Z [1m[92m      Adding[0m human-panic v1.2.3 [1m[33m(available: v2.0.4)[0m
+2025-12-13T16:02:02.7058836Z [1m[92m      Adding[0m siphasher v0.3.11 [1m[33m(available: v1.0.1)[0m
+2025-12-13T16:02:02.7060647Z [1m[92m      Adding[0m strsim v0.10.0 [1m[33m(available: v0.11.1)[0m
+2025-12-13T16:02:02.7089917Z [1m[92m      Adding[0m toml v0.7.8 [1m[33m(available: v0.9.8)[0m
+2025-12-13T16:02:02.7104806Z [1m[92m      Adding[0m ureq v2.12.1 [1m[33m(available: v3.1.4)[0m
+2025-12-13T16:02:02.7124912Z [1m[92m      Adding[0m which v4.4.2 [1m[33m(available: v8.0.0)[0m
+2025-12-13T16:02:02.7155393Z [1m[92m Downloading[0m crates ...
+2025-12-13T16:02:02.8339770Z [1m[92m  Downloaded[0m anyhow v1.0.100
+2025-12-13T16:02:02.8599566Z [1m[92m  Downloaded[0m path-clean v1.0.1
+2025-12-13T16:02:02.8650712Z [1m[92m  Downloaded[0m anstream v0.6.21
+2025-12-13T16:02:02.8678466Z [1m[92m  Downloaded[0m quote v1.0.42
+2025-12-13T16:02:02.8710115Z [1m[92m  Downloaded[0m cpufeatures v0.2.17
+2025-12-13T16:02:02.8728116Z [1m[92m  Downloaded[0m byteorder v1.5.0
+2025-12-13T16:02:02.8749304Z [1m[92m  Downloaded[0m block-buffer v0.10.4
+2025-12-13T16:02:02.8763475Z [1m[92m  Downloaded[0m binary-install v0.4.1
+2025-12-13T16:02:02.8786600Z [1m[92m  Downloaded[0m powerfmt v0.2.0
+2025-12-13T16:02:02.8801563Z [1m[92m  Downloaded[0m percent-encoding v2.3.2
+2025-12-13T16:02:02.8813987Z [1m[92m  Downloaded[0m potential_utf v0.1.4
+2025-12-13T16:02:02.8829423Z [1m[92m  Downloaded[0m crypto-common v0.1.7
+2025-12-13T16:02:02.8840571Z [1m[92m  Downloaded[0m crc v3.4.0
+2025-12-13T16:02:02.8864971Z [1m[92m  Downloaded[0m deflate64 v0.1.10
+2025-12-13T16:02:02.8884735Z [1m[92m  Downloaded[0m equivalent v1.0.2
+2025-12-13T16:02:02.8904356Z [1m[92m  Downloaded[0m bzip2 v0.5.2
+2025-12-13T16:02:02.8927643Z [1m[92m  Downloaded[0m either v1.15.0
+2025-12-13T16:02:02.8946270Z [1m[92m  Downloaded[0m bitflags v2.10.0
+2025-12-13T16:02:02.8996566Z [1m[92m  Downloaded[0m proc-macro2 v1.0.103
+2025-12-13T16:02:02.9036147Z [1m[92m  Downloaded[0m pkg-config v0.3.32
+2025-12-13T16:02:02.9057864Z [1m[92m  Downloaded[0m idna_adapter v1.2.1
+2025-12-13T16:02:02.9072251Z [1m[92m  Downloaded[0m itoa v1.0.15
+2025-12-13T16:02:02.9092909Z [1m[92m  Downloaded[0m is_executable v0.1.2
+2025-12-13T16:02:02.9109077Z [1m[92m  Downloaded[0m rustc-demangle v0.1.26
+2025-12-13T16:02:02.9131550Z [1m[92m  Downloaded[0m is_terminal_polyfill v1.70.2
+2025-12-13T16:02:02.9144015Z [1m[92m  Downloaded[0m human-panic v1.2.3
+2025-12-13T16:02:02.9156595Z [1m[92m  Downloaded[0m env_logger v0.10.2
+2025-12-13T16:02:02.9191025Z [1m[92m  Downloaded[0m cargo_metadata v0.15.4
+2025-12-13T16:02:02.9213915Z [1m[92m  Downloaded[0m os_info v3.13.0
+2025-12-13T16:02:02.9269825Z [1m[92m  Downloaded[0m pbkdf2 v0.12.2
+2025-12-13T16:02:02.9302206Z [1m[92m  Downloaded[0m parking_lot v0.12.5
+2025-12-13T16:02:02.9344087Z [1m[92m  Downloaded[0m strsim v0.10.0
+2025-12-13T16:02:02.9364553Z [1m[92m  Downloaded[0m simd-adler32 v0.3.8
+2025-12-13T16:02:02.9395367Z [1m[92m  Downloaded[0m stable_deref_trait v1.2.1
+2025-12-13T16:02:02.9409356Z [1m[92m  Downloaded[0m socks v0.3.4
+2025-12-13T16:02:02.9429666Z [1m[92m  Downloaded[0m idna v1.1.0
+2025-12-13T16:02:02.9493947Z [1m[92m  Downloaded[0m zeroize_derive v1.4.2
+2025-12-13T16:02:02.9511615Z [1m[92m  Downloaded[0m which v4.4.2
+2025-12-13T16:02:02.9535370Z [1m[92m  Downloaded[0m zerovec-derive v0.11.2
+2025-12-13T16:02:02.9553374Z [1m[92m  Downloaded[0m zerofrom v0.1.6
+2025-12-13T16:02:02.9577262Z [1m[92m  Downloaded[0m zeroize v1.8.2
+2025-12-13T16:02:02.9592522Z [1m[92m  Downloaded[0m rustls-pki-types v1.13.1
+2025-12-13T16:02:02.9625927Z [1m[92m  Downloaded[0m yoke v0.8.1
+2025-12-13T16:02:02.9646271Z [1m[92m  Downloaded[0m gimli v0.32.3
+2025-12-13T16:02:02.9760051Z [1m[92m  Downloaded[0m zstd-safe v7.2.4
+2025-12-13T16:02:02.9781369Z [1m[92m  Downloaded[0m zopfli v0.8.3
+2025-12-13T16:02:02.9814919Z [1m[92m  Downloaded[0m zerotrie v0.2.3
+2025-12-13T16:02:02.9857678Z [1m[92m  Downloaded[0m typenum v1.19.0
+2025-12-13T16:02:02.9890926Z [1m[92m  Downloaded[0m serde v1.0.228
+2025-12-13T16:02:02.9947594Z [1m[92m  Downloaded[0m zip v2.4.2
+2025-12-13T16:02:03.0005105Z [1m[92m  Downloaded[0m winnow v0.5.40
+2025-12-13T16:02:03.0099638Z [1m[92m  Downloaded[0m rustix v0.38.44
+2025-12-13T16:02:03.0365323Z [1m[92m  Downloaded[0m time v0.3.44
+2025-12-13T16:02:03.0451088Z [1m[92m  Downloaded[0m serde_json v1.0.145
+2025-12-13T16:02:03.0525947Z [1m[92m  Downloaded[0m zerovec v0.11.5
+2025-12-13T16:02:03.0581988Z [1m[92m  Downloaded[0m syn v2.0.111
+2025-12-13T16:02:03.0690829Z [1m[92m  Downloaded[0m ureq v2.12.1
+2025-12-13T16:02:03.0743152Z [1m[92m  Downloaded[0m webpki-roots v1.0.4
+2025-12-13T16:02:03.0779624Z [1m[92m  Downloaded[0m unicode-width v0.2.2
+2025-12-13T16:02:03.0837653Z [1m[92m  Downloaded[0m toml_edit v0.19.15
+2025-12-13T16:02:03.1039238Z [1m[92m  Downloaded[0m rustls-webpki v0.103.8
+2025-12-13T16:02:03.1072036Z [1m[92m  Downloaded[0m rustls v0.23.35
+2025-12-13T16:02:03.1191852Z [1m[92m  Downloaded[0m bzip2-sys v0.1.13+1.0.8
+2025-12-13T16:02:03.1300627Z [1m[92m  Downloaded[0m url v2.5.7
+2025-12-13T16:02:03.1329481Z [1m[92m  Downloaded[0m toml_edit v0.22.27
+2025-12-13T16:02:03.1374100Z [1m[92m  Downloaded[0m tempfile v3.23.0
+2025-12-13T16:02:03.1404382Z [1m[92m  Downloaded[0m nix v0.30.1
+2025-12-13T16:02:03.1520177Z [1m[92m  Downloaded[0m rustix v1.1.2
+2025-12-13T16:02:03.1793250Z [1m[92m  Downloaded[0m libc v0.2.178
+2025-12-13T16:02:03.2162421Z [1m[92m  Downloaded[0m lzma-sys v0.1.20
+2025-12-13T16:02:03.2486658Z [1m[92m  Downloaded[0m uuid v1.19.0
+2025-12-13T16:02:03.2516293Z [1m[92m  Downloaded[0m unicode-ident v1.0.22
+2025-12-13T16:02:03.2544570Z [1m[92m  Downloaded[0m toml v0.7.8
+2025-12-13T16:02:03.2575861Z [1m[92m  Downloaded[0m tar v0.4.44
+2025-12-13T16:02:03.2602769Z [1m[92m  Downloaded[0m serde_derive v1.0.228
+2025-12-13T16:02:03.2634009Z [1m[92m  Downloaded[0m serde_core v1.0.228
+2025-12-13T16:02:03.2661680Z [1m[92m  Downloaded[0m object v0.37.3
+2025-12-13T16:02:03.2770726Z [1m[92m  Downloaded[0m zstd v0.13.3
+2025-12-13T16:02:03.2800678Z [1m[92m  Downloaded[0m writeable v0.6.2
+2025-12-13T16:02:03.2819298Z [1m[92m  Downloaded[0m utf8parse v0.2.2
+2025-12-13T16:02:03.2829421Z [1m[92m  Downloaded[0m sha1 v0.10.6
+2025-12-13T16:02:03.2845658Z [1m[92m  Downloaded[0m ryu v1.0.20
+2025-12-13T16:02:03.2877035Z [1m[92m  Downloaded[0m walkdir v2.5.0
+2025-12-13T16:02:03.2895121Z [1m[92m  Downloaded[0m untrusted v0.9.0
+2025-12-13T16:02:03.2911825Z [1m[92m  Downloaded[0m smallvec v1.15.1
+2025-12-13T16:02:03.2933093Z [1m[92m  Downloaded[0m zstd-sys v2.0.16+zstd.1.5.7
+2025-12-13T16:02:03.3095882Z [1m[92m  Downloaded[0m yoke-derive v0.8.1
+2025-12-13T16:02:03.3105538Z [1m[92m  Downloaded[0m xz2 v0.1.7
+2025-12-13T16:02:03.3122100Z [1m[92m  Downloaded[0m xattr v1.6.1
+2025-12-13T16:02:03.3141394Z [1m[92m  Downloaded[0m webpki-roots v0.26.11
+2025-12-13T16:02:03.3154166Z [1m[92m  Downloaded[0m version_check v0.9.5
+2025-12-13T16:02:03.3166721Z [1m[92m  Downloaded[0m utf8_iter v1.0.4
+2025-12-13T16:02:03.3176874Z [1m[92m  Downloaded[0m toml_write v0.1.2
+2025-12-13T16:02:03.3189436Z [1m[92m  Downloaded[0m thiserror-impl v1.0.69
+2025-12-13T16:02:03.3202668Z [1m[92m  Downloaded[0m subtle v2.6.1
+2025-12-13T16:02:03.3215129Z [1m[92m  Downloaded[0m strsim v0.11.1
+2025-12-13T16:02:03.3227993Z [1m[92m  Downloaded[0m chrono v0.4.42
+2025-12-13T16:02:03.3294841Z [1m[92m  Downloaded[0m toml v0.8.23
+2025-12-13T16:02:03.3318218Z [1m[92m  Downloaded[0m tinystr v0.8.2
+2025-12-13T16:02:03.3337733Z [1m[92m  Downloaded[0m thiserror v2.0.17
+2025-12-13T16:02:03.3401055Z [1m[92m  Downloaded[0m synstructure v0.13.2
+2025-12-13T16:02:03.3411519Z [1m[92m  Downloaded[0m siphasher v0.3.11
+2025-12-13T16:02:03.3423875Z [1m[92m  Downloaded[0m shell-words v1.1.1
+2025-12-13T16:02:03.3433289Z [1m[92m  Downloaded[0m serde_ignored v0.1.14
+2025-12-13T16:02:03.3446234Z [1m[92m  Downloaded[0m semver v1.0.27
+2025-12-13T16:02:03.3468364Z [1m[92m  Downloaded[0m scopeguard v1.2.0
+2025-12-13T16:02:03.3480862Z [1m[92m  Downloaded[0m zerofrom-derive v0.1.6
+2025-12-13T16:02:03.3490667Z [1m[92m  Downloaded[0m toml_datetime v0.6.11
+2025-12-13T16:02:03.3502817Z [1m[92m  Downloaded[0m time-core v0.1.6
+2025-12-13T16:02:03.3513368Z [1m[92m  Downloaded[0m thiserror-impl v2.0.17
+2025-12-13T16:02:03.3527685Z [1m[92m  Downloaded[0m thiserror v1.0.69
+2025-12-13T16:02:03.3582872Z [1m[92m  Downloaded[0m shlex v1.3.0
+2025-12-13T16:02:03.3596195Z [1m[92m  Downloaded[0m clap_builder v4.5.53
+2025-12-13T16:02:03.3659091Z [1m[92m  Downloaded[0m icu_properties_data v2.1.2
+2025-12-13T16:02:03.3761784Z [1m[92m  Downloaded[0m hashbrown v0.16.1
+2025-12-13T16:02:03.3813251Z [1m[92m  Downloaded[0m memchr v2.7.6
+2025-12-13T16:02:03.3866847Z [1m[92m  Downloaded[0m cc v1.2.49
+2025-12-13T16:02:03.3896277Z [1m[92m  Downloaded[0m serde_spanned v0.6.9
+2025-12-13T16:02:03.3906915Z [1m[92m  Downloaded[0m same-file v1.0.6
+2025-12-13T16:02:03.3920712Z [1m[92m  Downloaded[0m indexmap v2.12.1
+2025-12-13T16:02:03.3962764Z [1m[92m  Downloaded[0m icu_collections v2.1.1
+2025-12-13T16:02:03.4024180Z [1m[92m  Downloaded[0m ring v0.17.14
+2025-12-13T16:02:03.4467594Z [1m[92m  Downloaded[0m aes v0.8.4
+2025-12-13T16:02:03.4502662Z [1m[92m  Downloaded[0m num-traits v0.2.19
+2025-12-13T16:02:03.4528488Z [1m[92m  Downloaded[0m icu_normalizer_data v2.1.1
+2025-12-13T16:02:03.4549684Z [1m[92m  Downloaded[0m icu_locale_core v2.1.1
+2025-12-13T16:02:03.4616196Z [1m[92m  Downloaded[0m clap v4.5.53
+2025-12-13T16:02:03.4708760Z [1m[92m  Downloaded[0m camino v1.2.1
+2025-12-13T16:02:03.4727138Z [1m[92m  Downloaded[0m bumpalo v3.19.0
+2025-12-13T16:02:03.4753014Z [1m[92m  Downloaded[0m miniz_oxide v0.8.9
+2025-12-13T16:02:03.4777861Z [1m[92m  Downloaded[0m log v0.4.29
+2025-12-13T16:02:03.4802282Z [1m[92m  Downloaded[0m icu_provider v2.1.1
+2025-12-13T16:02:03.4826981Z [1m[92m  Downloaded[0m icu_properties v2.1.2
+2025-12-13T16:02:03.4848572Z [1m[92m  Downloaded[0m icu_normalizer v2.1.1
+2025-12-13T16:02:03.4882585Z [1m[92m  Downloaded[0m hmac v0.12.1
+2025-12-13T16:02:03.4901852Z [1m[92m  Downloaded[0m linux-raw-sys v0.4.15
+2025-12-13T16:02:03.5367748Z [1m[92m  Downloaded[0m getrandom v0.3.4
+2025-12-13T16:02:03.5409630Z [1m[92m  Downloaded[0m find-msvc-tools v0.1.5
+2025-12-13T16:02:03.5432456Z [1m[92m  Downloaded[0m crc32fast v1.5.0
+2025-12-13T16:02:03.5451035Z [1m[92m  Downloaded[0m clap_derive v4.5.49
+2025-12-13T16:02:03.5472646Z [1m[92m  Downloaded[0m backtrace v0.3.76
+2025-12-13T16:02:03.5522726Z [1m[92m  Downloaded[0m parking_lot_core v0.9.12
+2025-12-13T16:02:03.5543306Z [1m[92m  Downloaded[0m lzma-rs v0.3.0
+2025-12-13T16:02:03.5568677Z [1m[92m  Downloaded[0m lock_api v0.4.14
+2025-12-13T16:02:03.5581483Z [1m[92m  Downloaded[0m litemap v0.8.1
+2025-12-13T16:02:03.5603074Z [1m[92m  Downloaded[0m iana-time-zone v0.1.64
+2025-12-13T16:02:03.5629654Z [1m[92m  Downloaded[0m getrandom v0.2.16
+2025-12-13T16:02:03.5658093Z [1m[92m  Downloaded[0m clap_lex v0.7.6
+2025-12-13T16:02:03.5668882Z [1m[92m  Downloaded[0m cargo-platform v0.1.9
+2025-12-13T16:02:03.5680526Z [1m[92m  Downloaded[0m once_cell v1.21.3
+2025-12-13T16:02:03.5705283Z [1m[92m  Downloaded[0m jobserver v0.1.34
+2025-12-13T16:02:03.5725654Z [1m[92m  Downloaded[0m fs4 v0.6.6
+2025-12-13T16:02:03.5749015Z [1m[92m  Downloaded[0m form_urlencoded v1.2.2
+2025-12-13T16:02:03.5756948Z [1m[92m  Downloaded[0m flate2 v1.1.5
+2025-12-13T16:02:03.5803831Z [1m[92m  Downloaded[0m digest v0.10.7
+2025-12-13T16:02:03.5821414Z [1m[92m  Downloaded[0m dialoguer v0.10.4
+2025-12-13T16:02:03.5851346Z [1m[92m  Downloaded[0m cipher v0.4.4
+2025-12-13T16:02:03.5865927Z [1m[92m  Downloaded[0m inout v0.1.4
+2025-12-13T16:02:03.5876515Z [1m[92m  Downloaded[0m home v0.5.12
+2025-12-13T16:02:03.5886027Z [1m[92m  Downloaded[0m hex v0.4.3
+2025-12-13T16:02:03.5901326Z [1m[92m  Downloaded[0m heck v0.5.0
+2025-12-13T16:02:03.5913745Z [1m[92m  Downloaded[0m filetime v0.2.26
+2025-12-13T16:02:03.5930643Z [1m[92m  Downloaded[0m cfg_aliases v0.2.1
+2025-12-13T16:02:03.5939863Z [1m[92m  Downloaded[0m glob v0.3.3
+2025-12-13T16:02:03.5954493Z [1m[92m  Downloaded[0m generic-array v0.14.7
+2025-12-13T16:02:03.5967675Z [1m[92m  Downloaded[0m errno v0.3.14
+2025-12-13T16:02:03.5982670Z [1m[92m  Downloaded[0m displaydoc v0.2.5
+2025-12-13T16:02:03.6011646Z [1m[92m  Downloaded[0m dirs-sys-next v0.1.2
+2025-12-13T16:02:03.6021414Z [1m[92m  Downloaded[0m fastrand v2.3.0
+2025-12-13T16:02:03.6034041Z [1m[92m  Downloaded[0m dirs-next v2.0.0
+2025-12-13T16:02:03.6044764Z [1m[92m  Downloaded[0m num-conv v0.1.0
+2025-12-13T16:02:03.6052537Z [1m[92m  Downloaded[0m addr2line v0.25.1
+2025-12-13T16:02:03.6069982Z [1m[92m  Downloaded[0m deranged v0.5.5
+2025-12-13T16:02:03.6083085Z [1m[92m  Downloaded[0m console v0.15.11
+2025-12-13T16:02:03.6111670Z [1m[92m  Downloaded[0m crc-catalog v2.4.0
+2025-12-13T16:02:03.6122941Z [1m[92m  Downloaded[0m base64 v0.22.1
+2025-12-13T16:02:03.6159958Z [1m[92m  Downloaded[0m colorchoice v1.0.4
+2025-12-13T16:02:03.6169714Z [1m[92m  Downloaded[0m cfg-if v1.0.4
+2025-12-13T16:02:03.6182683Z [1m[92m  Downloaded[0m anstyle-query v1.1.5
+2025-12-13T16:02:03.6193428Z [1m[92m  Downloaded[0m constant_time_eq v0.3.1
+2025-12-13T16:02:03.6206447Z [1m[92m  Downloaded[0m anstyle v1.0.13
+2025-12-13T16:02:03.6220578Z [1m[92m  Downloaded[0m adler2 v2.0.1
+2025-12-13T16:02:03.6232507Z [1m[92m  Downloaded[0m linux-raw-sys v0.11.0
+2025-12-13T16:02:03.6778302Z [1m[92m  Downloaded[0m autocfg v1.5.0
+2025-12-13T16:02:03.6796582Z [1m[92m  Downloaded[0m anstyle-parse v0.2.7
+2025-12-13T16:02:03.7261999Z [1m[92m   Compiling[0m proc-macro2 v1.0.103
+2025-12-13T16:02:03.7262777Z [1m[92m   Compiling[0m quote v1.0.42
+2025-12-13T16:02:03.7263444Z [1m[92m   Compiling[0m unicode-ident v1.0.22
+2025-12-13T16:02:03.7264096Z [1m[92m   Compiling[0m libc v0.2.178
+2025-12-13T16:02:04.0142646Z [1m[92m   Compiling[0m cfg-if v1.0.4
+2025-12-13T16:02:04.0428133Z [1m[92m   Compiling[0m shlex v1.3.0
+2025-12-13T16:02:04.1632091Z [1m[92m   Compiling[0m find-msvc-tools v0.1.5
+2025-12-13T16:02:04.3189013Z [1m[92m   Compiling[0m serde_core v1.0.228
+2025-12-13T16:02:04.6577916Z [1m[92m   Compiling[0m syn v2.0.111
+2025-12-13T16:02:05.1078891Z [1m[92m   Compiling[0m jobserver v0.1.34
+2025-12-13T16:02:05.4353707Z [1m[92m   Compiling[0m cc v1.2.49
+2025-12-13T16:02:05.7742209Z [1m[92m   Compiling[0m pkg-config v0.3.32
+2025-12-13T16:02:06.2627316Z [1m[92m   Compiling[0m serde v1.0.228
+2025-12-13T16:02:06.4238089Z [1m[92m   Compiling[0m stable_deref_trait v1.2.1
+2025-12-13T16:02:06.4800675Z [1m[92m   Compiling[0m version_check v0.9.5
+2025-12-13T16:02:06.7135635Z [1m[92m   Compiling[0m typenum v1.19.0
+2025-12-13T16:02:06.9157439Z [1m[92m   Compiling[0m generic-array v0.14.7
+2025-12-13T16:02:07.0180380Z [1m[92m   Compiling[0m bitflags v2.10.0
+2025-12-13T16:02:07.3222393Z [1m[92m   Compiling[0m writeable v0.6.2
+2025-12-13T16:02:07.3556496Z [1m[92m   Compiling[0m litemap v0.8.1
+2025-12-13T16:02:07.4981371Z [1m[92m   Compiling[0m smallvec v1.15.1
+2025-12-13T16:02:07.5245018Z [1m[92m   Compiling[0m hashbrown v0.16.1
+2025-12-13T16:02:07.6893727Z [1m[92m   Compiling[0m log v0.4.29
+2025-12-13T16:02:07.8717825Z [1m[92m   Compiling[0m subtle v2.6.1
+2025-12-13T16:02:07.9784005Z [1m[92m   Compiling[0m icu_normalizer_data v2.1.1
+2025-12-13T16:02:08.0601077Z [1m[92m   Compiling[0m getrandom v0.3.4
+2025-12-13T16:02:08.2362905Z [1m[92m   Compiling[0m synstructure v0.13.2
+2025-12-13T16:02:08.2600941Z [1m[92m   Compiling[0m memchr v2.7.6
+2025-12-13T16:02:08.3078793Z [1m[92m   Compiling[0m crypto-common v0.1.7
+2025-12-13T16:02:08.3799732Z [1m[92m   Compiling[0m equivalent v1.0.2
+2025-12-13T16:02:08.4179525Z [1m[92m   Compiling[0m icu_properties_data v2.1.2
+2025-12-13T16:02:08.5015181Z [1m[92m   Compiling[0m simd-adler32 v0.3.8
+2025-12-13T16:02:08.7666379Z [1m[92m   Compiling[0m indexmap v2.12.1
+2025-12-13T16:02:09.0565213Z [1m[92m   Compiling[0m ring v0.17.14
+2025-12-13T16:02:09.4149851Z [1m[92m   Compiling[0m zstd-sys v2.0.16+zstd.1.5.7
+2025-12-13T16:02:09.5806339Z [1m[92m   Compiling[0m crc32fast v1.5.0
+2025-12-13T16:02:09.6354213Z [1m[92m   Compiling[0m rustix v1.1.2
+2025-12-13T16:02:09.6379742Z [1m[92m   Compiling[0m adler2 v2.0.1
+2025-12-13T16:02:09.7308473Z [1m[92m   Compiling[0m miniz_oxide v0.8.9
+2025-12-13T16:02:09.8252096Z [1m[92m   Compiling[0m zerofrom-derive v0.1.6
+2025-12-13T16:02:09.8811329Z [1m[92m   Compiling[0m yoke-derive v0.8.1
+2025-12-13T16:02:10.5927566Z [1m[92m   Compiling[0m serde_derive v1.0.228
+2025-12-13T16:02:10.8417958Z [1m[92m   Compiling[0m zerofrom v0.1.6
+2025-12-13T16:02:10.9171112Z [1m[92m   Compiling[0m yoke v0.8.1
+2025-12-13T16:02:11.0920372Z [1m[92m   Compiling[0m zerovec-derive v0.11.2
+2025-12-13T16:02:11.3108288Z [1m[92m   Compiling[0m displaydoc v0.2.5
+2025-12-13T16:02:11.7823328Z [1m[92m   Compiling[0m zeroize_derive v1.4.2
+2025-12-13T16:02:12.0027491Z [1m[92m   Compiling[0m zerovec v0.11.5
+2025-12-13T16:02:12.1283200Z [1m[92m   Compiling[0m zeroize v1.8.2
+2025-12-13T16:02:12.2533157Z [1m[92m   Compiling[0m zerotrie v0.2.3
+2025-12-13T16:02:12.6039620Z [1m[92m   Compiling[0m tinystr v0.8.2
+2025-12-13T16:02:12.6290668Z [1m[92m   Compiling[0m potential_utf v0.1.4
+2025-12-13T16:02:12.7172757Z [1m[92m   Compiling[0m icu_collections v2.1.1
+2025-12-13T16:02:12.7538897Z [1m[92m   Compiling[0m icu_locale_core v2.1.1
+2025-12-13T16:02:13.4113701Z [1m[92m   Compiling[0m rustls-pki-types v1.13.1
+2025-12-13T16:02:13.9352806Z [1m[92m   Compiling[0m icu_provider v2.1.1
+2025-12-13T16:02:14.6245926Z [1m[92m   Compiling[0m block-buffer v0.10.4
+2025-12-13T16:02:14.7141017Z [1m[92m   Compiling[0m once_cell v1.21.3
+2025-12-13T16:02:14.8850703Z [1m[92m   Compiling[0m linux-raw-sys v0.11.0
+2025-12-13T16:02:15.4515636Z [1m[92m   Compiling[0m digest v0.10.7
+2025-12-13T16:02:15.6469043Z [1m[92m   Compiling[0m icu_properties v2.1.2
+2025-12-13T16:02:17.5656064Z [1m[92m   Compiling[0m icu_normalizer v2.1.1
+2025-12-13T16:02:18.4416935Z [1m[92m   Compiling[0m serde_spanned v0.6.9
+2025-12-13T16:02:18.5258123Z [1m[92m   Compiling[0m toml_datetime v0.6.11
+2025-12-13T16:02:18.8503967Z [1m[92m   Compiling[0m lzma-sys v0.1.20
+2025-12-13T16:02:18.9722824Z [1m[92m   Compiling[0m bzip2-sys v0.1.13+1.0.8
+2025-12-13T16:02:18.9833235Z [1m[92m   Compiling[0m getrandom v0.2.16
+2025-12-13T16:02:19.0889764Z [1m[92m   Compiling[0m cfg_aliases v0.2.1
+2025-12-13T16:02:19.1105341Z [1m[92m   Compiling[0m untrusted v0.9.0
+2025-12-13T16:02:19.1195855Z [1m[92m   Compiling[0m zstd-safe v7.2.4
+2025-12-13T16:02:19.1603075Z [1m[92m   Compiling[0m serde_json v1.0.145
+2025-12-13T16:02:19.1827402Z [1m[92m   Compiling[0m utf8parse v0.2.2
+2025-12-13T16:02:19.2205745Z [1m[92m   Compiling[0m byteorder v1.5.0
+2025-12-13T16:02:19.2232033Z [1m[92m   Compiling[0m rustix v0.38.44
+2025-12-13T16:02:19.3846576Z [1m[92m   Compiling[0m anstyle-parse v0.2.7
+2025-12-13T16:02:19.4050610Z [1m[92m   Compiling[0m nix v0.30.1
+2025-12-13T16:02:30.6815578Z [1m[92m   Compiling[0m idna_adapter v1.2.1
+2025-12-13T16:02:30.7091100Z [1m[92m   Compiling[0m inout v0.1.4
+2025-12-13T16:02:30.7487164Z [1m[92m   Compiling[0m ryu v1.0.20
+2025-12-13T16:02:30.7923435Z [1m[92m   Compiling[0m crc-catalog v2.4.0
+2025-12-13T16:02:30.8400587Z [1m[92m   Compiling[0m thiserror v2.0.17
+2025-12-13T16:02:31.0187604Z [1m[92m   Compiling[0m utf8_iter v1.0.4
+2025-12-13T16:02:31.0229388Z [1m[92m   Compiling[0m is_terminal_polyfill v1.70.2
+2025-12-13T16:02:31.0612121Z [1m[92m   Compiling[0m powerfmt v0.2.0
+2025-12-13T16:02:31.1236343Z [1m[92m   Compiling[0m object v0.37.3
+2025-12-13T16:02:31.2522278Z [1m[92m   Compiling[0m autocfg v1.5.0
+2025-12-13T16:02:31.2591012Z [1m[92m   Compiling[0m anstyle v1.0.13
+2025-12-13T16:02:31.4714605Z [1m[92m   Compiling[0m anstyle-query v1.1.5
+2025-12-13T16:02:31.5226508Z [1m[92m   Compiling[0m cpufeatures v0.2.17
+2025-12-13T16:02:31.5575718Z [1m[92m   Compiling[0m linux-raw-sys v0.4.15
+2025-12-13T16:02:31.5650503Z [1m[92m   Compiling[0m colorchoice v1.0.4
+2025-12-13T16:02:31.6165627Z [1m[92m   Compiling[0m rustls v0.23.35
+2025-12-13T16:02:31.6940059Z [1m[92m   Compiling[0m percent-encoding v2.3.2
+2025-12-13T16:02:31.8944357Z [1m[92m   Compiling[0m itoa v1.0.15
+2025-12-13T16:02:34.9496211Z [1m[92m   Compiling[0m rustls-webpki v0.103.8
+2025-12-13T16:02:35.0392127Z [1m[92m   Compiling[0m form_urlencoded v1.2.2
+2025-12-13T16:02:35.2547912Z [1m[92m   Compiling[0m anstream v0.6.21
+2025-12-13T16:02:35.6670045Z [1m[92m   Compiling[0m num-traits v0.2.19
+2025-12-13T16:02:35.7365552Z [1m[92m   Compiling[0m deranged v0.5.5
+2025-12-13T16:02:35.7482952Z [1m[92m   Compiling[0m idna v1.1.0
+2025-12-13T16:02:37.2496950Z [1m[92m   Compiling[0m crc v3.4.0
+2025-12-13T16:02:37.4123376Z [1m[92m   Compiling[0m cipher v0.4.4
+2025-12-13T16:02:37.7295074Z [1m[92m   Compiling[0m flate2 v1.1.5
+2025-12-13T16:02:37.8928798Z [1m[92m   Compiling[0m hmac v0.12.1
+2025-12-13T16:02:37.9848863Z [1m[92m   Compiling[0m webpki-roots v1.0.4
+2025-12-13T16:02:38.0637237Z [1m[92m   Compiling[0m thiserror-impl v2.0.17
+2025-12-13T16:02:38.2254020Z [1m[92m   Compiling[0m bumpalo v3.19.0
+2025-12-13T16:02:38.2935625Z [1m[92m   Compiling[0m camino v1.2.1
+2025-12-13T16:02:38.4549346Z [1m[92m   Compiling[0m zip v2.4.2
+2025-12-13T16:02:38.4649401Z [1m[92m   Compiling[0m parking_lot_core v0.9.12
+2025-12-13T16:02:38.5235747Z [1m[92m   Compiling[0m gimli v0.32.3
+2025-12-13T16:02:38.5616773Z [1m[92m   Compiling[0m toml_write v0.1.2
+2025-12-13T16:02:38.7315229Z [1m[92m   Compiling[0m thiserror v1.0.69
+2025-12-13T16:02:38.8522660Z [1m[92m   Compiling[0m time-core v0.1.6
+2025-12-13T16:02:38.9286936Z [1m[92m   Compiling[0m num-conv v0.1.0
+2025-12-13T16:02:38.9972191Z [1m[92m   Compiling[0m anyhow v1.0.100
+2025-12-13T16:02:39.1406545Z [1m[92m   Compiling[0m time v0.3.44
+2025-12-13T16:02:39.2540840Z [1m[92m   Compiling[0m toml_edit v0.22.27
+2025-12-13T16:02:39.8336474Z [1m[92m   Compiling[0m zopfli v0.8.3
+2025-12-13T16:02:41.6971815Z [1m[92m   Compiling[0m addr2line v0.25.1
+2025-12-13T16:02:41.8082341Z [1m[92m   Compiling[0m webpki-roots v0.26.11
+2025-12-13T16:02:41.8403766Z [1m[92m   Compiling[0m pbkdf2 v0.12.2
+2025-12-13T16:02:42.1293827Z [1m[92m   Compiling[0m bzip2 v0.5.2
+2025-12-13T16:02:42.3035074Z [1m[92m   Compiling[0m xz2 v0.1.7
+2025-12-13T16:02:42.3072284Z [1m[92m   Compiling[0m aes v0.8.4
+2025-12-13T16:02:42.5381852Z [1m[92m   Compiling[0m lzma-rs v0.3.0
+2025-12-13T16:02:43.3842829Z [1m[92m   Compiling[0m url v2.5.7
+2025-12-13T16:02:46.2635743Z [1m[92m   Compiling[0m sha1 v0.10.6
+2025-12-13T16:02:46.6568390Z [1m[92m   Compiling[0m socks v0.3.4
+2025-12-13T16:02:47.0793200Z [1m[92m   Compiling[0m xattr v1.6.1
+2025-12-13T16:02:47.7082009Z [1m[92m   Compiling[0m thiserror-impl v1.0.69
+2025-12-13T16:02:47.7192110Z [1m[92m   Compiling[0m dirs-sys-next v0.1.2
+2025-12-13T16:02:48.1926828Z [1m[92m   Compiling[0m filetime v0.2.26
+2025-12-13T16:02:48.3537627Z [1m[92m   Compiling[0m rustc-demangle v0.1.26
+2025-12-13T16:02:48.5884660Z [1m[92m   Compiling[0m unicode-width v0.2.2
+2025-12-13T16:02:48.8012699Z [1m[92m   Compiling[0m fastrand v2.3.0
+2025-12-13T16:02:49.0323306Z [1m[92m   Compiling[0m clap_lex v0.7.6
+2025-12-13T16:02:49.1525013Z [1m[92m   Compiling[0m zstd v0.13.3
+2025-12-13T16:02:49.3192854Z [1m[92m   Compiling[0m constant_time_eq v0.3.1
+2025-12-13T16:02:49.3744486Z [1m[92m   Compiling[0m base64 v0.22.1
+2025-12-13T16:02:49.3999160Z [1m[92m   Compiling[0m strsim v0.11.1
+2025-12-13T16:02:49.5084642Z [1m[92m   Compiling[0m deflate64 v0.1.10
+2025-12-13T16:02:49.8682825Z [1m[92m   Compiling[0m winnow v0.5.40
+2025-12-13T16:02:49.9982405Z [1m[92m   Compiling[0m heck v0.5.0
+2025-12-13T16:02:50.1508935Z [1m[92m   Compiling[0m scopeguard v1.2.0
+2025-12-13T16:02:50.1982067Z [1m[92m   Compiling[0m lock_api v0.4.14
+2025-12-13T16:02:50.2546413Z [1m[92m   Compiling[0m clap_derive v4.5.49
+2025-12-13T16:02:51.9682761Z [1m[92m   Compiling[0m toml_edit v0.19.15
+2025-12-13T16:02:52.0016500Z [1m[92m   Compiling[0m ureq v2.12.1
+2025-12-13T16:02:54.9399837Z [1m[92m   Compiling[0m clap_builder v4.5.53
+2025-12-13T16:03:00.4690252Z [1m[92m   Compiling[0m tempfile v3.23.0
+2025-12-13T16:03:01.4324354Z [1m[92m   Compiling[0m console v0.15.11
+2025-12-13T16:03:02.8960056Z [1m[92m   Compiling[0m backtrace v0.3.76
+2025-12-13T16:03:03.5562477Z [1m[92m   Compiling[0m tar v0.4.44
+2025-12-13T16:03:06.5929181Z [1m[92m   Compiling[0m dirs-next v2.0.0
+2025-12-13T16:03:07.5350720Z [1m[92m   Compiling[0m os_info v3.13.0
+2025-12-13T16:03:07.6154143Z [1m[92m   Compiling[0m toml v0.8.23
+2025-12-13T16:03:08.7528380Z [1m[92m   Compiling[0m fs4 v0.6.6
+2025-12-13T16:03:08.8458603Z [1m[92m   Compiling[0m uuid v1.19.0
+2025-12-13T16:03:08.9110382Z [1m[92m   Compiling[0m cargo-platform v0.1.9
+2025-12-13T16:03:09.3181672Z [1m[92m   Compiling[0m semver v1.0.27
+2025-12-13T16:03:09.4066201Z [1m[92m   Compiling[0m shell-words v1.1.1
+2025-12-13T16:03:09.4232955Z [1m[92m   Compiling[0m either v1.15.0
+2025-12-13T16:03:09.4945221Z [1m[92m   Compiling[0m iana-time-zone v0.1.64
+2025-12-13T16:03:09.6008992Z [1m[92m   Compiling[0m is_executable v0.1.2
+2025-12-13T16:03:09.6092429Z [1m[92m   Compiling[0m siphasher v0.3.11
+2025-12-13T16:03:09.6628724Z [1m[92m   Compiling[0m same-file v1.0.6
+2025-12-13T16:03:09.7584184Z [1m[92m   Compiling[0m home v0.5.12
+2025-12-13T16:03:09.7612198Z [1m[92m   Compiling[0m hex v0.4.3
+2025-12-13T16:03:09.8474007Z [1m[92m   Compiling[0m which v4.4.2
+2025-12-13T16:03:09.9420092Z [1m[92m   Compiling[0m walkdir v2.5.0
+2025-12-13T16:03:10.0047377Z [1m[92m   Compiling[0m chrono v0.4.42
+2025-12-13T16:03:10.0319253Z [1m[92m   Compiling[0m binary-install v0.4.1
+2025-12-13T16:03:10.3415024Z [1m[92m   Compiling[0m cargo_metadata v0.15.4
+2025-12-13T16:03:10.7629163Z [1m[92m   Compiling[0m dialoguer v0.10.4
+2025-12-13T16:03:12.3104887Z [1m[92m   Compiling[0m human-panic v1.2.3
+2025-12-13T16:03:13.0387273Z [1m[92m   Compiling[0m parking_lot v0.12.5
+2025-12-13T16:03:13.0830247Z [1m[92m   Compiling[0m clap v4.5.53
+2025-12-13T16:03:13.1205210Z [1m[92m   Compiling[0m toml v0.7.8
+2025-12-13T16:03:13.9985027Z [1m[92m   Compiling[0m env_logger v0.10.2
+2025-12-13T16:03:14.0570038Z [1m[92m   Compiling[0m serde_ignored v0.1.14
+2025-12-13T16:03:14.2339321Z [1m[92m   Compiling[0m glob v0.3.3
+2025-12-13T16:03:15.1876996Z [1m[92m   Compiling[0m path-clean v1.0.1
+2025-12-13T16:03:15.2976679Z [1m[92m   Compiling[0m strsim v0.10.0
+2025-12-13T16:03:15.6280408Z [1m[92m   Compiling[0m wasm-pack v0.13.1
+2025-12-13T16:03:21.3370242Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 1m 20s
+2025-12-13T16:03:21.3821051Z [1m[92m  Installing[0m /home/runner/.cargo/bin/wasm-pack
+2025-12-13T16:03:21.3822575Z [1m[92m   Installed[0m package `wasm-pack v0.13.1` (executable `wasm-pack`)
+2025-12-13T16:03:21.5116153Z ##[group]Run actions/setup-node@v4
+2025-12-13T16:03:21.5116412Z with:
+2025-12-13T16:03:21.5116574Z   node-version: 20
+2025-12-13T16:03:21.5116753Z   always-auth: false
+2025-12-13T16:03:21.5116932Z   check-latest: false
+2025-12-13T16:03:21.5117224Z   token: ***
+2025-12-13T16:03:21.5117384Z env:
+2025-12-13T16:03:21.5117550Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:03:21.5117780Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:03:21.5118001Z   SHORT_SHA: a257471
+2025-12-13T16:03:21.5118377Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:03:21.5118589Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:03:21.5118774Z   CARGO_TERM_COLOR: always
+2025-12-13T16:03:21.5118961Z ##[endgroup]
+2025-12-13T16:03:21.7207174Z Found in cache @ /opt/hostedtoolcache/node/20.19.6/x64
+2025-12-13T16:03:21.7214293Z ##[group]Environment details
+2025-12-13T16:03:24.0360474Z node: v20.19.6
+2025-12-13T16:03:24.0360862Z npm: 10.8.2
+2025-12-13T16:03:24.0361297Z yarn: 1.22.22
+2025-12-13T16:03:24.0362054Z ##[endgroup]
+2025-12-13T16:03:24.0447724Z ##[group]Run npm install --global typedoc typescript
+2025-12-13T16:03:24.0448093Z [36;1mnpm install --global typedoc typescript[0m
+2025-12-13T16:03:24.0485467Z shell: /usr/bin/bash -e {0}
+2025-12-13T16:03:24.0485682Z env:
+2025-12-13T16:03:24.0485846Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:03:24.0486086Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:03:24.0486300Z   SHORT_SHA: a257471
+2025-12-13T16:03:24.0486493Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:03:24.0486712Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:03:24.0486898Z   CARGO_TERM_COLOR: always
+2025-12-13T16:03:24.0487088Z ##[endgroup]
+2025-12-13T16:03:27.8472585Z 
+2025-12-13T16:03:27.8483574Z added 22 packages in 4s
+2025-12-13T16:03:27.8483930Z 
+2025-12-13T16:03:27.8484245Z 3 packages are looking for funding
+2025-12-13T16:03:27.8484742Z   run `npm fund` for details
+2025-12-13T16:03:28.1551365Z ##[group]Run actions/cache@v4
+2025-12-13T16:03:28.1551684Z with:
+2025-12-13T16:03:28.1552024Z   path: ~/.cargo/bin/
+~/.cargo/registry/index/
+~/.cargo/registry/cache/
+~/.cargo/git/db/
+target/
+
+2025-12-13T16:03:28.1552576Z   key: Linux-cargo-9e770a7dfdda656c416f93b08f4ac790c088b32031649373e328068d7a5669dd
+2025-12-13T16:03:28.1552974Z   enableCrossOsArchive: false
+2025-12-13T16:03:28.1553201Z   fail-on-cache-miss: false
+2025-12-13T16:03:28.1553403Z   lookup-only: false
+2025-12-13T16:03:28.1553588Z   save-always: false
+2025-12-13T16:03:28.1553747Z env:
+2025-12-13T16:03:28.1553914Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:03:28.1554156Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:03:28.1554372Z   SHORT_SHA: a257471
+2025-12-13T16:03:28.1554560Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:03:28.1554768Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:03:28.1554953Z   CARGO_TERM_COLOR: always
+2025-12-13T16:03:28.1555137Z ##[endgroup]
+2025-12-13T16:03:28.5160942Z Cache hit for: Linux-cargo-9e770a7dfdda656c416f93b08f4ac790c088b32031649373e328068d7a5669dd
+2025-12-13T16:03:29.7341404Z Received 37748736 of 509327306 (7.4%), 35.9 MBs/sec
+2025-12-13T16:03:30.7345832Z Received 201326592 of 509327306 (39.5%), 95.8 MBs/sec
+2025-12-13T16:03:31.7354248Z Received 360710144 of 509327306 (70.8%), 114.5 MBs/sec
+2025-12-13T16:03:32.6070431Z Received 509327306 of 509327306 (100.0%), 125.3 MBs/sec
+2025-12-13T16:03:32.6073985Z Cache Size: ~486 MB (509327306 B)
+2025-12-13T16:03:32.6183499Z [command]/usr/bin/tar -xf /home/runner/work/_temp/382df61a-5ad3-4795-b257-3481c7751a4c/cache.tzst -P -C /home/runner/work/qaspa/qaspa --use-compress-program unzstd
+2025-12-13T16:03:35.6449947Z Cache restored successfully
+2025-12-13T16:03:35.7522829Z Cache restored from key: Linux-cargo-9e770a7dfdda656c416f93b08f4ac790c088b32031649373e328068d7a5669dd
+2025-12-13T16:03:35.7618974Z ##[group]Run pushd .
+2025-12-13T16:03:35.7619217Z [36;1mpushd .[0m
+2025-12-13T16:03:35.7619396Z [36;1mcd wasm[0m
+2025-12-13T16:03:35.7619578Z [36;1mbash build-release[0m
+2025-12-13T16:03:35.7619781Z [36;1mpopd[0m
+2025-12-13T16:03:35.7653487Z shell: /usr/bin/bash -e {0}
+2025-12-13T16:03:35.7653712Z env:
+2025-12-13T16:03:35.7653890Z   CC_wasm32_unknown_unknown: clang
+2025-12-13T16:03:35.7654138Z   AR_wasm32_unknown_unknown: llvm-ar
+2025-12-13T16:03:35.7654361Z   SHORT_SHA: a257471
+2025-12-13T16:03:35.7654560Z   CARGO_HOME: /home/runner/.cargo
+2025-12-13T16:03:35.7654778Z   CARGO_INCREMENTAL: 0
+2025-12-13T16:03:35.7654970Z   CARGO_TERM_COLOR: always
+2025-12-13T16:03:35.7655165Z ##[endgroup]
+2025-12-13T16:03:35.8618184Z ~/work/qaspa/qaspa ~/work/qaspa/qaspa
+2025-12-13T16:03:40.2145108Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:03:40.3221890Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:03:40.7232082Z [1m[92m   Compiling[0m proc-macro2 v1.0.103
+2025-12-13T16:03:40.7234018Z [1m[92m   Compiling[0m unicode-ident v1.0.22
+2025-12-13T16:03:40.7234952Z [1m[92m   Compiling[0m quote v1.0.42
+2025-12-13T16:03:40.7235588Z [1m[92m   Compiling[0m serde_core v1.0.228
+2025-12-13T16:03:40.7839034Z [1m[92m   Compiling[0m serde v1.0.228
+2025-12-13T16:03:40.8720347Z [1m[92m   Compiling[0m rustversion v1.0.22
+2025-12-13T16:03:40.9540896Z [1m[92m   Compiling[0m wasm-bindgen-shared v0.2.106
+2025-12-13T16:03:41.0821610Z [1m[92m   Compiling[0m memchr v2.7.6
+2025-12-13T16:03:41.6965875Z [1m[92m   Compiling[0m syn v2.0.111
+2025-12-13T16:03:41.7185190Z [1m[92m   Compiling[0m bumpalo v3.19.0
+2025-12-13T16:03:41.7235342Z [1m[92m   Compiling[0m cfg-if v1.0.4
+2025-12-13T16:03:41.7555440Z [1m[92m   Compiling[0m itoa v1.0.15
+2025-12-13T16:03:41.8519921Z [1m[92m   Compiling[0m ryu v1.0.20
+2025-12-13T16:03:41.9213263Z [1m[92m   Compiling[0m serde_json v1.0.145
+2025-12-13T16:03:42.0220392Z [1m[92m   Compiling[0m wasm-bindgen v0.2.106
+2025-12-13T16:03:42.1488128Z [1m[92m   Compiling[0m once_cell v1.21.3
+2025-12-13T16:03:42.3308083Z [1m[92m   Compiling[0m version_check v0.9.5
+2025-12-13T16:03:42.5692779Z [1m[92m   Compiling[0m typenum v1.19.0
+2025-12-13T16:03:42.6762615Z [1m[92m   Compiling[0m generic-array v0.14.7
+2025-12-13T16:03:42.7773594Z [1m[92m   Compiling[0m subtle v2.6.1
+2025-12-13T16:03:42.8897597Z [1m[92m   Compiling[0m libc v0.2.178
+2025-12-13T16:03:43.1512382Z [1m[92m   Compiling[0m crossbeam-utils v0.8.21
+2025-12-13T16:03:43.5051904Z [1m[92m   Compiling[0m zerocopy v0.8.31
+2025-12-13T16:03:46.2684940Z [1m[92m   Compiling[0m wasm-bindgen-macro-support v0.2.106
+2025-12-13T16:03:46.3289049Z [1m[92m   Compiling[0m futures-core v0.3.31
+2025-12-13T16:03:46.4290263Z [1m[92m   Compiling[0m syn v1.0.109
+2025-12-13T16:03:46.6083986Z [1m[92m   Compiling[0m thiserror v1.0.69
+2025-12-13T16:03:47.3243682Z [1m[92m   Compiling[0m serde_derive v1.0.228
+2025-12-13T16:03:47.4957368Z [1m[92m   Compiling[0m zeroize_derive v1.4.2
+2025-12-13T16:03:47.7233600Z [1m[92m   Compiling[0m pin-project-lite v0.2.16
+2025-12-13T16:03:47.7703593Z [1m[92m   Compiling[0m thiserror-impl v1.0.69
+2025-12-13T16:03:47.9069688Z [1m[92m   Compiling[0m zeroize v1.8.2
+2025-12-13T16:03:48.6985511Z [1m[92m   Compiling[0m block-buffer v0.10.4
+2025-12-13T16:03:48.9808696Z [1m[92m   Compiling[0m semver v1.0.27
+2025-12-13T16:03:49.0317050Z [1m[92m   Compiling[0m wasm-bindgen-macro v0.2.106
+2025-12-13T16:03:49.2250895Z [1m[92m   Compiling[0m proc-macro-error-attr v1.0.4
+2025-12-13T16:03:49.3243815Z [1m[92m   Compiling[0m aho-corasick v1.1.4
+2025-12-13T16:03:49.5203344Z [1m[92m   Compiling[0m proc-macro-error v1.0.4
+2025-12-13T16:03:49.6093459Z [1m[92m   Compiling[0m futures-sink v0.3.31
+2025-12-13T16:03:49.6663264Z [1m[92m   Compiling[0m regex-syntax v0.8.8
+2025-12-13T16:03:51.1735776Z [1m[92m   Compiling[0m futures-channel v0.3.31
+2025-12-13T16:03:51.3583694Z [1m[92m   Compiling[0m regex-automata v0.4.13
+2025-12-13T16:03:52.1292656Z [1m[92m   Compiling[0m js-sys v0.3.83
+2025-12-13T16:03:53.1597481Z [1m[92m   Compiling[0m rustc_version v0.4.1
+2025-12-13T16:03:53.3753447Z [1m[92m   Compiling[0m concurrent-queue v2.5.0
+2025-12-13T16:03:53.5366854Z [1m[92m   Compiling[0m hashbrown v0.16.1
+2025-12-13T16:03:53.9454702Z [1m[92m   Compiling[0m winnow v0.7.14
+2025-12-13T16:03:54.0969774Z [1m[92m   Compiling[0m equivalent v1.0.2
+2025-12-13T16:03:54.3153467Z [1m[92m   Compiling[0m indexmap v2.12.1
+2025-12-13T16:03:54.6043133Z [1m[92m   Compiling[0m regex v1.12.2
+2025-12-13T16:03:55.1812187Z [1m[92m   Compiling[0m ppv-lite86 v0.2.21
+2025-12-13T16:03:55.4354114Z [1m[92m   Compiling[0m camino v1.2.1
+2025-12-13T16:03:55.5926076Z [1m[92m   Compiling[0m slab v0.4.11
+2025-12-13T16:03:55.5966293Z [1m[92m   Compiling[0m toml_datetime v0.7.3
+2025-12-13T16:03:55.7324206Z [1m[92m   Compiling[0m toml_parser v1.0.4
+2025-12-13T16:03:55.7714299Z [1m[92m   Compiling[0m pin-utils v0.1.0
+2025-12-13T16:03:55.8078481Z [1m[92m   Compiling[0m value-bag v1.12.0
+2025-12-13T16:03:55.9074100Z [1m[92m   Compiling[0m futures-io v0.3.31
+2025-12-13T16:03:56.0349504Z [1m[92m   Compiling[0m log v0.4.29
+2025-12-13T16:03:56.1524423Z [1m[92m   Compiling[0m toml_edit v0.23.9
+2025-12-13T16:03:56.4019978Z [1m[92m   Compiling[0m event-listener v5.4.1
+2025-12-13T16:03:56.6062675Z [1m[92m   Compiling[0m futures-macro v0.3.31
+2025-12-13T16:03:56.9267355Z [1m[92m   Compiling[0m parse-variants-derive v1.0.2
+2025-12-13T16:03:57.2570492Z [1m[92m   Compiling[0m cfg_aliases v0.2.1
+2025-12-13T16:03:57.2783852Z [1m[92m   Compiling[0m unicode-segmentation v1.12.0
+2025-12-13T16:03:57.2889043Z [1m[92m   Compiling[0m anyhow v1.0.100
+2025-12-13T16:03:57.3290804Z [1m[92m   Compiling[0m powerfmt v0.2.0
+2025-12-13T16:03:57.4579756Z [1m[92m   Compiling[0m futures-task v0.3.31
+2025-12-13T16:03:57.5232287Z [1m[92m   Compiling[0m deranged v0.5.5
+2025-12-13T16:03:57.5725730Z [1m[92m   Compiling[0m convert_case v0.6.0
+2025-12-13T16:03:57.6138225Z [1m[92m   Compiling[0m futures-util v0.3.31
+2025-12-13T16:03:57.8312122Z [1m[92m   Compiling[0m getrandom v0.2.16
+2025-12-13T16:03:58.1033062Z [1m[92m   Compiling[0m rand_core v0.6.4
+2025-12-13T16:03:58.2997907Z [1m[92m   Compiling[0m crypto-common v0.1.7
+2025-12-13T16:03:58.3848134Z [1m[92m   Compiling[0m digest v0.10.7
+2025-12-13T16:03:58.5852133Z [1m[92m   Compiling[0m rand_chacha v0.3.1
+2025-12-13T16:03:58.7911770Z [1m[92m   Compiling[0m web-sys v0.3.83
+2025-12-13T16:03:59.0140912Z [1m[92m   Compiling[0m rand v0.8.5
+2025-12-13T16:04:00.1007425Z [1m[92m   Compiling[0m wasm-bindgen-futures v0.4.56
+2025-12-13T16:04:00.3760197Z [1m[92m   Compiling[0m borsh v1.6.0
+2025-12-13T16:04:00.6003323Z [1m[92m   Compiling[0m parse-variants v1.0.8
+2025-12-13T16:04:00.6090538Z [1m[92m   Compiling[0m cargo-platform v0.1.9
+2025-12-13T16:04:00.6393323Z [1m[92m   Compiling[0m proc-macro-crate v3.4.0
+2025-12-13T16:04:00.7849508Z [1m[92m   Compiling[0m event-listener-strategy v0.5.4
+2025-12-13T16:04:01.1899897Z [1m[92m   Compiling[0m vergen v8.3.2
+2025-12-13T16:04:01.2025966Z [1m[92m   Compiling[0m num-conv v0.1.0
+2025-12-13T16:04:01.2415075Z [1m[92m   Compiling[0m num_threads v0.1.7
+2025-12-13T16:04:01.2686055Z [1m[92m   Compiling[0m time-core v0.1.6
+2025-12-13T16:04:01.3160501Z [1m[92m   Compiling[0m cargo_metadata v0.18.1
+2025-12-13T16:04:01.3876590Z [1m[92m   Compiling[0m time v0.3.44
+2025-12-13T16:04:01.4531051Z [1m[92m   Compiling[0m borsh-derive v1.6.0
+2025-12-13T16:04:02.7246962Z [1m[92m   Compiling[0m atty v0.2.14
+2025-12-13T16:04:02.7587226Z [1m[92m   Compiling[0m termcolor v1.4.1
+2025-12-13T16:04:02.7698190Z [1m[92m   Compiling[0m cpufeatures v0.2.17
+2025-12-13T16:04:02.8020720Z [1m[92m   Compiling[0m event-listener v2.5.3
+2025-12-13T16:04:02.9949211Z [1m[92m   Compiling[0m unicode-width v0.2.2
+2025-12-13T16:04:03.1195803Z [1m[92m   Compiling[0m hexplay v0.3.0
+2025-12-13T16:04:03.2228284Z [1m[92m   Compiling[0m console v0.15.11
+2025-12-13T16:04:03.8139287Z [1m[92m   Compiling[0m sha2 v0.10.9
+2025-12-13T16:04:04.1343254Z [1m[92m   Compiling[0m workflow-macro-tools v0.18.0
+2025-12-13T16:04:04.3400856Z [1m[92m   Compiling[0m option-ext v0.2.0
+2025-12-13T16:04:04.3831839Z [1m[92m   Compiling[0m downcast v0.11.0
+2025-12-13T16:04:04.4149877Z [1m[92m   Compiling[0m lazy_static v1.5.0
+2025-12-13T16:04:04.4582009Z [1m[92m   Compiling[0m triggered v0.1.3
+2025-12-13T16:04:04.4652968Z [1m[92m   Compiling[0m workflow-log v0.18.0
+2025-12-13T16:04:04.7263637Z [1m[92m   Compiling[0m dirs-sys v0.4.1
+2025-12-13T16:04:04.7777891Z [1m[92m   Compiling[0m workflow-core v0.18.0
+2025-12-13T16:04:04.9744382Z [1m[92m   Compiling[0m async-channel v1.9.0
+2025-12-13T16:04:04.9858475Z [1m[92m   Compiling[0m async-channel v2.5.0
+2025-12-13T16:04:05.0982344Z [1m[92m   Compiling[0m async-lock v3.4.1
+2025-12-13T16:04:05.1220458Z [1m[92m   Compiling[0m futures-executor v0.3.31
+2025-12-13T16:04:05.1445625Z [1m[92m   Compiling[0m gloo-timers v0.3.0
+2025-12-13T16:04:05.3416808Z [1m[92m   Compiling[0m kv-log-macro v1.0.7
+2025-12-13T16:04:05.4134012Z [1m[92m   Compiling[0m async-attributes v1.1.2
+2025-12-13T16:04:05.4250878Z [1m[92m   Compiling[0m faster-hex v0.9.0
+2025-12-13T16:04:05.6071497Z [1m[92m   Compiling[0m shlex v1.3.0
+2025-12-13T16:04:05.6272705Z [1m[92m   Compiling[0m find-msvc-tools v0.1.5
+2025-12-13T16:04:05.6362221Z [1m[92m   Compiling[0m async-std v1.13.2
+2025-12-13T16:04:05.7293953Z [1m[92m   Compiling[0m cc v1.2.49
+2025-12-13T16:04:05.7905835Z [1m[92m   Compiling[0m futures v0.3.31
+2025-12-13T16:04:06.4613171Z [1m[92m   Compiling[0m dirs v5.0.1
+2025-12-13T16:04:06.5025669Z [1m[92m   Compiling[0m workflow-core-macros v0.18.0
+2025-12-13T16:04:06.9777093Z [1m[92m   Compiling[0m bs58 v0.5.1
+2025-12-13T16:04:07.1045982Z [1m[92m   Compiling[0m serde-wasm-bindgen v0.6.5
+2025-12-13T16:04:07.4148484Z [1m[92m   Compiling[0m smallvec v1.15.1
+2025-12-13T16:04:07.5724111Z [1m[92m   Compiling[0m signal-hook v0.3.18
+2025-12-13T16:04:07.6271096Z [1m[92m   Compiling[0m signal-hook-registry v1.4.7
+2025-12-13T16:04:07.6564971Z [1m[92m   Compiling[0m either v1.15.0
+2025-12-13T16:04:07.9050972Z [1m[92m   Compiling[0m os_pipe v1.2.3
+2025-12-13T16:04:07.9456521Z [1m[92m   Compiling[0m crossbeam-epoch v0.9.18
+2025-12-13T16:04:07.9839167Z [1m[92m   Compiling[0m sigchld v0.2.4
+2025-12-13T16:04:08.0643065Z [1m[92m   Compiling[0m rayon-core v1.13.0
+2025-12-13T16:04:08.1426005Z [1m[92m   Compiling[0m parking_lot_core v0.9.12
+2025-12-13T16:04:08.2915111Z [1m[92m   Compiling[0m getrandom v0.3.4
+2025-12-13T16:04:08.3035563Z [1m[92m   Compiling[0m crossbeam-deque v0.8.6
+2025-12-13T16:04:08.4680523Z [1m[92m   Compiling[0m shared_child v1.1.1
+2025-12-13T16:04:08.4755368Z [1m[92m   Compiling[0m ahash v0.8.12
+2025-12-13T16:04:08.5701740Z [1m[92m   Compiling[0m scopeguard v1.2.0
+2025-12-13T16:04:08.5988471Z [1m[92m   Compiling[0m autocfg v1.5.0
+2025-12-13T16:04:08.6213124Z [1m[92m   Compiling[0m lock_api v0.4.14
+2025-12-13T16:04:08.8489614Z [1m[92m   Compiling[0m duct v0.13.7
+2025-12-13T16:04:08.9104885Z [1m[92m   Compiling[0m num-traits v0.2.19
+2025-12-13T16:04:09.4889215Z [1m[92m   Compiling[0m kaspa-utils v1.0.1 (/home/runner/work/qaspa/qaspa/utils)
+2025-12-13T16:04:09.6312738Z [1m[92m   Compiling[0m rayon v1.11.0
+2025-12-13T16:04:10.7528655Z [1m[92m   Compiling[0m uuid v1.19.0
+2025-12-13T16:04:11.8913242Z [1m[92m   Compiling[0m workflow-wasm-macros v0.18.0
+2025-12-13T16:04:12.1273449Z [1m[92m   Compiling[0m sysinfo v0.31.4
+2025-12-13T16:04:12.2522653Z [1m[92m   Compiling[0m parking_lot v0.12.5
+2025-12-13T16:04:12.2732121Z [1m[92m   Compiling[0m itertools v0.13.0
+2025-12-13T16:04:12.8005621Z [1m[92m   Compiling[0m num_cpus v1.17.0
+2025-12-13T16:04:12.8383141Z [1m[92m   Compiling[0m ipnet v2.11.0
+2025-12-13T16:04:13.0417672Z [1m[92m   Compiling[0m arc-swap v1.7.1
+2025-12-13T16:04:13.2804899Z [1m[92m   Compiling[0m instant v0.1.13
+2025-12-13T16:04:13.4170888Z [1m[92m   Compiling[0m workflow-panic-hook v0.18.0
+2025-12-13T16:04:13.6225354Z [1m[92m   Compiling[0m kaspa-hashes v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/hashes)
+2025-12-13T16:04:13.7414367Z [1m[92m   Compiling[0m arrayref v0.3.9
+2025-12-13T16:04:13.7781770Z [1m[92m   Compiling[0m libm v0.2.15
+2025-12-13T16:04:13.9387274Z [1m[92m   Compiling[0m keccak v0.1.5
+2025-12-13T16:04:14.1649197Z [1m[92m   Compiling[0m constant_time_eq v0.3.1
+2025-12-13T16:04:14.2145276Z [1m[92m   Compiling[0m arrayvec v0.7.6
+2025-12-13T16:04:14.2528466Z [1m[92m   Compiling[0m hashbrown v0.14.5
+2025-12-13T16:04:14.3986573Z [1m[92m   Compiling[0m blake2b_simd v1.0.3
+2025-12-13T16:04:14.9770204Z [1m[92m   Compiling[0m secp256k1-sys v0.10.1
+2025-12-13T16:04:15.1342279Z [1m[92m   Compiling[0m itertools v0.11.0
+2025-12-13T16:04:16.2684365Z [1m[92m   Compiling[0m synstructure v0.13.2
+2025-12-13T16:04:16.7050164Z [1m[92m   Compiling[0m hybrid-array v0.4.5
+2025-12-13T16:04:16.7743991Z [1m[92m   Compiling[0m malachite-nz v0.4.22
+2025-12-13T16:04:16.8582565Z [1m[92m   Compiling[0m malachite-base v0.4.22
+2025-12-13T16:04:17.5403138Z [1m[92m   Compiling[0m block-buffer v0.11.0
+2025-12-13T16:04:17.6546032Z [1m[92m   Compiling[0m crypto-common v0.2.0-rc.5
+2025-12-13T16:04:17.8121817Z [1m[92m   Compiling[0m workflow-wasm v0.18.0
+2025-12-13T16:04:19.3022934Z [1m[92m   Compiling[0m zerofrom-derive v0.1.6
+2025-12-13T16:04:19.3551684Z [1m[92m   Compiling[0m async-trait v0.1.89
+2025-12-13T16:04:20.1078842Z [1m[92m   Compiling[0m stable_deref_trait v1.2.1
+2025-12-13T16:04:20.1433694Z [1m[92m   Compiling[0m const-oid v0.10.1
+2025-12-13T16:04:20.3703927Z [1m[92m   Compiling[0m zerofrom v0.1.6
+2025-12-13T16:04:20.4584909Z [1m[92m   Compiling[0m digest v0.11.0-rc.4
+2025-12-13T16:04:20.5775664Z [1m[92m   Compiling[0m yoke-derive v0.8.1
+2025-12-13T16:04:21.4908163Z [1m[92m   Compiling[0m hmac v0.12.1
+2025-12-13T16:04:21.5880395Z [1m[92m   Compiling[0m yoke v0.8.1
+2025-12-13T16:04:21.7335708Z [1m[92m   Compiling[0m kaspa-merkle v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/merkle)
+2025-12-13T16:04:21.8180665Z [1m[92m   Compiling[0m kaspa-addresses v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/addresses)
+2025-12-13T16:04:23.1425659Z [1m[92m   Compiling[0m der v0.8.0-rc.10
+2025-12-13T16:04:25.0930663Z [1m[92m   Compiling[0m spki v0.8.0-rc.4
+2025-12-13T16:04:25.3024471Z [1m[92m   Compiling[0m workflow-serializer v0.18.0
+2025-12-13T16:04:25.4565755Z [1m[92m   Compiling[0m kaspa-core v1.0.1 (/home/runner/work/qaspa/qaspa/core)
+2025-12-13T16:04:25.5789423Z [1m[92m   Compiling[0m rand_core v0.10.0-rc-2
+2025-12-13T16:04:25.6934919Z [1m[92m   Compiling[0m keccak v0.2.0-rc.0
+2025-12-13T16:04:26.0188065Z [1m[92m   Compiling[0m bitflags v2.10.0
+2025-12-13T16:04:26.3045130Z [1m[92m   Compiling[0m sha3 v0.11.0-rc.3
+2025-12-13T16:04:26.9550750Z [1m[92m   Compiling[0m signature v3.0.0-rc.5
+2025-12-13T16:04:27.0299425Z [1m[92m   Compiling[0m pkcs8 v0.11.0-rc.8
+2025-12-13T16:04:27.1567772Z [1m[92m   Compiling[0m zerovec-derive v0.11.2
+2025-12-13T16:04:27.7266302Z [1m[92m   Compiling[0m ident_case v1.0.1
+2025-12-13T16:04:27.7839775Z [1m[92m   Compiling[0m strsim v0.11.1
+2025-12-13T16:04:28.0157429Z [1m[92m   Compiling[0m fnv v1.0.7
+2025-12-13T16:04:28.0586392Z [1m[92m   Compiling[0m ml-dsa v0.1.0-rc.2
+2025-12-13T16:04:28.1051949Z [1m[92m   Compiling[0m zerovec v0.11.5
+2025-12-13T16:04:28.6900372Z [1m[92m   Compiling[0m hkdf v0.12.4
+2025-12-13T16:04:28.7825675Z [1m[92m   Compiling[0m secp256k1 v0.29.1
+2025-12-13T16:04:28.8447089Z [1m[92m   Compiling[0m sha3 v0.10.8
+2025-12-13T16:04:29.2120818Z [1m[92m   Compiling[0m kaspa-txscript-errors v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/txscript/errors)
+2025-12-13T16:04:29.3690496Z [1m[92m   Compiling[0m hex v0.4.3
+2025-12-13T16:04:29.4894007Z [1m[92m   Compiling[0m displaydoc v0.2.5
+2025-12-13T16:04:29.6405885Z [1m[92m   Compiling[0m kaspa-stealth v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/stealth)
+2025-12-13T16:04:30.0080773Z [1m[92m   Compiling[0m kaspa-math v1.0.1 (/home/runner/work/qaspa/qaspa/math)
+2025-12-13T16:04:30.0935273Z [1m[92m   Compiling[0m kaspa-mldsa v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/mldsa)
+2025-12-13T16:04:30.2875590Z [1m[92m   Compiling[0m kaspa-wasm-core v1.0.1 (/home/runner/work/qaspa/qaspa/wasm/core)
+2025-12-13T16:04:30.6954314Z [1m[92m   Compiling[0m tinystr v0.8.2
+2025-12-13T16:04:30.8696781Z [1m[92m   Compiling[0m kaspa-muhash v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/muhash)
+2025-12-13T16:04:30.9941678Z [1m[92m   Compiling[0m writeable v0.6.2
+2025-12-13T16:04:31.1657029Z [1m[92m   Compiling[0m kaspa-consensus-core v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/core)
+2025-12-13T16:04:31.6560652Z [1m[92m   Compiling[0m litemap v0.8.1
+2025-12-13T16:04:31.8289098Z [1m[92m   Compiling[0m icu_locale_core v2.1.1
+2025-12-13T16:04:34.4270549Z [1m[92m   Compiling[0m kaspa-txscript v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/txscript)
+2025-12-13T16:04:36.5218964Z [1m[92m   Compiling[0m zerotrie v0.2.3
+2025-12-13T16:04:36.9272987Z [1m[92m   Compiling[0m potential_utf v0.1.4
+2025-12-13T16:04:36.9363091Z [1m[92m   Compiling[0m icu_normalizer_data v2.1.1
+2025-12-13T16:04:37.0179779Z [1m[92m   Compiling[0m icu_properties_data v2.1.2
+2025-12-13T16:04:37.0358269Z [1m[92m   Compiling[0m icu_collections v2.1.1
+2025-12-13T16:04:37.1084636Z [1m[92m   Compiling[0m icu_provider v2.1.1
+2025-12-13T16:04:37.4517999Z [1m[92m   Compiling[0m paste v1.0.15
+2025-12-13T16:04:37.6315815Z [1m[92m   Compiling[0m inout v0.1.4
+2025-12-13T16:04:37.6518315Z [1m[92m   Compiling[0m convert_case v0.4.0
+2025-12-13T16:04:37.7203765Z [1m[92m   Compiling[0m cipher v0.4.4
+2025-12-13T16:04:37.7246793Z [1m[92m   Compiling[0m icu_properties v2.1.2
+2025-12-13T16:04:37.9221985Z [1m[92m   Compiling[0m icu_normalizer v2.1.1
+2025-12-13T16:04:37.9477123Z [1m[92m   Compiling[0m derive_more v0.99.20
+2025-12-13T16:04:39.5040356Z [1m[92m   Compiling[0m kaspa-consensus-client v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/client)
+2025-12-13T16:04:39.6384947Z [1m[92m   Compiling[0m darling_core v0.21.3
+2025-12-13T16:04:40.4576487Z [1m[92m   Compiling[0m ring v0.17.14
+2025-12-13T16:04:40.8122520Z [1m[92m   Compiling[0m workflow-task-macros v0.18.0
+2025-12-13T16:04:41.0258802Z [1m[92m   Compiling[0m percent-encoding v2.3.2
+2025-12-13T16:04:41.2183053Z [1m[92m   Compiling[0m form_urlencoded v1.2.2
+2025-12-13T16:04:41.3976209Z [1m[92m   Compiling[0m workflow-task v0.18.0
+2025-12-13T16:04:42.4840792Z [1m[92m   Compiling[0m darling_macro v0.21.3
+2025-12-13T16:04:42.7081813Z [1m[92m   Compiling[0m kaspa-notify v1.0.1 (/home/runner/work/qaspa/qaspa/notify)
+2025-12-13T16:04:47.1498391Z [1m[92m   Compiling[0m idna_adapter v1.2.1
+2025-12-13T16:04:47.2241727Z [1m[92m   Compiling[0m darling_core v0.20.11
+2025-12-13T16:04:47.8895544Z [1m[92m   Compiling[0m macroific_core v1.0.2
+2025-12-13T16:04:48.0077975Z [1m[92m   Compiling[0m macroific_attr_parse v1.3.0
+2025-12-13T16:04:48.4491046Z [1m[92m   Compiling[0m proc-macro-error-attr2 v2.0.0
+2025-12-13T16:04:48.6798342Z [1m[92m   Compiling[0m utf8_iter v1.0.4
+2025-12-13T16:04:48.7853164Z [1m[92m   Compiling[0m idna v1.1.0
+2025-12-13T16:04:49.7755192Z [1m[92m   Compiling[0m darling_macro v0.20.11
+2025-12-13T16:04:50.0086668Z [1m[92m   Compiling[0m proc-macro-error2 v2.0.1
+2025-12-13T16:04:50.2175149Z [1m[92m   Compiling[0m macroific_macro v1.1.0
+2025-12-13T16:04:50.7076485Z [1m[92m   Compiling[0m darling v0.21.3
+2025-12-13T16:04:50.7449245Z [1m[92m   Compiling[0m bytes v1.11.0
+2025-12-13T16:04:51.1620715Z [1m[92m   Compiling[0m untrusted v0.9.0
+2025-12-13T16:04:51.6593460Z [1m[92m   Compiling[0m base64 v0.22.1
+2025-12-13T16:04:52.1306077Z [1m[92m   Compiling[0m http v1.4.0
+2025-12-13T16:04:54.5882189Z [1m[92m   Compiling[0m serde_nested_with v0.2.6
+2025-12-13T16:04:55.0446239Z [1m[92m   Compiling[0m macroific v1.3.1
+2025-12-13T16:04:55.0809505Z [1m[92m   Compiling[0m darling v0.20.11
+2025-12-13T16:04:55.1192258Z [1m[92m   Compiling[0m url v2.5.7
+2025-12-13T16:04:57.7070893Z [1m[92m   Compiling[0m kaspa-consensus-notify v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/notify)
+2025-12-13T16:04:57.8531676Z [1m[92m   Compiling[0m kaspa-index-core v1.0.1 (/home/runner/work/qaspa/qaspa/indexes/core)
+2025-12-13T16:04:58.1784875Z [1m[92m   Compiling[0m kaspa-consensus-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/wasm)
+2025-12-13T16:04:58.2934241Z [1m[92m   Compiling[0m serde_urlencoded v0.7.1
+2025-12-13T16:04:58.5151629Z [1m[92m   Compiling[0m kaspa-mining-errors v1.0.1 (/home/runner/work/qaspa/qaspa/mining/errors)
+2025-12-13T16:04:58.5273071Z [1m[92m   Compiling[0m num-integer v0.1.46
+2025-12-13T16:04:58.6855179Z [1m[92m   Compiling[0m universal-hash v0.5.1
+2025-12-13T16:04:58.7671070Z [1m[92m   Compiling[0m kaspa-rpc-macros v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/macros)
+2025-12-13T16:04:58.8126573Z [1m[92m   Compiling[0m serde_spanned v0.6.9
+2025-12-13T16:04:58.8907876Z [1m[92m   Compiling[0m toml_datetime v0.6.11
+2025-12-13T16:04:58.9055978Z [1m[92m   Compiling[0m rustls-pki-types v1.13.1
+2025-12-13T16:04:59.2270433Z [1m[92m   Compiling[0m sync_wrapper v1.0.2
+2025-12-13T16:04:59.6254066Z [1m[92m   Compiling[0m toml_write v0.1.2
+2025-12-13T16:04:59.6961863Z [1m[92m   Compiling[0m rustls v0.23.35
+2025-12-13T16:04:59.7735747Z [1m[92m   Compiling[0m downcast-rs v1.2.1
+2025-12-13T16:04:59.8195144Z [1m[92m   Compiling[0m opaque-debug v0.3.1
+2025-12-13T16:04:59.8253560Z [1m[92m   Compiling[0m workflow-websocket v0.18.0
+2025-12-13T16:04:59.8549888Z [1m[92m   Compiling[0m poly1305 v0.8.0
+2025-12-13T16:05:00.0115166Z [1m[92m   Compiling[0m kaspa-rpc-core v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/core)
+2025-12-13T16:05:01.4771895Z [1m[92m   Compiling[0m toml_edit v0.22.27
+2025-12-13T16:05:03.2729574Z [1m[92m   Compiling[0m reqwest v0.12.25
+2025-12-13T16:05:04.4455695Z [1m[92m   Compiling[0m rustls-webpki v0.103.8
+2025-12-13T16:05:06.4187733Z [1m[92m   Compiling[0m derive_builder_core v0.20.2
+2025-12-13T16:05:07.0368720Z [1m[92m   Compiling[0m chacha20 v0.9.1
+2025-12-13T16:05:07.1620848Z [1m[92m   Compiling[0m pbkdf2 v0.12.2
+2025-12-13T16:05:07.2418275Z [1m[92m   Compiling[0m workflow-rpc-macros v0.18.0
+2025-12-13T16:05:07.3606848Z [1m[92m   Compiling[0m manual_future v0.1.3
+2025-12-13T16:05:07.4230210Z [1m[92m   Compiling[0m ripemd v0.1.3
+2025-12-13T16:05:07.4572986Z [1m[92m   Compiling[0m aead v0.5.2
+2025-12-13T16:05:07.5705539Z [1m[92m   Compiling[0m curve25519-dalek v4.1.3
+2025-12-13T16:05:07.6887945Z [1m[92m   Compiling[0m cfg-if v0.1.10
+2025-12-13T16:05:07.7227525Z [1m[92m   Compiling[0m node-sys v0.4.2
+2025-12-13T16:05:08.6717293Z [1m[92m   Compiling[0m kaspa-bip32 v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/bip32)
+2025-12-13T16:05:10.8471505Z [1m[92m   Compiling[0m workflow-rpc v0.18.0
+2025-12-13T16:05:11.0528609Z [1m[92m   Compiling[0m derive_builder_macro v0.20.2
+2025-12-13T16:05:11.2508152Z [1m[92m   Compiling[0m workflow-dom v0.18.0
+2025-12-13T16:05:14.2067503Z [1m[92m   Compiling[0m workflow-http v0.18.0
+2025-12-13T16:05:14.4683933Z [1m[92m   Compiling[0m toml v0.8.23
+2025-12-13T16:05:17.0492391Z [1m[92m   Compiling[0m num-bigint v0.4.6
+2025-12-13T16:05:17.9860064Z [1m[92m   Compiling[0m salsa20 v0.10.2
+2025-12-13T16:05:18.0866767Z [1m[92m   Compiling[0m ordered-float v2.10.1
+2025-12-13T16:05:18.3343980Z [1m[92m   Compiling[0m chrome-sys v0.2.0
+2025-12-13T16:05:19.0693809Z [1m[92m   Compiling[0m heapless v0.8.0
+2025-12-13T16:05:19.1723255Z [1m[92m   Compiling[0m byteorder v1.5.0
+2025-12-13T16:05:19.2188160Z [1m[92m   Compiling[0m separator v0.4.1
+2025-12-13T16:05:19.3249762Z [1m[92m   Compiling[0m base64ct v1.8.1
+2025-12-13T16:05:19.3366726Z [1m[92m   Compiling[0m hash32 v0.3.1
+2025-12-13T16:05:19.4453758Z [1m[92m   Compiling[0m workflow-node v0.18.0
+2025-12-13T16:05:19.6050966Z [1m[92m   Compiling[0m password-hash v0.5.0
+2025-12-13T16:05:19.7708882Z [1m[92m   Compiling[0m workflow-chrome v0.18.0
+2025-12-13T16:05:20.0158566Z [1m[92m   Compiling[0m num-rational v0.4.2
+2025-12-13T16:05:20.5056581Z [1m[92m   Compiling[0m serde-value v0.7.0
+2025-12-13T16:05:20.8958949Z [1m[92m   Compiling[0m crypto_secretbox v0.1.1
+2025-12-13T16:05:21.0368839Z [1m[92m   Compiling[0m derive_builder v0.20.2
+2025-12-13T16:05:21.2125665Z [1m[92m   Compiling[0m num-iter v0.1.45
+2025-12-13T16:05:21.2777253Z [1m[92m   Compiling[0m delegate-display v2.1.1
+2025-12-13T16:05:21.6340791Z [1m[92m   Compiling[0m accessory v1.3.1
+2025-12-13T16:05:22.0112437Z [1m[92m   Compiling[0m fancy_constructor v1.3.0
+2025-12-13T16:05:22.1103000Z [1m[92m   Compiling[0m num-complex v0.4.6
+2025-12-13T16:05:22.4289184Z [1m[92m   Compiling[0m nanoid v0.4.0
+2025-12-13T16:05:22.6224170Z [1m[92m   Compiling[0m blake2 v0.10.6
+2025-12-13T16:05:23.0201921Z [1m[92m   Compiling[0m bincode v1.3.3
+2025-12-13T16:05:23.0305665Z [1m[92m   Compiling[0m serde_repr v0.1.20
+2025-12-13T16:05:23.0561501Z [1m[92m   Compiling[0m xxhash-rust v0.8.15
+2025-12-13T16:05:23.2924694Z [1m[92m   Compiling[0m unicode-width v0.1.14
+2025-12-13T16:05:23.4603238Z [1m[92m   Compiling[0m deunicode v1.6.2
+2025-12-13T16:05:23.5054612Z [1m[92m   Compiling[0m convert_case v0.5.0
+2025-12-13T16:05:23.6662931Z [1m[92m   Compiling[0m slugify-rs v0.0.3
+2025-12-13T16:05:23.7734179Z [1m[92m   Compiling[0m kaspa-wallet-macros v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/macros)
+2025-12-13T16:05:24.0055193Z [1m[92m   Compiling[0m kaspa-wallet-pskt v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/pskt)
+2025-12-13T16:05:24.3658674Z [1m[92m   Compiling[0m pad v0.1.6
+2025-12-13T16:05:24.5482974Z [1m[92m   Compiling[0m argon2 v0.5.3
+2025-12-13T16:05:25.0495976Z [1m[92m   Compiling[0m num v0.4.3
+2025-12-13T16:05:25.0874430Z [1m[92m   Compiling[0m indexed_db_futures v0.5.0
+2025-12-13T16:05:25.4401968Z [1m[92m   Compiling[0m workflow-store v0.18.0
+2025-12-13T16:05:25.7275415Z [1m[92m   Compiling[0m crypto_box v0.9.1
+2025-12-13T16:05:26.3407360Z [1m[92m   Compiling[0m kaspa-metrics-core v1.0.1 (/home/runner/work/qaspa/qaspa/metrics/core)
+2025-12-13T16:05:26.6482650Z [1m[92m   Compiling[0m kaspa-wallet-keys v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/keys)
+2025-12-13T16:05:27.7598156Z [1m[92m   Compiling[0m kaspa-wrpc-client v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/client)
+2025-12-13T16:05:27.8202811Z [1m[92m   Compiling[0m chacha20poly1305 v0.10.1
+2025-12-13T16:05:27.9047714Z [1m[92m   Compiling[0m cfb-mode v0.8.2
+2025-12-13T16:05:28.0162567Z [1m[92m   Compiling[0m aes v0.8.4
+2025-12-13T16:05:28.7672077Z [1m[92m   Compiling[0m dashmap v6.1.0
+2025-12-13T16:05:29.2328585Z [1m[92m   Compiling[0m evpkdf v0.2.0
+2025-12-13T16:05:29.2890950Z [1m[92m   Compiling[0m sha1 v0.10.6
+2025-12-13T16:05:29.5250697Z [1m[92m   Compiling[0m md-5 v0.10.6
+2025-12-13T16:05:29.6298734Z [1m[92m   Compiling[0m derivative v2.2.0
+2025-12-13T16:05:31.2352468Z [1m[92m   Compiling[0m fixedstr v0.5.10
+2025-12-13T16:05:31.4839108Z [1m[92m   Compiling[0m sorted-insert v0.2.6
+2025-12-13T16:05:32.0919277Z [1m[92m   Compiling[0m kaspa-pow v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/pow)
+2025-12-13T16:05:45.0000894Z [1m[92m   Compiling[0m kaspa-wrpc-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/wasm)
+2025-12-13T16:05:50.7844866Z [1m[92m   Compiling[0m kaspa-wallet-core v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/core)
+2025-12-13T16:06:49.7709290Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:06:52.1723350Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 3m 11s
+2025-12-13T16:06:52.2172864Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:06:54.5222042Z [INFO]: Optimizing wasm binaries with `wasm-opt`...
+2025-12-13T16:06:57.4110143Z [INFO]: ✨   Done in 3m 17s
+2025-12-13T16:06:57.4111801Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa-keygen.
+2025-12-13T16:06:57.8982216Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:06:58.0061950Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:06:58.3749319Z [1m[92m   Compiling[0m serde_core v1.0.228
+2025-12-13T16:06:58.3750096Z [1m[92m   Compiling[0m memchr v2.7.6
+2025-12-13T16:06:58.3794958Z [1m[92m   Compiling[0m itoa v1.0.15
+2025-12-13T16:06:58.3795840Z [1m[92m   Compiling[0m cfg-if v1.0.4
+2025-12-13T16:06:58.4110832Z [1m[92m   Compiling[0m ryu v1.0.20
+2025-12-13T16:06:58.4608910Z [1m[92m   Compiling[0m once_cell v1.21.3
+2025-12-13T16:06:58.5688623Z [1m[92m   Compiling[0m unicode-ident v1.0.22
+2025-12-13T16:06:58.6176512Z [1m[92m   Compiling[0m zeroize v1.8.2
+2025-12-13T16:06:58.6450039Z [1m[92m   Compiling[0m wasm-bindgen-shared v0.2.106
+2025-12-13T16:06:58.7257680Z [1m[92m   Compiling[0m typenum v1.19.0
+2025-12-13T16:06:58.7841725Z [1m[92m   Compiling[0m subtle v2.6.1
+2025-12-13T16:06:58.8780429Z [1m[92m   Compiling[0m crossbeam-utils v0.8.21
+2025-12-13T16:06:58.8935365Z [1m[92m   Compiling[0m zerocopy v0.8.31
+2025-12-13T16:06:59.3740034Z [1m[92m   Compiling[0m futures-core v0.3.31
+2025-12-13T16:06:59.4630154Z [1m[92m   Compiling[0m pin-project-lite v0.2.16
+2025-12-13T16:06:59.5097022Z [1m[92m   Compiling[0m generic-array v0.14.7
+2025-12-13T16:06:59.5183516Z [1m[92m   Compiling[0m futures-sink v0.3.31
+2025-12-13T16:06:59.5696482Z [1m[92m   Compiling[0m futures-channel v0.3.31
+2025-12-13T16:06:59.7381468Z [1m[92m   Compiling[0m concurrent-queue v2.5.0
+2025-12-13T16:06:59.8814690Z [1m[92m   Compiling[0m futures-io v0.3.31
+2025-12-13T16:06:59.9939769Z [1m[92m   Compiling[0m value-bag v1.12.0
+2025-12-13T16:07:00.1258731Z [1m[92m   Compiling[0m block-buffer v0.10.4
+2025-12-13T16:07:00.2112010Z [1m[92m   Compiling[0m pin-utils v0.1.0
+2025-12-13T16:07:00.2469405Z [1m[92m   Compiling[0m slab v0.4.11
+2025-12-13T16:07:00.2504966Z [1m[92m   Compiling[0m log v0.4.29
+2025-12-13T16:07:00.3642745Z [1m[92m   Compiling[0m libc v0.2.178
+2025-12-13T16:07:00.4048020Z [1m[92m   Compiling[0m event-listener v5.4.1
+2025-12-13T16:07:00.5317648Z [1m[92m   Compiling[0m ppv-lite86 v0.2.21
+2025-12-13T16:07:00.5827493Z [1m[92m   Compiling[0m futures-task v0.3.31
+2025-12-13T16:07:00.5909636Z [1m[92m   Compiling[0m thiserror v1.0.69
+2025-12-13T16:07:00.6355748Z [1m[92m   Compiling[0m serde v1.0.228
+2025-12-13T16:07:00.6970734Z [1m[92m   Compiling[0m serde_json v1.0.145
+2025-12-13T16:07:00.7171110Z [1m[92m   Compiling[0m futures-util v0.3.31
+2025-12-13T16:07:00.7657989Z [1m[92m   Compiling[0m event-listener-strategy v0.5.4
+2025-12-13T16:07:00.8373254Z [1m[92m   Compiling[0m atty v0.2.14
+2025-12-13T16:07:00.8819470Z [1m[92m   Compiling[0m termcolor v1.4.1
+2025-12-13T16:07:01.2111721Z [1m[92m   Compiling[0m event-listener v2.5.3
+2025-12-13T16:07:01.2153388Z [1m[92m   Compiling[0m unicode-width v0.2.2
+2025-12-13T16:07:01.3375872Z [1m[92m   Compiling[0m hexplay v0.3.0
+2025-12-13T16:07:01.4165966Z [1m[92m   Compiling[0m console v0.15.11
+2025-12-13T16:07:01.6467589Z [1m[92m   Compiling[0m wasm-bindgen v0.2.106
+2025-12-13T16:07:01.9479668Z [1m[92m   Compiling[0m borsh v1.6.0
+2025-12-13T16:07:02.1066026Z [1m[92m   Compiling[0m lazy_static v1.5.0
+2025-12-13T16:07:02.1525204Z [1m[92m   Compiling[0m option-ext v0.2.0
+2025-12-13T16:07:02.1943057Z [1m[92m   Compiling[0m triggered v0.1.3
+2025-12-13T16:07:02.3817894Z [1m[92m   Compiling[0m downcast v0.11.0
+2025-12-13T16:07:02.3863530Z [1m[92m   Compiling[0m dirs-sys v0.4.1
+2025-12-13T16:07:02.4395350Z [1m[92m   Compiling[0m async-channel v1.9.0
+2025-12-13T16:07:02.4652741Z [1m[92m   Compiling[0m faster-hex v0.9.0
+2025-12-13T16:07:02.5545022Z [1m[92m   Compiling[0m async-lock v3.4.1
+2025-12-13T16:07:02.6233596Z [1m[92m   Compiling[0m async-channel v2.5.0
+2025-12-13T16:07:02.7746646Z [1m[92m   Compiling[0m js-sys v0.3.83
+2025-12-13T16:07:02.8413285Z [1m[92m   Compiling[0m workflow-log v0.18.0
+2025-12-13T16:07:03.0035088Z [1m[92m   Compiling[0m kv-log-macro v1.0.7
+2025-12-13T16:07:03.0752995Z [1m[92m   Compiling[0m dirs v5.0.1
+2025-12-13T16:07:03.1095005Z [1m[92m   Compiling[0m smallvec v1.15.1
+2025-12-13T16:07:03.1218927Z [1m[92m   Compiling[0m either v1.15.0
+2025-12-13T16:07:03.2855885Z [1m[92m   Compiling[0m crossbeam-epoch v0.9.18
+2025-12-13T16:07:03.2899844Z [1m[92m   Compiling[0m scopeguard v1.2.0
+2025-12-13T16:07:03.3326369Z [1m[92m   Compiling[0m futures-executor v0.3.31
+2025-12-13T16:07:03.4874930Z [1m[92m   Compiling[0m futures v0.3.31
+2025-12-13T16:07:03.5271788Z [1m[92m   Compiling[0m crossbeam-deque v0.8.6
+2025-12-13T16:07:03.5336584Z [1m[92m   Compiling[0m lock_api v0.4.14
+2025-12-13T16:07:03.5751477Z [1m[92m   Compiling[0m parking_lot_core v0.9.12
+2025-12-13T16:07:03.6669388Z [1m[92m   Compiling[0m rayon-core v1.13.0
+2025-12-13T16:07:03.7206713Z [1m[92m   Compiling[0m getrandom v0.3.4
+2025-12-13T16:07:03.7678588Z [1m[92m   Compiling[0m kaspa-utils v1.0.1 (/home/runner/work/qaspa/qaspa/utils)
+2025-12-13T16:07:03.8347475Z [1m[92m   Compiling[0m ahash v0.8.12
+2025-12-13T16:07:03.9713533Z [1m[92m   Compiling[0m uuid v1.19.0
+2025-12-13T16:07:04.0113760Z [1m[92m   Compiling[0m num-traits v0.2.19
+2025-12-13T16:07:04.3759153Z [1m[92m   Compiling[0m rayon v1.11.0
+2025-12-13T16:07:04.4652041Z [1m[92m   Compiling[0m parking_lot v0.12.5
+2025-12-13T16:07:04.7559476Z [1m[92m   Compiling[0m itertools v0.13.0
+2025-12-13T16:07:04.8387434Z [1m[92m   Compiling[0m num_cpus v1.17.0
+2025-12-13T16:07:04.8790026Z [1m[92m   Compiling[0m arc-swap v1.7.1
+2025-12-13T16:07:05.0935886Z [1m[92m   Compiling[0m ipnet v2.11.0
+2025-12-13T16:07:05.7097077Z [1m[92m   Compiling[0m kaspa-hashes v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/hashes)
+2025-12-13T16:07:05.8724412Z [1m[92m   Compiling[0m constant_time_eq v0.3.1
+2025-12-13T16:07:05.9256783Z [1m[92m   Compiling[0m keccak v0.1.5
+2025-12-13T16:07:06.1961807Z [1m[92m   Compiling[0m arrayvec v0.7.6
+2025-12-13T16:07:06.2159237Z [1m[92m   Compiling[0m arrayref v0.3.9
+2025-12-13T16:07:06.2576895Z [1m[92m   Compiling[0m hashbrown v0.14.5
+2025-12-13T16:07:06.3435186Z [1m[92m   Compiling[0m blake2b_simd v1.0.3
+2025-12-13T16:07:06.5570517Z [1m[92m   Compiling[0m sysinfo v0.31.4
+2025-12-13T16:07:06.7862368Z [1m[92m   Compiling[0m secp256k1-sys v0.10.1
+2025-12-13T16:07:06.8311986Z [1m[92m   Compiling[0m libm v0.2.15
+2025-12-13T16:07:07.0276431Z [1m[92m   Compiling[0m itertools v0.11.0
+2025-12-13T16:07:08.1817461Z [1m[92m   Compiling[0m hybrid-array v0.4.5
+2025-12-13T16:07:08.2821469Z [1m[92m   Compiling[0m getrandom v0.2.16
+2025-12-13T16:07:08.4979486Z [1m[92m   Compiling[0m rand_core v0.6.4
+2025-12-13T16:07:08.6383508Z [1m[92m   Compiling[0m crypto-common v0.1.7
+2025-12-13T16:07:08.7057658Z [1m[92m   Compiling[0m digest v0.10.7
+2025-12-13T16:07:08.8655768Z [1m[92m   Compiling[0m rand_chacha v0.3.1
+2025-12-13T16:07:08.9626298Z [1m[92m   Compiling[0m web-sys v0.3.83
+2025-12-13T16:07:09.0907422Z [1m[92m   Compiling[0m rand v0.8.5
+2025-12-13T16:07:10.9229071Z [1m[92m   Compiling[0m wasm-bindgen-futures v0.4.56
+2025-12-13T16:07:11.1276354Z [1m[92m   Compiling[0m sha2 v0.10.9
+2025-12-13T16:07:11.1529116Z [1m[92m   Compiling[0m gloo-timers v0.3.0
+2025-12-13T16:07:11.3386987Z [1m[92m   Compiling[0m bs58 v0.5.1
+2025-12-13T16:07:11.5715181Z [1m[92m   Compiling[0m async-std v1.13.2
+2025-12-13T16:07:12.2257822Z [1m[92m   Compiling[0m serde-wasm-bindgen v0.6.5
+2025-12-13T16:07:12.7509942Z [1m[92m   Compiling[0m malachite-base v0.4.22
+2025-12-13T16:07:12.9819056Z [1m[92m   Compiling[0m secp256k1 v0.29.1
+2025-12-13T16:07:13.2607264Z [1m[92m   Compiling[0m crypto-common v0.2.0-rc.5
+2025-12-13T16:07:13.4736537Z [1m[92m   Compiling[0m block-buffer v0.11.0
+2025-12-13T16:07:13.5806863Z [1m[92m   Compiling[0m const-oid v0.10.1
+2025-12-13T16:07:14.8051893Z [1m[92m   Compiling[0m stable_deref_trait v1.2.1
+2025-12-13T16:07:14.8425390Z [1m[92m   Compiling[0m digest v0.11.0-rc.4
+2025-12-13T16:07:14.9430640Z [1m[92m   Compiling[0m zerofrom v0.1.6
+2025-12-13T16:07:15.0274605Z [1m[92m   Compiling[0m hmac v0.12.1
+2025-12-13T16:07:15.1123700Z [1m[92m   Compiling[0m yoke v0.8.1
+2025-12-13T16:07:15.2593242Z [1m[92m   Compiling[0m kaspa-txscript-errors v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/txscript/errors)
+2025-12-13T16:07:15.3772416Z [1m[92m   Compiling[0m workflow-serializer v0.18.0
+2025-12-13T16:07:15.4998845Z [1m[92m   Compiling[0m kaspa-core v1.0.1 (/home/runner/work/qaspa/qaspa/core)
+2025-12-13T16:07:15.6173556Z [1m[92m   Compiling[0m keccak v0.2.0-rc.0
+2025-12-13T16:07:15.8985389Z [1m[92m   Compiling[0m equivalent v1.0.2
+2025-12-13T16:07:15.9373508Z [1m[92m   Compiling[0m hashbrown v0.16.1
+2025-12-13T16:07:16.3306561Z [1m[92m   Compiling[0m der v0.8.0-rc.10
+2025-12-13T16:07:16.5089077Z [1m[92m   Compiling[0m bitflags v2.10.0
+2025-12-13T16:07:16.6847075Z [1m[92m   Compiling[0m rand_core v0.10.0-rc-2
+2025-12-13T16:07:16.7906384Z [1m[92m   Compiling[0m signature v3.0.0-rc.5
+2025-12-13T16:07:16.8636818Z [1m[92m   Compiling[0m indexmap v2.12.1
+2025-12-13T16:07:17.4969041Z [1m[92m   Compiling[0m spki v0.8.0-rc.4
+2025-12-13T16:07:17.6443859Z [1m[92m   Compiling[0m pkcs8 v0.11.0-rc.8
+2025-12-13T16:07:17.7524386Z [1m[92m   Compiling[0m sha3 v0.11.0-rc.3
+2025-12-13T16:07:18.2567964Z [1m[92m   Compiling[0m malachite-nz v0.4.22
+2025-12-13T16:07:18.3199033Z [1m[92m   Compiling[0m zerovec v0.11.5
+2025-12-13T16:07:18.8442998Z [1m[92m   Compiling[0m ml-dsa v0.1.0-rc.2
+2025-12-13T16:07:18.9066643Z [1m[92m   Compiling[0m hkdf v0.12.4
+2025-12-13T16:07:18.9867270Z [1m[92m   Compiling[0m sha3 v0.10.8
+2025-12-13T16:07:19.2452199Z [1m[92m   Compiling[0m hex v0.4.3
+2025-12-13T16:07:19.4796376Z [1m[92m   Compiling[0m tinystr v0.8.2
+2025-12-13T16:07:19.6342440Z [1m[92m   Compiling[0m litemap v0.8.1
+2025-12-13T16:07:19.7856884Z [1m[92m   Compiling[0m writeable v0.6.2
+2025-12-13T16:07:19.9319174Z [1m[92m   Compiling[0m icu_locale_core v2.1.1
+2025-12-13T16:07:20.7265216Z [1m[92m   Compiling[0m zerotrie v0.2.3
+2025-12-13T16:07:20.9953263Z [1m[92m   Compiling[0m potential_utf v0.1.4
+2025-12-13T16:07:21.0921784Z [1m[92m   Compiling[0m icu_collections v2.1.1
+2025-12-13T16:07:21.1214074Z [1m[92m   Compiling[0m icu_provider v2.1.1
+2025-12-13T16:07:21.3784372Z [1m[92m   Compiling[0m icu_normalizer_data v2.1.1
+2025-12-13T16:07:21.4215990Z [1m[92m   Compiling[0m icu_properties_data v2.1.2
+2025-12-13T16:07:21.5278106Z [1m[92m   Compiling[0m inout v0.1.4
+2025-12-13T16:07:21.6108627Z [1m[92m   Compiling[0m cipher v0.4.4
+2025-12-13T16:07:21.6722144Z [1m[92m   Compiling[0m icu_properties v2.1.2
+2025-12-13T16:07:21.7944775Z [1m[92m   Compiling[0m icu_normalizer v2.1.1
+2025-12-13T16:07:22.4410232Z [1m[92m   Compiling[0m percent-encoding v2.3.2
+2025-12-13T16:07:22.5829416Z [1m[92m   Compiling[0m form_urlencoded v1.2.2
+2025-12-13T16:07:22.6915103Z [1m[92m   Compiling[0m idna_adapter v1.2.1
+2025-12-13T16:07:22.7594099Z [1m[92m   Compiling[0m ring v0.17.14
+2025-12-13T16:07:23.0763065Z [1m[92m   Compiling[0m instant v0.1.13
+2025-12-13T16:07:23.1593098Z [1m[92m   Compiling[0m workflow-panic-hook v0.18.0
+2025-12-13T16:07:23.3137412Z [1m[92m   Compiling[0m utf8_iter v1.0.4
+2025-12-13T16:07:23.4051716Z [1m[92m   Compiling[0m idna v1.1.0
+2025-12-13T16:07:24.3046121Z [1m[92m   Compiling[0m aho-corasick v1.1.4
+2025-12-13T16:07:24.4980858Z [1m[92m   Compiling[0m regex-syntax v0.8.8
+2025-12-13T16:07:24.5608476Z [1m[92m   Compiling[0m workflow-core v0.18.0
+2025-12-13T16:07:25.6064064Z [1m[92m   Compiling[0m workflow-wasm v0.18.0
+2025-12-13T16:07:25.9918483Z [1m[92m   Compiling[0m workflow-task v0.18.0
+2025-12-13T16:07:26.0804052Z [1m[92m   Compiling[0m untrusted v0.9.0
+2025-12-13T16:07:26.1433696Z [1m[92m   Compiling[0m base64 v0.22.1
+2025-12-13T16:07:26.2964375Z [1m[92m   Compiling[0m bytes v1.11.0
+2025-12-13T16:07:26.4820182Z [1m[92m   Compiling[0m kaspa-math v1.0.1 (/home/runner/work/qaspa/qaspa/math)
+2025-12-13T16:07:26.7461017Z [1m[92m   Compiling[0m kaspa-merkle v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/merkle)
+2025-12-13T16:07:26.8241982Z [1m[92m   Compiling[0m kaspa-addresses v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/addresses)
+2025-12-13T16:07:27.0139454Z [1m[92m   Compiling[0m kaspa-mldsa v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/mldsa)
+2025-12-13T16:07:27.2342691Z [1m[92m   Compiling[0m kaspa-muhash v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/muhash)
+2025-12-13T16:07:27.4338931Z [1m[92m   Compiling[0m kaspa-consensus-core v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/core)
+2025-12-13T16:07:27.6167578Z [1m[92m   Compiling[0m kaspa-stealth v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/stealth)
+2025-12-13T16:07:27.7086796Z [1m[92m   Compiling[0m kaspa-wasm-core v1.0.1 (/home/runner/work/qaspa/qaspa/wasm/core)
+2025-12-13T16:07:27.9092480Z [1m[92m   Compiling[0m http v1.4.0
+2025-12-13T16:07:28.0205344Z [1m[92m   Compiling[0m regex-automata v0.4.13
+2025-12-13T16:07:30.6929250Z [1m[92m   Compiling[0m kaspa-txscript v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/txscript)
+2025-12-13T16:07:31.2218293Z [1m[92m   Compiling[0m kaspa-mining-errors v1.0.1 (/home/runner/work/qaspa/qaspa/mining/errors)
+2025-12-13T16:07:31.4043597Z [1m[92m   Compiling[0m url v2.5.7
+2025-12-13T16:07:31.4249573Z [1m[92m   Compiling[0m serde_urlencoded v0.7.1
+2025-12-13T16:07:31.6407040Z [1m[92m   Compiling[0m universal-hash v0.5.1
+2025-12-13T16:07:31.7090815Z [1m[92m   Compiling[0m num-integer v0.1.46
+2025-12-13T16:07:32.0459078Z [1m[92m   Compiling[0m serde_spanned v0.6.9
+2025-12-13T16:07:32.1224541Z [1m[92m   Compiling[0m toml_datetime v0.6.11
+2025-12-13T16:07:32.3500920Z [1m[92m   Compiling[0m kaspa-rpc-macros v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/macros)
+2025-12-13T16:07:32.3661064Z [1m[92m   Compiling[0m sync_wrapper v1.0.2
+2025-12-13T16:07:32.4183328Z [1m[92m   Compiling[0m kaspa-consensus-client v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/client)
+2025-12-13T16:07:32.5888944Z [1m[92m   Compiling[0m kaspa-notify v1.0.1 (/home/runner/work/qaspa/qaspa/notify)
+2025-12-13T16:07:32.6796931Z [1m[92m   Compiling[0m rustls-pki-types v1.13.1
+2025-12-13T16:07:33.1255599Z [1m[92m   Compiling[0m opaque-debug v0.3.1
+2025-12-13T16:07:33.1590670Z [1m[92m   Compiling[0m toml_write v0.1.2
+2025-12-13T16:07:33.3055300Z [1m[92m   Compiling[0m winnow v0.7.14
+2025-12-13T16:07:33.7017741Z [1m[92m   Compiling[0m downcast-rs v1.2.1
+2025-12-13T16:07:33.7469305Z [1m[92m   Compiling[0m workflow-websocket v0.18.0
+2025-12-13T16:07:34.8580043Z [1m[92m   Compiling[0m kaspa-index-core v1.0.1 (/home/runner/work/qaspa/qaspa/indexes/core)
+2025-12-13T16:07:35.0843204Z [1m[92m   Compiling[0m kaspa-consensus-notify v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/notify)
+2025-12-13T16:07:35.2305828Z [1m[92m   Compiling[0m toml_edit v0.22.27
+2025-12-13T16:07:35.2460102Z [1m[92m   Compiling[0m rustls v0.23.35
+2025-12-13T16:07:35.2550261Z [1m[92m   Compiling[0m poly1305 v0.8.0
+2025-12-13T16:07:35.3850814Z [1m[92m   Compiling[0m kaspa-consensus-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/wasm)
+2025-12-13T16:07:35.5148177Z [1m[92m   Compiling[0m kaspa-rpc-core v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/core)
+2025-12-13T16:07:35.5229323Z [1m[92m   Compiling[0m rustls-webpki v0.103.8
+2025-12-13T16:07:36.8138439Z [1m[92m   Compiling[0m reqwest v0.12.25
+2025-12-13T16:07:37.3735034Z [1m[92m   Compiling[0m regex v1.12.2
+2025-12-13T16:07:37.8480594Z [1m[92m   Compiling[0m chacha20 v0.9.1
+2025-12-13T16:07:37.9530603Z [1m[92m   Compiling[0m pbkdf2 v0.12.2
+2025-12-13T16:07:38.0116877Z [1m[92m   Compiling[0m ripemd v0.1.3
+2025-12-13T16:07:38.0181486Z [1m[92m   Compiling[0m aead v0.5.2
+2025-12-13T16:07:38.1020388Z [1m[92m   Compiling[0m manual_future v0.1.3
+2025-12-13T16:07:38.1625019Z [1m[92m   Compiling[0m cfg-if v0.1.10
+2025-12-13T16:07:38.1942760Z [1m[92m   Compiling[0m node-sys v0.4.2
+2025-12-13T16:07:39.1630631Z [1m[92m   Compiling[0m kaspa-bip32 v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/bip32)
+2025-12-13T16:07:39.4224609Z [1m[92m   Compiling[0m workflow-rpc v0.18.0
+2025-12-13T16:07:40.3817604Z [1m[92m   Compiling[0m workflow-dom v0.18.0
+2025-12-13T16:07:40.4974041Z [1m[92m   Compiling[0m workflow-http v0.18.0
+2025-12-13T16:07:40.8932344Z [1m[92m   Compiling[0m toml v0.8.23
+2025-12-13T16:07:41.7511441Z [1m[92m   Compiling[0m num-bigint v0.4.6
+2025-12-13T16:07:43.3697394Z [1m[92m   Compiling[0m salsa20 v0.10.2
+2025-12-13T16:07:43.4540042Z [1m[92m   Compiling[0m chrome-sys v0.2.0
+2025-12-13T16:07:44.2010670Z [1m[92m   Compiling[0m ordered-float v2.10.1
+2025-12-13T16:07:44.4404167Z [1m[92m   Compiling[0m byteorder v1.5.0
+2025-12-13T16:07:44.5843849Z [1m[92m   Compiling[0m separator v0.4.1
+2025-12-13T16:07:44.7314630Z [1m[92m   Compiling[0m base64ct v1.8.1
+2025-12-13T16:07:44.9697069Z [1m[92m   Compiling[0m password-hash v0.5.0
+2025-12-13T16:07:45.3679082Z [1m[92m   Compiling[0m hash32 v0.3.1
+2025-12-13T16:07:45.4447872Z [1m[92m   Compiling[0m serde-value v0.7.0
+2025-12-13T16:07:45.8339205Z [1m[92m   Compiling[0m workflow-chrome v0.18.0
+2025-12-13T16:07:46.5310078Z [1m[92m   Compiling[0m crypto_secretbox v0.1.1
+2025-12-13T16:07:46.5424880Z [1m[92m   Compiling[0m num-rational v0.4.2
+2025-12-13T16:07:46.6582196Z [1m[92m   Compiling[0m derive_builder v0.20.2
+2025-12-13T16:07:46.7127625Z [1m[92m   Compiling[0m curve25519-dalek v4.1.3
+2025-12-13T16:07:47.1878780Z [1m[92m   Compiling[0m num-iter v0.1.45
+2025-12-13T16:07:47.2487676Z [1m[92m   Compiling[0m nanoid v0.4.0
+2025-12-13T16:07:47.3507688Z [1m[92m   Compiling[0m blake2 v0.10.6
+2025-12-13T16:07:47.4797504Z [1m[92m   Compiling[0m kaspa-wrpc-client v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/client)
+2025-12-13T16:07:47.5443057Z [1m[92m   Compiling[0m workflow-node v0.18.0
+2025-12-13T16:07:47.5777440Z [1m[92m   Compiling[0m num-complex v0.4.6
+2025-12-13T16:07:48.0350075Z [1m[92m   Compiling[0m bincode v1.3.3
+2025-12-13T16:07:48.4157330Z [1m[92m   Compiling[0m deunicode v1.6.2
+2025-12-13T16:07:48.6050602Z [1m[92m   Compiling[0m unicode-width v0.1.14
+2025-12-13T16:07:48.7947294Z [1m[92m   Compiling[0m unicode-segmentation v1.12.0
+2025-12-13T16:07:49.0678007Z [1m[92m   Compiling[0m kaspa-wallet-macros v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/macros)
+2025-12-13T16:07:49.2060128Z [1m[92m   Compiling[0m convert_case v0.6.0
+2025-12-13T16:07:49.5994178Z [1m[92m   Compiling[0m workflow-store v0.18.0
+2025-12-13T16:07:50.0208501Z [1m[92m   Compiling[0m pad v0.1.6
+2025-12-13T16:07:50.1382280Z [1m[92m   Compiling[0m slugify-rs v0.0.3
+2025-12-13T16:07:50.2627261Z [1m[92m   Compiling[0m kaspa-wallet-pskt v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/pskt)
+2025-12-13T16:07:50.2754001Z [1m[92m   Compiling[0m num v0.4.3
+2025-12-13T16:07:50.3127916Z [1m[92m   Compiling[0m argon2 v0.5.3
+2025-12-13T16:07:50.9244724Z [1m[92m   Compiling[0m indexed_db_futures v0.5.0
+2025-12-13T16:07:51.4494549Z [1m[92m   Compiling[0m crypto_box v0.9.1
+2025-12-13T16:07:51.5454754Z [1m[92m   Compiling[0m heapless v0.8.0
+2025-12-13T16:07:51.9869900Z [1m[92m   Compiling[0m kaspa-metrics-core v1.0.1 (/home/runner/work/qaspa/qaspa/metrics/core)
+2025-12-13T16:07:53.0485724Z [1m[92m   Compiling[0m kaspa-wallet-keys v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/keys)
+2025-12-13T16:07:56.5442817Z [1m[92m   Compiling[0m chacha20poly1305 v0.10.1
+2025-12-13T16:07:56.6115001Z [1m[92m   Compiling[0m cfb-mode v0.8.2
+2025-12-13T16:07:56.7057732Z [1m[92m   Compiling[0m aes v0.8.4
+2025-12-13T16:07:57.0656467Z [1m[92m   Compiling[0m md-5 v0.10.6
+2025-12-13T16:07:57.1576440Z [1m[92m   Compiling[0m evpkdf v0.2.0
+2025-12-13T16:07:57.2157855Z [1m[92m   Compiling[0m sha1 v0.10.6
+2025-12-13T16:07:57.4077569Z [1m[92m   Compiling[0m dashmap v6.1.0
+2025-12-13T16:07:57.7823562Z [1m[92m   Compiling[0m fixedstr v0.5.10
+2025-12-13T16:07:57.9837081Z [1m[92m   Compiling[0m sorted-insert v0.2.6
+2025-12-13T16:07:58.0926107Z [1m[92m   Compiling[0m xxhash-rust v0.8.15
+2025-12-13T16:07:58.3140676Z [1m[92m   Compiling[0m kaspa-pow v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/pow)
+2025-12-13T16:07:58.9942143Z [1m[92m   Compiling[0m kaspa-wrpc-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/wasm)
+2025-12-13T16:08:02.7797673Z [1m[92m   Compiling[0m kaspa-wallet-core v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/core)
+2025-12-13T16:08:39.7887449Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:08:40.1048590Z [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1m 42s
+2025-12-13T16:08:40.1534650Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:08:40.5467099Z [INFO]: ✨   Done in 1m 42s
+2025-12-13T16:08:40.5468355Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa-keygen-dev.
+2025-12-13T16:08:41.0448315Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:08:41.1542468Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:08:41.4949329Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:08:55.6676525Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 14.46s
+2025-12-13T16:08:55.7089497Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:08:56.4558929Z [INFO]: Optimizing wasm binaries with `wasm-opt`...
+2025-12-13T16:09:24.7757371Z [INFO]: ✨   Done in 43.78s
+2025-12-13T16:09:24.7758614Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa-rpc.
+2025-12-13T16:09:25.2682779Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:09:25.3766746Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:09:25.7191499Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:09:26.4242860Z [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1.00s
+2025-12-13T16:09:26.4642974Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:09:28.9185832Z [INFO]: ✨   Done in 3.70s
+2025-12-13T16:09:28.9186890Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa-rpc-dev.
+2025-12-13T16:09:29.4081639Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:09:29.5168790Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:09:29.8576840Z [1m[92m   Compiling[0m kaspa-txscript v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/txscript)
+2025-12-13T16:09:31.4116640Z [1m[92m   Compiling[0m kaspa-consensus-client v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/client)
+2025-12-13T16:09:31.4118781Z [1m[92m   Compiling[0m kaspa-notify v1.0.1 (/home/runner/work/qaspa/qaspa/notify)
+2025-12-13T16:09:32.1574352Z [1m[92m   Compiling[0m kaspa-wallet-keys v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/keys)
+2025-12-13T16:09:32.6454567Z [1m[92m   Compiling[0m kaspa-consensus-notify v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/notify)
+2025-12-13T16:09:32.7985369Z [1m[92m   Compiling[0m kaspa-index-core v1.0.1 (/home/runner/work/qaspa/qaspa/indexes/core)
+2025-12-13T16:09:34.6074736Z [1m[92m   Compiling[0m kaspa-consensus-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/wasm)
+2025-12-13T16:09:34.7670878Z [1m[92m   Compiling[0m kaspa-rpc-core v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/core)
+2025-12-13T16:09:34.9420214Z [1m[92m   Compiling[0m kaspa-pow v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/pow)
+2025-12-13T16:09:39.9753560Z [1m[92m   Compiling[0m kaspa-wallet-pskt v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/pskt)
+2025-12-13T16:09:44.7263338Z [1m[92m   Compiling[0m kaspa-metrics-core v1.0.1 (/home/runner/work/qaspa/qaspa/metrics/core)
+2025-12-13T16:09:50.3454851Z [1m[92m   Compiling[0m kaspa-wrpc-client v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/client)
+2025-12-13T16:10:00.9121131Z [1m[92m   Compiling[0m kaspa-wrpc-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/wasm)
+2025-12-13T16:10:06.7692641Z [1m[92m   Compiling[0m kaspa-wallet-core v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/core)
+2025-12-13T16:11:06.0294713Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:11:44.5877069Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 2m 15s
+2025-12-13T16:11:44.6285864Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:11:46.8216893Z [INFO]: Optimizing wasm binaries with `wasm-opt`...
+2025-12-13T16:13:01.8920706Z [INFO]: ✨   Done in 3m 32s
+2025-12-13T16:13:01.8922316Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa-core.
+2025-12-13T16:13:02.3856700Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:13:02.4943480Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:13:02.8382780Z [1m[92m   Compiling[0m kaspa-txscript v1.0.1 (/home/runner/work/qaspa/qaspa/crypto/txscript)
+2025-12-13T16:13:04.1606351Z [1m[92m   Compiling[0m kaspa-consensus-client v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/client)
+2025-12-13T16:13:04.1611844Z [1m[92m   Compiling[0m kaspa-notify v1.0.1 (/home/runner/work/qaspa/qaspa/notify)
+2025-12-13T16:13:04.4008056Z [1m[92m   Compiling[0m kaspa-wallet-keys v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/keys)
+2025-12-13T16:13:05.3438538Z [1m[92m   Compiling[0m kaspa-consensus-notify v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/notify)
+2025-12-13T16:13:05.5013219Z [1m[92m   Compiling[0m kaspa-index-core v1.0.1 (/home/runner/work/qaspa/qaspa/indexes/core)
+2025-12-13T16:13:06.8177534Z [1m[92m   Compiling[0m kaspa-consensus-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/wasm)
+2025-12-13T16:13:06.8179118Z [1m[92m   Compiling[0m kaspa-pow v1.0.1 (/home/runner/work/qaspa/qaspa/consensus/pow)
+2025-12-13T16:13:06.9643068Z [1m[92m   Compiling[0m kaspa-rpc-core v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/core)
+2025-12-13T16:13:07.9225394Z [1m[92m   Compiling[0m kaspa-wallet-pskt v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/pskt)
+2025-12-13T16:13:13.4241009Z [1m[92m   Compiling[0m kaspa-metrics-core v1.0.1 (/home/runner/work/qaspa/qaspa/metrics/core)
+2025-12-13T16:13:14.3017941Z [1m[92m   Compiling[0m kaspa-wrpc-client v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/client)
+2025-12-13T16:13:18.6733531Z [1m[92m   Compiling[0m kaspa-wrpc-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/rpc/wrpc/wasm)
+2025-12-13T16:13:22.2290221Z [1m[92m   Compiling[0m kaspa-wallet-core v1.0.1 (/home/runner/work/qaspa/qaspa/wallet/core)
+2025-12-13T16:13:59.3066192Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:14:00.4728284Z [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 57.93s
+2025-12-13T16:14:00.5134108Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:14:06.3075944Z [INFO]: ✨   Done in 1m 03s
+2025-12-13T16:14:06.3076715Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa-core-dev.
+2025-12-13T16:14:06.8043506Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:14:06.9130283Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:14:07.2542146Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:14:45.3980699Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 38.43s
+2025-12-13T16:14:45.4382609Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:14:47.6276905Z [INFO]: Optimizing wasm binaries with `wasm-opt`...
+2025-12-13T16:16:03.6198017Z [INFO]: ✨   Done in 1m 56s
+2025-12-13T16:16:03.6198694Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa.
+2025-12-13T16:16:04.1139539Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:16:04.2226275Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:16:04.5676318Z [1m[92m   Compiling[0m kaspa-wasm v1.0.1 (/home/runner/work/qaspa/qaspa/wasm)
+2025-12-13T16:16:05.7524495Z [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 1.48s
+2025-12-13T16:16:05.7935239Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:16:11.6428341Z [INFO]: ✨   Done in 7.58s
+2025-12-13T16:16:11.6429369Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/web/kaspa-dev.
+2025-12-13T16:16:12.1298891Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:16:12.2395409Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:16:12.5841459Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 0.29s
+2025-12-13T16:16:12.6165800Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:16:14.8092536Z [INFO]: Optimizing wasm binaries with `wasm-opt`...
+2025-12-13T16:17:30.3064041Z [INFO]: ✨   Done in 1m 18s
+2025-12-13T16:17:30.3064876Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/nodejs/kaspa.
+2025-12-13T16:17:30.7985190Z [INFO]: 🎯  Checking for the Wasm target...
+2025-12-13T16:17:30.9063172Z [INFO]: 🌀  Compiling to Wasm...
+2025-12-13T16:17:31.2482064Z [1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
+2025-12-13T16:17:31.2807623Z [INFO]: ⬇️  Installing wasm-bindgen...
+2025-12-13T16:17:37.0585631Z [INFO]: ✨   Done in 6.31s
+2025-12-13T16:17:38.6846438Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/qaspa/qaspa/wasm/nodejs/kaspa-dev.
+2025-12-13T16:17:38.6847431Z [93m[warning][0m The entry point ./build/docs/kaspa-keygen.ts is not referenced by the 'files' or 'include' option in your tsconfig
+2025-12-13T16:17:38.6850048Z [91m[error][0m Unable to find any entry points. See previous warnings
+2025-12-13T16:17:38.6853219Z [91m[error][0m Found 1 errors and 1 warnings
+2025-12-13T16:17:38.7150266Z ##[error]Process completed with exit code 3.
+2025-12-13T16:17:38.7239415Z Post job cleanup.
+2025-12-13T16:17:38.8256429Z [command]/usr/bin/git version
+2025-12-13T16:17:38.8298538Z git version 2.52.0
+2025-12-13T16:17:38.8346191Z Temporarily overriding HOME='/home/runner/work/_temp/2b5da7f6-a94f-4b08-8cce-77658e6c9fd2' before making global git config changes
+2025-12-13T16:17:38.8347780Z Adding repository directory to the temporary git global config as a safe directory
+2025-12-13T16:17:38.8353082Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/qaspa/qaspa
+2025-12-13T16:17:38.8399530Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-12-13T16:17:38.8436366Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-12-13T16:17:38.8728080Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-12-13T16:17:38.8754377Z http.https://github.com/.extraheader
+2025-12-13T16:17:38.8769943Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-12-13T16:17:38.8805060Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-12-13T16:17:38.9050494Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-12-13T16:17:38.9085546Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-12-13T16:17:38.9524541Z Cleaning up orphan processes

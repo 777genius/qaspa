@@ -20,7 +20,15 @@ use kaspa_wasm_core::types::{BinaryT, HexString};
 #[wasm_bindgen(js_name = payToAddressScript)]
 pub fn pay_to_address_script(address: &AddressT) -> Result<ScriptPublicKey> {
     let address = Address::try_cast_from(address)?;
-    Ok(standard::pay_to_address_script(address.as_ref()))
+    pay_to_address_script_inner(address.as_ref())
+}
+
+fn pay_to_address_script_inner(address: &Address) -> Result<ScriptPublicKey> {
+    if address.version == Version::Stealth {
+        return Err(Error::custom("Stealth addresses require ephemeral key data and cannot be converted using payToAddressScript"));
+    }
+
+    Ok(standard::pay_to_address_script(address))
 }
 
 /// Takes a script and returns an equivalent pay-to-script-hash script.
@@ -75,6 +83,25 @@ pub fn is_script_pay_to_pubkey(script: BinaryT) -> Result<bool> {
 pub fn is_script_pay_to_pubkey_ecdsa(script: BinaryT) -> Result<bool> {
     let script = script.try_as_vec_u8()?;
     Ok(ScriptClass::is_pay_to_pubkey_ecdsa(script.as_slice()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pay_to_address_script_rejects_stealth_addresses() {
+        let stealth = Address::new(Prefix::StealthTestnet, Version::Stealth, &[7u8; 64]);
+        let err = pay_to_address_script_inner(&stealth).expect_err("must fail");
+        assert!(err.to_string().to_lowercase().contains("stealth"));
+    }
+
+    #[test]
+    fn pay_to_address_script_accepts_non_stealth_addresses() {
+        let regular = Address::new(Prefix::Testnet, Version::PubKey, &[0u8; 32]);
+        let spk = pay_to_address_script_inner(&regular).expect("ok");
+        assert_eq!(spk.version(), 0);
+    }
 }
 
 /// Returns true if the script passed is a pay-to-script-hash (P2SH) format, false otherwise.

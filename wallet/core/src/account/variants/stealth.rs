@@ -613,6 +613,9 @@ impl StealthAccount {
         let xprv = payload.get_xprv(payment_secret)?;
 
         let derivation = StealthKeyDerivation::from_xprv(&xprv, self.account_index)?;
+        if derivation.scan_pubkey != self.scan_pubkey || derivation.spend_pubkey != self.spend_pubkey {
+            return Err(Error::Custom("derived stealth keys do not match account public keys".to_string()));
+        }
 
         let mut keys = self.unlocked_keys.write().await;
         *keys = Some(derivation.into_unlocked_keys());

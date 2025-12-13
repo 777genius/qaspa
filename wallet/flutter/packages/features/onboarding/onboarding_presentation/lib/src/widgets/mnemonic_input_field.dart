@@ -152,6 +152,7 @@ class _MnemonicInputFieldState extends State<MnemonicInputField> {
 
     // Create and insert new entry
     final newEntry = _createOverlayEntry();
+    if (newEntry == null) return;
     _overlayEntry = newEntry;
     overlay.insert(newEntry);
   }
@@ -169,9 +170,10 @@ class _MnemonicInputFieldState extends State<MnemonicInputField> {
     widget.onSubmitted?.call();
   }
 
-  OverlayEntry _createOverlayEntry() {
-    final renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
+  OverlayEntry? _createOverlayEntry() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox) return null;
+    final size = renderObject.size;
 
     return OverlayEntry(
       builder: (context) => Positioned(

@@ -41,17 +41,22 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
-                color: Colors.purple.shade50,
+                color: Theme.of(context).colorScheme.primaryContainer,
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Row(
                     children: [
-                      Icon(Icons.visibility_off, color: Colors.purple.shade700),
+                      Icon(
+                        Icons.visibility_off,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
                           'Share this stealth address to receive private payments.',
-                          style: TextStyle(color: Colors.purple.shade900),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
                         ),
                       ),
                     ],
@@ -62,7 +67,7 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(AppSpacing.md),
                 ),
                 child: const Center(
@@ -104,7 +109,9 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
                               // Cancel any existing timer and start new one
                               _clipboardClearTimer?.cancel();
                               _clipboardClearTimer = Timer(_clipboardClearTimeout, () {
-                                Clipboard.setData(const ClipboardData(text: ''));
+                                if (mounted) {
+                                  Clipboard.setData(const ClipboardData(text: ''));
+                                }
                               });
                             }
                           : null,

@@ -42,18 +42,24 @@ class _SendPageState extends State<SendPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Recipient Address',
                   hintText: 'kaspa:...',
+                  errorText: store.recipientAddress.isNotEmpty && !store.isAddressValid
+                      ? 'Invalid Kaspa address'
+                      : null,
                 ),
                 onChanged: store.setRecipientAddress,
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Amount',
                   hintText: '0.00',
                   suffixText: 'KAS',
+                  errorText: store.amount.isNotEmpty && !store.isAmountValid
+                      ? 'Enter a valid amount greater than 0'
+                      : null,
                 ),
                 keyboardType: TextInputType.number,
                 onChanged: store.setAmount,

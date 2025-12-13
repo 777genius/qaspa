@@ -1924,7 +1924,7 @@ impl Wallet {
         let account = self.get_account_by_id(account_id, &guard).await?.ok_or(Error::AccountNotFound(*account_id))?;
         let stealth = account.as_stealth_account()?;
         stealth.unlock(wallet_secret, payment_secret).await?;
-        Ok(stealth.stealth_address().to_string())
+        Ok(stealth.receive_address()?.to_string())
     }
 
     /// Locks a stealth account by clearing cached keys from memory.

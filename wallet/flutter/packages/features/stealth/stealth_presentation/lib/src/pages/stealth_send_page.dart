@@ -22,17 +22,22 @@ class StealthSendPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
-                color: Colors.purple.shade50,
+                color: Theme.of(context).colorScheme.primaryContainer,
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Row(
                     children: [
-                      Icon(Icons.visibility_off, color: Colors.purple.shade700),
+                      Icon(
+                        Icons.visibility_off,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
                           'Private payments hide the amount and recipient on the blockchain.',
-                          style: TextStyle(color: Colors.purple.shade900),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
                         ),
                       ),
                     ],

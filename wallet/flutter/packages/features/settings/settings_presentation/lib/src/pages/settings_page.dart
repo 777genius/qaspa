@@ -6,6 +6,8 @@ import 'package:modularity_flutter/modularity_flutter.dart';
 
 import '../navigation/settings_routes.dart';
 import '../stores/settings_store.dart';
+import '../widgets/settings_section.dart';
+import '../widgets/settings_tile.dart';
 
 /// Main settings page.
 class SettingsPage extends StatelessWidget {
@@ -26,16 +28,16 @@ class SettingsPage extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.screenHorizontal),
             children: [
-              _SettingsSection(
+              SettingsSection(
                 title: 'Security',
                 children: [
-                  _SettingsTile(
+                  SettingsTile(
                     icon: Icons.key,
                     title: 'Export Recovery Phrase',
                     subtitle: 'Back up your wallet',
                     onTap: () => context.push(SettingsRoutes.exportMnemonic),
                   ),
-                  _SettingsTile(
+                  SettingsTile(
                     icon: Icons.lock,
                     title: 'Change Password',
                     subtitle: 'Update your wallet password',
@@ -44,10 +46,10 @@ class SettingsPage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              _SettingsSection(
+              SettingsSection(
                 title: 'Network',
                 children: [
-                  _SettingsTile(
+                  SettingsTile(
                     icon: Icons.wifi,
                     title: 'Network',
                     subtitle: store.wallet?.network.toString() ?? 'Mainnet',
@@ -58,10 +60,10 @@ class SettingsPage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              _SettingsSection(
+              SettingsSection(
                 title: 'About',
                 children: [
-                  _SettingsTile(
+                  SettingsTile(
                     icon: Icons.info_outline,
                     title: 'Version',
                     subtitle: '1.0.0',
@@ -129,7 +131,6 @@ class SettingsPage extends StatelessWidget {
                       try {
                         final success = await store.deleteWallet(password: password);
 
-                        // Check mounted before any UI updates
                         if (!dialogContext.mounted) return;
 
                         if (success) {
@@ -139,7 +140,6 @@ class SettingsPage extends StatelessWidget {
                           }
                         }
                       } finally {
-                        // Always clear password from memory for security
                         passwordController.clear();
                       }
                     },
@@ -158,59 +158,5 @@ class SettingsPage extends StatelessWidget {
       passwordController.clear();
       passwordController.dispose();
     });
-  }
-}
-
-class _SettingsSection extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _SettingsSection({
-    required this.title,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Card(
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: onTap != null ? const Icon(Icons.chevron_right) : null,
-      onTap: onTap,
-    );
   }
 }

@@ -7,7 +7,10 @@ class ValidateAddressUseCase {
   static const _minAddressLength = 50;
 
   /// Maximum address length for safety.
-  static const _maxAddressLength = 120;
+  ///
+  /// Kaspa MLDSA addresses are large (PubKeyMLDSA payload ~2100 chars), so keep
+  /// this high enough to allow them.
+  static const _maxAddressLength = 3000;
 
   /// Validate a Kaspa address.
   ///
@@ -29,6 +32,14 @@ class ValidateAddressUseCase {
       data = address.substring(6);
     } else if (address.startsWith('kaspatest:')) {
       data = address.substring(10);
+    } else if (address.startsWith('kaspadev:')) {
+      data = address.substring(9);
+    } else if (address.startsWith('kaspasim:')) {
+      data = address.substring(9);
+    } else if (address.startsWith('qs:')) {
+      data = address.substring(3);
+    } else if (address.startsWith('qstest:')) {
+      data = address.substring(7);
     } else {
       return false;
     }

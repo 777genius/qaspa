@@ -52,6 +52,7 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.screenHorizontal),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _DetailCard(
@@ -116,7 +117,7 @@ class _DetailCard extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.grey,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: AppSpacing.xs),

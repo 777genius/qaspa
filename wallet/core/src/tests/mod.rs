@@ -18,3 +18,4 @@ mod account_mldsa_master;
 mod delegation_properties;
 mod delegation_unit;
 mod stealth_payload_migration;
+mod stealth_unlock_address;

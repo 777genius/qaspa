@@ -332,25 +332,33 @@ impl RpcCoreService {
         self.core_shutdown_request.listener.clone()
     }
 
+    fn pay_to_address_script_checked(&self, address: &RpcAddress) -> RpcResult<kaspa_consensus_core::tx::ScriptPublicKey> {
+        if address.version == kaspa_addresses::Version::Stealth {
+            return Err(RpcError::General(
+                "Stealth addresses require ephemeral output data and cannot be used with this operation".to_string(),
+            ));
+        }
+        Ok(pay_to_address_script(address))
+    }
+
     async fn get_utxo_set_by_script_public_key<'a>(
         &self,
         addresses: impl Iterator<Item = &'a RpcAddress>,
-    ) -> UtxoSetByScriptPublicKey {
-        self.utxoindex
-            .clone()
-            .unwrap()
-            .get_utxos_by_script_public_keys(addresses.map(pay_to_address_script).collect())
-            .await
-            .unwrap_or_default()
+    ) -> RpcResult<UtxoSetByScriptPublicKey> {
+        let script_public_keys =
+            addresses.map(|address| self.pay_to_address_script_checked(address)).collect::<RpcResult<HashSet<_>>>()?;
+
+        Ok(self.utxoindex.clone().unwrap().get_utxos_by_script_public_keys(script_public_keys).await.unwrap_or_default())
     }
 
-    async fn get_balance_by_script_public_key<'a>(&self, addresses: impl Iterator<Item = &'a RpcAddress>) -> BalanceByScriptPublicKey {
-        self.utxoindex
-            .clone()
-            .unwrap()
-            .get_balance_by_script_public_keys(addresses.map(pay_to_address_script).collect())
-            .await
-            .unwrap_or_default()
+    async fn get_balance_by_script_public_key<'a>(
+        &self,
+        addresses: impl Iterator<Item = &'a RpcAddress>,
+    ) -> RpcResult<BalanceByScriptPublicKey> {
+        let script_public_keys =
+            addresses.map(|address| self.pay_to_address_script_checked(address)).collect::<RpcResult<HashSet<_>>>()?;
+
+        Ok(self.utxoindex.clone().unwrap().get_balance_by_script_public_keys(script_public_keys).await.unwrap_or_default())
     }
 
     fn extract_tx_query(&self, filter_transaction_pool: bool, include_orphan_pool: bool) -> RpcResult<TransactionQuery> {
@@ -487,7 +495,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         if session.async_is_consensus_in_transitional_ibd_state().await {
             return Err(RpcError::ConsensusInTransitionalIbdState);
         }
-        let script_public_key = kaspa_txscript::pay_to_address_script(&request.pay_address);
+        let script_public_key = self.pay_to_address_script_checked(&request.pay_address)?;
         let extra_data = version().as_bytes().iter().chain(once(&(b'/'))).chain(&request.extra_data).cloned().collect::<Vec<_>>();
         let miner_data: MinerData = MinerData::new(script_public_key, extra_data);
         let block_template = self.mining_manager.clone().get_block_template(&session, miner_data).await?;
@@ -643,7 +651,8 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
     ) -> RpcResult<GetMempoolEntriesByAddressesResponse> {
         let query = self.extract_tx_query(request.filter_transaction_pool, request.include_orphan_pool)?;
         let session = self.consensus_manager.consensus().unguarded_session();
-        let script_public_keys = request.addresses.iter().map(pay_to_address_script).collect();
+        let script_public_keys =
+            request.addresses.iter().map(|address| self.pay_to_address_script_checked(address)).collect::<RpcResult<HashSet<_>>>()?;
         let grouped_txs = self.mining_manager.clone().get_transactions_by_addresses(script_public_keys, query).await;
         let mempool_entries = grouped_txs
             .owners
@@ -810,7 +819,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
 
         // TODO: discuss if the entry order is part of the method requirements
         //       (the current impl does not retain an entry order matching the request addresses order)
-        let entry_map = self.get_utxo_set_by_script_public_key(request.addresses.iter()).await;
+        let entry_map = self.get_utxo_set_by_script_public_key(request.addresses.iter()).await?;
         Ok(GetUtxosByAddressesResponse::new(self.index_converter.get_utxos_by_addresses_entries(&entry_map)))
     }
 
@@ -891,7 +900,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         if session.async_is_consensus_in_transitional_ibd_state().await {
             return Err(RpcError::ConsensusInTransitionalIbdState);
         }
-        let entry_map = self.get_balance_by_script_public_key(once(&request.address)).await;
+        let entry_map = self.get_balance_by_script_public_key(once(&request.address)).await?;
         let balance = entry_map.values().sum();
         Ok(GetBalanceByAddressResponse::new(balance))
     }
@@ -910,16 +919,16 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         if session.async_is_consensus_in_transitional_ibd_state().await {
             return Err(RpcError::ConsensusInTransitionalIbdState);
         }
-        let entry_map = self.get_balance_by_script_public_key(request.addresses.iter()).await;
+        let entry_map = self.get_balance_by_script_public_key(request.addresses.iter()).await?;
         let entries = request
             .addresses
             .iter()
             .map(|address| {
-                let script_public_key = pay_to_address_script(address);
+                let script_public_key = self.pay_to_address_script_checked(address)?;
                 let balance = entry_map.get(&script_public_key).copied();
-                RpcBalancesByAddressesEntry { address: address.to_owned(), balance }
+                Ok(RpcBalancesByAddressesEntry { address: address.to_owned(), balance })
             })
-            .collect();
+            .collect::<RpcResult<Vec<_>>>()?;
         Ok(GetBalancesByAddressesResponse::new(entries))
     }
 
@@ -1590,6 +1599,13 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
     /// Start sending notifications of some type to a listener.
     async fn start_notify(&self, id: ListenerId, scope: Scope) -> RpcResult<()> {
         match scope {
+            Scope::UtxosChanged(ref utxos_changed_scope)
+                if utxos_changed_scope.addresses.iter().any(|a| a.version == kaspa_addresses::Version::Stealth) =>
+            {
+                Err(RpcError::General(
+                    "Stealth addresses are not supported in UtxosChanged subscriptions; use StealthUtxosChanged instead".to_string(),
+                ))
+            }
             Scope::UtxosChanged(ref utxos_changed_scope) if !self.config.unsafe_rpc && utxos_changed_scope.addresses.is_empty() => {
                 // The subscription to blanket UtxosChanged notifications is restricted to unsafe mode only
                 // since the notifications yielded are highly resource intensive.

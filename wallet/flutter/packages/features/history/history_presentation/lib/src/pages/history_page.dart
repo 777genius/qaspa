@@ -43,13 +43,17 @@ class HistoryPage extends StatelessWidget {
           }
 
           if (store.transactions.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey),
-                  SizedBox(height: AppSpacing.md),
-                  Text('No transactions yet'),
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  const Text('No transactions yet'),
                 ],
               ),
             );
@@ -75,6 +79,7 @@ class HistoryPage extends StatelessWidget {
 
                 final transaction = store.transactions[index];
                 return _TransactionListItem(
+                  key: ValueKey(transaction.id),
                   transaction: transaction,
                   onTap: () => context.push(
                     HistoryRoutes.details.replaceFirst(
@@ -131,7 +136,7 @@ class _TransactionListItem extends StatelessWidget {
         ),
         trailing: Icon(
           transaction.isConfirmed ? Icons.check_circle : Icons.schedule,
-          color: transaction.isConfirmed ? AppColors.success : Colors.orange,
+          color: transaction.isConfirmed ? AppColors.success : AppColors.warning,
         ),
       ),
     );

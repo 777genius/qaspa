@@ -79,15 +79,20 @@ class _ReceivePageState extends State<ReceivePage> {
                 )
               else if (store.currentAddress != null) ...[
                 const SizedBox(height: AppSpacing.xl),
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppSpacing.md),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.qr_code_2, size: 200),
-                  ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final qrSize = constraints.maxWidth * 0.6;
+                    return Container(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(AppSpacing.md),
+                      ),
+                      child: Center(
+                        child: Icon(Icons.qr_code_2, size: qrSize.clamp(150.0, 280.0)),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 Container(
@@ -124,7 +129,9 @@ class _ReceivePageState extends State<ReceivePage> {
                           // Cancel any existing timer and start new one
                           _clipboardClearTimer?.cancel();
                           _clipboardClearTimer = Timer(_clipboardClearTimeout, () {
-                            Clipboard.setData(const ClipboardData(text: ''));
+                            if (mounted) {
+                              Clipboard.setData(const ClipboardData(text: ''));
+                            }
                           });
                         },
                         icon: Icon(

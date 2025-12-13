@@ -62,10 +62,10 @@ class _StealthPageState extends State<StealthPage> {
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     child: Column(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.visibility_off,
                           size: 48,
-                          color: Colors.purple,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                         const SizedBox(height: AppSpacing.md),
                         Text(
@@ -154,10 +154,10 @@ class _StealthPageState extends State<StealthPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(
+                              Icon(
                                 Icons.receipt_long_outlined,
                                 size: 48,
-                                color: Colors.grey,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                               const SizedBox(height: AppSpacing.md),
                               const Text('No private transactions yet'),
@@ -174,13 +174,14 @@ class _StealthPageState extends State<StealthPage> {
                           itemBuilder: (context, index) {
                             final tx = store.stealthTransactions[index];
                             return Card(
+                              key: ValueKey(tx.id),
                               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                               child: ListTile(
-                                leading: const CircleAvatar(
-                                  backgroundColor: Colors.purple,
+                                leading: CircleAvatar(
+                                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                                   child: Icon(
                                     Icons.visibility_off,
-                                    color: Colors.white,
+                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                                   ),
                                 ),
                                 title: Text(

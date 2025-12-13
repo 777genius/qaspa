@@ -106,10 +106,10 @@ abstract class _OnboardingStoreBase with Store {
 
   /// Can proceed from verify step
   @computed
-  bool get canProceedFromVerify =>
-      verification != null &&
-      verification!.isComplete &&
-      verification!.isAllCorrect;
+  bool get canProceedFromVerify {
+    final v = verification;
+    return v != null && v.isComplete && v.isAllCorrect;
+  }
 
   /// Can proceed from import step
   @computed
@@ -370,6 +370,11 @@ abstract class _OnboardingStoreBase with Store {
     errorMessage = null;
     createdWallet = null;
     walletName = 'My Wallet';
+  }
+
+  /// Dispose the store and clear all sensitive data.
+  void dispose() {
+    clearSensitiveData();
   }
 
   /// Clear sensitive data from memory (passwords, mnemonic, imported words).
