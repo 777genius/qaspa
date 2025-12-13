@@ -204,10 +204,7 @@ pub unsafe extern "C" fn kaspa_mldsa_generate_keypair(
         kaspa_mldsa_generate_keypair_inner(level, public_key_out, public_key_len, secret_key_out, secret_key_len)
     }));
 
-    match result {
-        Ok(v) => v,
-        Err(_) => false,
-    }
+    result.unwrap_or_default()
 }
 
 unsafe fn kaspa_mldsa_generate_keypair_inner(
@@ -320,10 +317,7 @@ pub unsafe extern "C" fn kaspa_mldsa_sign(
         kaspa_mldsa_sign_inner(message, message_len, secret_key, secret_key_len, signature_out, signature_len)
     }));
 
-    match result {
-        Ok(v) => v,
-        Err(_) => false,
-    }
+    result.unwrap_or_default()
 }
 
 unsafe fn kaspa_mldsa_sign_inner(
