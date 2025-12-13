@@ -539,15 +539,62 @@ impl StealthAccount {
             orphan_overlay: Arc::new(DashMap::new()),
         };
 
+        // `delegation_id` — это локальный указатель на запись в DelegationStore.
+        // Он не должен блокировать загрузку аккаунта: store может быть пустым (best-effort load),
+        // запись может быть недоступна/устаревшей, или метаданные могли рассинхронизироваться.
+        // В таких случаях очищаем delegation_id и продолжаем.
         if let Some(id) = account.delegation_id() {
-            let anchor =
-                account.master_anchor().ok_or_else(|| Error::Custom("delegation_id present without master_anchor".to_string()))?;
+            let mut should_clear = false;
+            let anchor_opt = account.master_anchor();
+            let Some(anchor) = anchor_opt else {
+                log_warn!(
+                    "Stealth account {} has delegation_id={} but no master_anchor; clearing delegation_id",
+                    account.id().short(),
+                    id.0
+                );
+                should_clear = true;
+                // Avoid using anchor below
+                if should_clear {
+                    *account.delegation_id.lock().unwrap() = None;
+                }
+                return Ok(account);
+            };
+
             let store = wallet.delegation_store();
-            let record = store.by_id(id).ok_or_else(|| Error::Custom("delegation not found in store".to_string()))?;
-            account.validate_delegation_record(&record, Some(anchor))?;
-            let current_daa = account.wallet().utxo_processor().current_daa_score().unwrap_or(0);
-            if !matches!(record.status, DelegationStatus::Active) || !account.delegation_window_ok(&record, current_daa) {
-                return Err(Error::Custom("delegation inactive or outside validity window".to_string()));
+            match store.by_id(id) {
+                None => {
+                    log_warn!(
+                        "Stealth account {} references missing delegation_id={}; clearing delegation_id",
+                        account.id().short(),
+                        id.0
+                    );
+                    should_clear = true;
+                }
+                Some(record) => {
+                    if let Err(err) = account.validate_delegation_record(&record, Some(anchor)) {
+                        log_warn!(
+                            "Stealth account {} delegation_id={} failed validation ({}); clearing delegation_id",
+                            account.id().short(),
+                            id.0,
+                            err
+                        );
+                        should_clear = true;
+                    } else {
+                        let current_daa = account.wallet().utxo_processor().current_daa_score().unwrap_or(0);
+                        if !matches!(record.status, DelegationStatus::Active) || !account.delegation_window_ok(&record, current_daa) {
+                            log_warn!(
+                                "Stealth account {} delegation_id={} inactive/outside validity window; clearing delegation_id",
+                                account.id().short(),
+                                id.0
+                            );
+                            should_clear = true;
+                        }
+                    }
+                }
+            }
+
+            if should_clear {
+                *account.delegation_id.lock().unwrap() = None;
             }
         }
 
@@ -2119,5 +2166,41 @@ mod tests {
         assert!(!pending.is_dirty());
         assert_eq!(pending.len(), 0);
         assert!(EphemeralKeyStore::storage_exists(&wallet_folder, &account_id, network_id).await.unwrap());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn try_load_clears_missing_delegation_id_instead_of_failing() {
+        let store = crate::wallet::Wallet::resident_store().expect("resident store");
+        let wallet = Arc::new(
+            crate::wallet::Wallet::try_with_rpc(None, store, Some(NetworkId::with_suffix(NetworkType::Testnet, 17))).expect("wallet"),
+        );
+
+        let mut rng = StdRng::seed_from_u64(123);
+        let scan_secret = SecretKey::new(&mut rng);
+        let spend_secret = SecretKey::new(&mut rng);
+        let scan_pubkey = PublicKey::from_secret_key(SECP256K1, &scan_secret).x_only_public_key().0;
+        let spend_pubkey = PublicKey::from_secret_key(SECP256K1, &spend_secret).x_only_public_key().0;
+
+        let stealth = StealthAccount::try_new(
+            &wallet,
+            Some("stealth-load-test".into()),
+            crate::storage::PrvKeyDataId::new(1),
+            0,
+            scan_pubkey,
+            spend_pubkey,
+            None,
+        )
+        .await
+        .expect("create stealth");
+
+        let anchor = [7u8; 32];
+        stealth.set_delegation(anchor, Some(DelegationId(42)));
+        let storage = stealth.to_storage().expect("to_storage");
+
+        // DelegationStore пустой (best-effort load), но payload содержит delegation_id.
+        // Загрузка аккаунта не должна падать — delegation_id очищается.
+        let loaded = StealthAccount::try_load(&wallet, &storage, None).await.expect("try_load must succeed");
+        assert_eq!(loaded.master_anchor(), Some(anchor));
+        assert!(loaded.delegation_id().is_none());
     }
 }

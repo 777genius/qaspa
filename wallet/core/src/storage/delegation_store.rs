@@ -198,6 +198,16 @@ impl DelegationStore {
 
     pub async fn load_from_storage(&self, wallet_folder: &str, network_id: NetworkId, wallet_secret: &Secret) -> Result<usize> {
         let path = Self::storage_path(wallet_folder, network_id);
+
+        // `load_from_storage` должен отражать текущее состояние на диске.
+        // Поэтому всегда сбрасываем in-memory индексы перед загрузкой, иначе при повторных
+        // открытиях/перезагрузках кошелька можно получить дубликаты в `by_anchor_account`
+        // и смешивание данных разных кошельков.
+        self.by_id.clear();
+        self.by_anchor_account.clear();
+        self.request_index.clear();
+        self.next_id.store(0, Ordering::SeqCst);
+
         if !fs::exists(&path).await? {
             return Ok(0);
         }
@@ -214,9 +224,9 @@ impl DelegationStore {
             return Err(Error::Custom("unsupported delegation storage version".to_string()));
         }
 
-        let mut max_id = 0u64;
+        let mut max_id: Option<u64> = None;
         for StoredDelegation { id, record, request_id } in envelope.entries {
-            max_id = max_id.max(id);
+            max_id = Some(max_id.map(|prev| prev.max(id)).unwrap_or(id));
             let key = (record.anchor, record.account_id);
             self.by_id.insert(DelegationId(id), DelegationEntry::new(record.clone(), request_id));
             self.by_anchor_account.entry(key).or_default().push(DelegationId(id));
@@ -224,7 +234,8 @@ impl DelegationStore {
                 self.request_index.entry(rid).or_default().push(DelegationId(id));
             }
         }
-        self.next_id.store(max_id + 1, Ordering::SeqCst);
+        let next = max_id.map(|m| m.saturating_add(1)).unwrap_or(0);
+        self.next_id.store(next, Ordering::SeqCst);
         Ok(self.by_id.len())
     }
 
@@ -236,8 +247,12 @@ impl DelegationStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_arch = "wasm32"))]
+    use kaspa_consensus_core::network::NetworkType;
     use kaspa_hashes::Hash;
     use kaspa_mldsa::MlDsaLevel;
+    #[cfg(not(target_arch = "wasm32"))]
+    use tempfile::tempdir;
 
     #[test]
     fn upsert_rejects_stale_even_when_list_order_is_unsorted() {
@@ -275,5 +290,42 @@ mod tests {
             err,
             Error::MasterDelegationStaleNonce { account_id: a, current: 10, received: 6 } if a == account_id
         ));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn load_from_storage_clears_and_does_not_duplicate() {
+        let store = DelegationStore::new();
+        let anchor = [7u8; 32];
+        let account_id = AccountId(Hash::from_u64_word(1));
+
+        let mut rec = DelegationRecordV1::new(
+            MlDsaLevel::Level2,
+            anchor,
+            account_id,
+            [1u8; 32],
+            [2u8; 32],
+            0,
+            None,
+            1,
+            DelegationStatus::Active,
+        );
+        rec.signature = vec![0u8; MlDsaLevel::Level2.signature_len()];
+        let _id = store.upsert(rec, None).expect("upsert");
+        assert_eq!(store.by_anchor(&anchor).len(), 1);
+
+        let temp_dir = tempdir().unwrap();
+        let wallet_folder = temp_dir.path().to_string_lossy().to_string();
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 17);
+        let wallet_secret = Secret::from("delegation-store-test");
+
+        store.save_to_storage(&wallet_folder, network_id, &wallet_secret).await.expect("save");
+
+        // Повторная загрузка в тот же экземпляр не должна давать дубликаты.
+        store.load_from_storage(&wallet_folder, network_id, &wallet_secret).await.expect("load 1");
+        assert_eq!(store.by_anchor(&anchor).len(), 1);
+
+        store.load_from_storage(&wallet_folder, network_id, &wallet_secret).await.expect("load 2");
+        assert_eq!(store.by_anchor(&anchor).len(), 1);
     }
 }
