@@ -5,6 +5,7 @@
 #![allow(non_snake_case)]
 
 use crate::error::Error;
+use crate::result::Result;
 use js_sys::{Array, Object};
 use kaspa_consensus_core::hashing;
 use kaspa_consensus_core::header as native;

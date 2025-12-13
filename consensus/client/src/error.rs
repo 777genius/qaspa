@@ -45,6 +45,9 @@ pub enum Error {
     #[error(transparent)]
     CompressedParents(#[from] kaspa_consensus_core::errors::header::CompressedParentsError),
 
+    #[error("{0}")]
+    Math(String),
+
     #[error("Error converting property `{0}`: {1}")]
     Convert(&'static str, String),
 
@@ -107,5 +110,11 @@ impl From<serde_json::Error> for Error {
 impl From<serde_wasm_bindgen::Error> for Error {
     fn from(err: serde_wasm_bindgen::Error) -> Self {
         Self::SerdeWasmBindgen(JsValue::from(err).into())
+    }
+}
+
+impl From<kaspa_math::Error> for Error {
+    fn from(err: kaspa_math::Error) -> Self {
+        Self::Math(err.to_string())
     }
 }
