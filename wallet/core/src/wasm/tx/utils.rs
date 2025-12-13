@@ -2,11 +2,32 @@ use crate::imports::*;
 use crate::result::Result;
 use crate::tx::{IPaymentOutputArray, PaymentOutputs};
 use crate::wasm::tx::generator::*;
+use kaspa_addresses::Version;
 use kaspa_consensus_client::*;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
+use kaspa_stealth::{create_stealth_output, StealthAddress};
+use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use kaspa_wasm_core::types::BinaryT;
 use workflow_core::runtime::is_web;
+
+fn payment_outputs_to_transaction_outputs(outputs: PaymentOutputs) -> crate::result::Result<Vec<TransactionOutput>> {
+    let mut tx_outputs = Vec::with_capacity(outputs.outputs.len());
+    for output in outputs.outputs.into_iter() {
+        let script_public_key = if output.address.version == Version::Stealth {
+            let stealth_addr = StealthAddress::try_from_slice(&output.address.payload)
+                .map_err(|_| Error::custom("Invalid stealth address payload"))?;
+            // Generate ephemeral output with random ephemeral key (required for stealth scripts)
+            let ephemeral_output =
+                create_stealth_output(&stealth_addr, &mut rand::thread_rng()).map_err(|e| Error::custom(format!("{e}")))?;
+            pay_to_stealth(&ephemeral_output)
+        } else {
+            pay_to_address_script(&output.address)
+        };
+        tx_outputs.push(TransactionOutput::new(output.amount, script_public_key));
+    }
+    Ok(tx_outputs)
+}
 
 /// Create a basic transaction without any mass limit checks.
 /// @category Wallet SDK
@@ -48,10 +69,36 @@ pub fn create_transaction_js(
         return Err(format!("priority fee({priority_fee}) > amount({total_input_amount})").into());
     }
 
-    let outputs: Vec<TransactionOutput> = outputs.into();
+    let outputs = payment_outputs_to_transaction_outputs(outputs)?;
     let transaction = Transaction::new(None, 0, inputs, outputs, 0, SUBNETWORK_ID_NATIVE, 0, payload, 0)?;
 
     Ok(transaction)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn payment_outputs_to_transaction_outputs_supports_stealth() {
+        let stealth_addr = Address::new(Prefix::StealthTestnet, Version::Stealth, &[7u8; 64]);
+        let outputs = PaymentOutputs::from([(stealth_addr, 123u64)].as_slice());
+        let tx_outputs = payment_outputs_to_transaction_outputs(outputs).expect("outputs");
+        assert_eq!(tx_outputs.len(), 1);
+        let spk = tx_outputs[0].get_script_public_key();
+        assert_eq!(spk.version(), kaspa_txscript::STEALTH_SCRIPT_VERSION);
+        assert_eq!(spk.script().len(), 66);
+    }
+
+    #[test]
+    fn payment_outputs_to_transaction_outputs_supports_regular() {
+        let addr = Address::new(Prefix::Testnet, Version::PubKey, &[0u8; 32]);
+        let outputs = PaymentOutputs::from([(addr, 123u64)].as_slice());
+        let tx_outputs = payment_outputs_to_transaction_outputs(outputs).expect("outputs");
+        assert_eq!(tx_outputs.len(), 1);
+        let spk = tx_outputs[0].get_script_public_key();
+        assert_eq!(spk.version(), 0);
+    }
 }
 
 declare! {

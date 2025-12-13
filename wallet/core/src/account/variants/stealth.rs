@@ -739,7 +739,12 @@ impl StealthAccount {
             store.by_anchor(&anchor).into_iter().filter(|(_, rec)| rec.account_id == *self.id()).collect();
 
         if candidates.is_empty() {
-            return (None, None, Some(OrphanReason::AnchorMismatch));
+            // Нет записей по ожидаемому anchor: это либо отсутствие делегаций вовсе,
+            // либо делегации существуют, но под другим anchor (mismatch).
+            if store.has_any_for_account(self.id()) {
+                return (None, None, Some(OrphanReason::AnchorMismatch));
+            }
+            return (None, None, Some(OrphanReason::NoDelegation));
         }
 
         select_delegation_from_records(block_daa, candidates)
@@ -1661,7 +1666,8 @@ impl StealthUtxoHandler for StealthAccount {
                 match rec.status {
                     DelegationStatus::Active => {
                         if let Some(until) = rec.valid_until_daa {
-                            if current_daa_score >= until {
+                            // `valid_until_daa` включительно: делегация считается истёкшей только когда DAA > until.
+                            if current_daa_score > until {
                                 expired_events.push((id, rec));
                             }
                         }
@@ -2205,5 +2211,150 @@ mod tests {
         let loaded = StealthAccount::try_load(&wallet, &storage, None).await.expect("try_load must succeed");
         assert_eq!(loaded.master_anchor(), Some(anchor));
         assert!(loaded.delegation_id().is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn select_delegation_for_utxo_returns_no_delegation_when_store_has_no_records() {
+        let store = crate::wallet::Wallet::resident_store().expect("resident store");
+        let wallet = Arc::new(
+            crate::wallet::Wallet::try_with_rpc(None, store, Some(NetworkId::with_suffix(NetworkType::Testnet, 17))).expect("wallet"),
+        );
+
+        let mut rng = StdRng::seed_from_u64(456);
+        let scan_secret = SecretKey::new(&mut rng);
+        let spend_secret = SecretKey::new(&mut rng);
+        let scan_pubkey = PublicKey::from_secret_key(SECP256K1, &scan_secret).x_only_public_key().0;
+        let spend_pubkey = PublicKey::from_secret_key(SECP256K1, &spend_secret).x_only_public_key().0;
+
+        let stealth = StealthAccount::try_new(
+            &wallet,
+            Some("stealth-select-test".into()),
+            crate::storage::PrvKeyDataId::new(1),
+            0,
+            scan_pubkey,
+            spend_pubkey,
+            None,
+        )
+        .await
+        .expect("create stealth");
+
+        stealth.attach_to_master([1u8; 32]);
+
+        let (_id, _rec, reason) = stealth.select_delegation_for_utxo(123);
+        assert!(matches!(reason, Some(OrphanReason::NoDelegation)));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn select_delegation_for_utxo_returns_anchor_mismatch_when_records_exist_under_other_anchor() {
+        let store = crate::wallet::Wallet::resident_store().expect("resident store");
+        let wallet = Arc::new(
+            crate::wallet::Wallet::try_with_rpc(None, store, Some(NetworkId::with_suffix(NetworkType::Testnet, 17))).expect("wallet"),
+        );
+
+        let mut rng = StdRng::seed_from_u64(789);
+        let scan_secret = SecretKey::new(&mut rng);
+        let spend_secret = SecretKey::new(&mut rng);
+        let scan_pubkey = PublicKey::from_secret_key(SECP256K1, &scan_secret).x_only_public_key().0;
+        let spend_pubkey = PublicKey::from_secret_key(SECP256K1, &spend_secret).x_only_public_key().0;
+
+        let stealth = StealthAccount::try_new(
+            &wallet,
+            Some("stealth-select-test-2".into()),
+            crate::storage::PrvKeyDataId::new(1),
+            0,
+            scan_pubkey,
+            spend_pubkey,
+            None,
+        )
+        .await
+        .expect("create stealth");
+
+        // Account expects anchor A
+        let anchor_a = [1u8; 32];
+        stealth.attach_to_master(anchor_a);
+
+        // But store contains record for this account under anchor B
+        let anchor_b = [2u8; 32];
+        let mut rec = DelegationRecordV1::new(
+            MlDsaLevel::Level2,
+            anchor_b,
+            *stealth.id(),
+            stealth.spend_pubkey().unwrap().serialize(),
+            stealth.scan_pubkey().unwrap().serialize(),
+            0,
+            None,
+            1,
+            DelegationStatus::Active,
+        );
+        rec.signature = vec![0u8; MlDsaLevel::Level2.signature_len()];
+        wallet.delegation_store().upsert(rec, None).expect("upsert");
+
+        let (_id, _rec, reason) = stealth.select_delegation_for_utxo(123);
+        assert!(matches!(reason, Some(OrphanReason::AnchorMismatch)));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn delegation_expires_only_after_valid_until_daa() {
+        let store = crate::wallet::Wallet::resident_store().expect("resident store");
+        let wallet = Arc::new(
+            crate::wallet::Wallet::try_with_rpc(None, store, Some(NetworkId::with_suffix(NetworkType::Testnet, 17))).expect("wallet"),
+        );
+
+        let mut rng = StdRng::seed_from_u64(999);
+        let scan_secret = SecretKey::new(&mut rng);
+        let spend_secret = SecretKey::new(&mut rng);
+        let scan_pubkey = PublicKey::from_secret_key(SECP256K1, &scan_secret).x_only_public_key().0;
+        let spend_pubkey = PublicKey::from_secret_key(SECP256K1, &spend_secret).x_only_public_key().0;
+
+        let stealth = StealthAccount::try_new(
+            &wallet,
+            Some("stealth-expiry-test".into()),
+            crate::storage::PrvKeyDataId::new(1),
+            0,
+            scan_pubkey,
+            spend_pubkey,
+            None,
+        )
+        .await
+        .expect("create stealth");
+
+        let anchor = [7u8; 32];
+        stealth.attach_to_master(anchor);
+
+        // Add delegation record which is valid through DAA=20 (inclusive)
+        let valid_until = 20u64;
+        let mut rec = DelegationRecordV1::new(
+            MlDsaLevel::Level2,
+            anchor,
+            *stealth.id(),
+            stealth.spend_pubkey().unwrap().serialize(),
+            stealth.scan_pubkey().unwrap().serialize(),
+            0,
+            Some(valid_until),
+            1,
+            DelegationStatus::Active,
+        );
+        rec.signature = vec![0u8; MlDsaLevel::Level2.signature_len()];
+        let delegation_id = wallet.delegation_store().upsert(rec, None).expect("upsert");
+
+        // Seed one ephemeral entry tied to this delegation id
+        let outpoint = TransactionOutpoint::new(Hash::from_bytes([1u8; 32]), 0);
+        let key_data = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
+        stealth
+            .ephemeral_keys
+            .store_with_metadata(outpoint, key_data, 10, Some(anchor), Some(delegation_id.0), None)
+            .await
+            .expect("store eph");
+
+        // At DAA == valid_until, delegation is still valid: must NOT orphan.
+        stealth.on_daa_score_changed(valid_until).await.expect("daa changed");
+        assert!(matches!(stealth.ephemeral_keys.status(&outpoint), Some(EphemeralKeyStatus::Pending { .. })));
+
+        // At DAA == valid_until + 1, delegation expires: must orphan.
+        stealth.on_daa_score_changed(valid_until + 1).await.expect("daa changed");
+        assert!(matches!(
+            stealth.ephemeral_keys.status(&outpoint),
+            Some(EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired })
+        ));
     }
 }

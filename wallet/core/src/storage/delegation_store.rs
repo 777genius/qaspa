@@ -176,6 +176,12 @@ impl DelegationStore {
             .unwrap_or_default()
     }
 
+    /// Returns true if the store contains at least one record for the given account id
+    /// (any anchor/status). Useful for distinguishing `NoDelegation` vs `AnchorMismatch`.
+    pub fn has_any_for_account(&self, account_id: &AccountId) -> bool {
+        self.by_id.iter().any(|entry| entry.record.account_id == *account_id)
+    }
+
     pub async fn save_to_storage(&self, wallet_folder: &str, network_id: NetworkId, wallet_secret: &Secret) -> Result<()> {
         let path = Self::storage_path(wallet_folder, network_id);
         if let Some(parent) = path.parent() {

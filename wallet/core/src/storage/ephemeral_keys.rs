@@ -503,6 +503,12 @@ impl EphemeralKeyStore {
     pub async fn load_from_storage(&self, wallet_folder: &str, network_id: NetworkId, wallet_secret: &Secret) -> Result<usize> {
         let path = Self::storage_path(wallet_folder, &self.account_id, network_id);
 
+        // `load_from_storage` должен отражать текущее состояние на диске.
+        // Поэтому всегда очищаем in-memory состояние перед загрузкой, иначе можно
+        // сохранить "хвост" ключей, которых уже нет на диске.
+        self.clear();
+        self.modified.store(false, Ordering::SeqCst);
+
         if !fs::exists(&path).await? {
             log_debug!("No ephemeral keys file for account {}", self.account_id.to_hex());
             return Ok(0);
@@ -792,6 +798,49 @@ mod tests {
         // Cleanup
         EphemeralKeyStore::delete_storage(wallet_folder, &account_id, network_id).await.unwrap();
         assert!(!EphemeralKeyStore::storage_exists(wallet_folder, &account_id, network_id).await.unwrap());
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn load_from_storage_clears_existing_entries() {
+        use kaspa_wallet_keys::secret::Secret;
+        use std::env;
+
+        let account_id = test_account_id("00000008");
+        let network_id =
+            kaspa_consensus_core::network::NetworkId::with_suffix(kaspa_consensus_core::network::NetworkType::Testnet, 11);
+        let wallet_secret = Secret::from("test-secret-for-stealth-keys");
+
+        // Use temp directory
+        let temp_dir = env::temp_dir().join("kaspa-test-stealth-keys-clear");
+        let wallet_folder = temp_dir.to_str().unwrap();
+
+        // Cleanup before test
+        let _ = EphemeralKeyStore::delete_storage(wallet_folder, &account_id, network_id).await;
+
+        // Create store with one entry and persist it
+        let store_disk = EphemeralKeyStore::new(account_id);
+        let outpoint_disk = TransactionOutpoint::new(Hash::from_bytes([42u8; 32]), 0);
+        let key_data_disk = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
+        store_disk.store(outpoint_disk, key_data_disk, 100, None, None).await.unwrap();
+        store_disk.save_to_storage(wallet_folder, network_id, &wallet_secret).await.unwrap();
+
+        // Create another store instance with different in-memory entry (must be cleared on load)
+        let store_mem = EphemeralKeyStore::new(account_id);
+        let outpoint_mem = TransactionOutpoint::new(Hash::from_bytes([43u8; 32]), 0);
+        let key_data_mem = EphemeralKeyData::new([9u8; 32], [8u8; 32], [7u8; 33]);
+        store_mem.store(outpoint_mem, key_data_mem, 200, None, None).await.unwrap();
+        assert!(store_mem.contains(&outpoint_mem));
+        assert_eq!(store_mem.len(), 1);
+
+        let loaded_count = store_mem.load_from_storage(wallet_folder, network_id, &wallet_secret).await.unwrap();
+        assert_eq!(loaded_count, 1);
+        assert!(store_mem.contains(&outpoint_disk));
+        assert!(!store_mem.contains(&outpoint_mem));
+        assert_eq!(store_mem.len(), 1);
+
+        // Cleanup
+        EphemeralKeyStore::delete_storage(wallet_folder, &account_id, network_id).await.unwrap();
     }
 
     #[tokio::test]

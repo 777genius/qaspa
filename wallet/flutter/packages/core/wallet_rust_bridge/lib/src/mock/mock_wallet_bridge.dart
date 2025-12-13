@@ -167,7 +167,7 @@ class MockWalletBridge implements WalletBridge {
       name: name,
       kind: kind,
       accountIndex: _accounts.values.where((a) => a.walletId == walletId).length,
-      receiveAddress: 'kaspa:qtest${DateTime.now().millisecondsSinceEpoch}',
+      receiveAddress: null,
     );
     _accounts[account.id] = account;
     _balances[account.id] = Balance.zero();

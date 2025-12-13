@@ -48,7 +48,7 @@ class StealthSendPage extends StatelessWidget {
               TextField(
                 decoration: const InputDecoration(
                   labelText: 'Recipient Stealth Address',
-                  hintText: 'stealth:...',
+                  hintText: 'qs:... / qstest:...',
                 ),
                 onChanged: store.setRecipientStealthAddress,
               ),
