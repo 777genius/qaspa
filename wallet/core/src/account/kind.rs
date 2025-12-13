@@ -140,7 +140,7 @@ mod tests {
     fn borsh_rejects_too_long_kind_len() {
         // len=65 while max is 64 (str64)
         let mut bytes = vec![65u8];
-        bytes.extend(std::iter::repeat(b'a').take(65));
+        bytes.extend(std::iter::repeat_n(b'a', 65));
         let decoded: std::io::Result<AccountKind> = borsh::from_slice(&bytes);
         assert!(decoded.is_err());
     }
