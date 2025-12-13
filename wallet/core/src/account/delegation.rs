@@ -159,6 +159,10 @@ impl BorshDeserialize for DelegationRecordV1 {
 pub fn delegation_message_hash(record: &DelegationRecordV1) -> Result<[u8; 32]> {
     let mut clone = record.clone();
     clone.signature.clear();
+    // `warned_at_daa` — локальная мета-информация (троттлинг уведомлений) и не должна
+    // влиять на подпись/валидацию делегации. Хэш всегда считается так, как будто
+    // `warned_at_daa` отсутствует.
+    clone.warned_at_daa = None;
     let serialized = borsh::to_vec(&clone).map_err(|e| Error::Custom(format!("delegation borsh encode: {e}")))?;
 
     let mut hasher = Params::new().hash_length(32).key(DOMAIN_MLDSA_DELEGATION).to_state();
@@ -196,10 +200,32 @@ pub fn verify_against_anchor(anchor: &MasterAnchor, master_pubkey: &[u8], record
         return Ok(false);
     }
 
-    let hash = delegation_message_hash(record)?;
     let sig = kaspa_mldsa::Signature::from_bytes(&record.signature, level)
         .map_err(|e| Error::Custom(format!("invalid delegation signature: {e}")))?;
-    Ok(verify(hash.as_slice(), &sig, &pubkey))
+
+    // Основной путь: хэш по текущей версии записи, но с `warned_at_daa = None`.
+    let hash = delegation_message_hash(record)?;
+    if verify(hash.as_slice(), &sig, &pubkey) {
+        return Ok(true);
+    }
+
+    // Совместимость: если в сторах оказалась запись, у которой `version` была повышена
+    // локально (например, чтобы попытаться сохранить `warned_at_daa`), подпись могла
+    // быть рассчитана на прежней версии. Пробуем повторно с version=1.
+    if record.version != 1 {
+        let mut legacy = record.clone();
+        legacy.version = 1;
+        legacy.warned_at_daa = None;
+        legacy.signature.clear();
+        let serialized = borsh::to_vec(&legacy).map_err(|e| Error::Custom(format!("delegation borsh encode: {e}")))?;
+        let mut hasher = Params::new().hash_length(32).key(DOMAIN_MLDSA_DELEGATION).to_state();
+        hasher.update(&serialized);
+        let mut out = [0u8; 32];
+        out.copy_from_slice(hasher.finalize().as_bytes());
+        return Ok(verify(out.as_slice(), &sig, &pubkey));
+    }
+
+    Ok(false)
 }
 
 pub fn select_active(records: &[DelegationRecordV1]) -> Option<DelegationRecordV1> {
@@ -263,6 +289,11 @@ mod tests {
         let hash_without_sig = delegation_message_hash(&record).expect("hash");
         let hash_with_sig = delegation_message_hash(&with_signature).expect("hash");
         assert_eq!(hash_without_sig, hash_with_sig, "signature must be ignored");
+
+        let mut warned = record.clone();
+        warned.version = warned.version.max(2);
+        warned.warned_at_daa = Some(12345);
+        assert_eq!(hash_without_sig, delegation_message_hash(&warned).expect("hash"), "warned_at_daa must not affect hash");
 
         let mut different_anchor = record.clone();
         different_anchor.anchor = [9u8; 32];

@@ -48,7 +48,7 @@ struct WalletDelegationProvider {
 }
 
 impl WalletDelegationProvider {
-    fn to_rpc(record: &kaspa_wallet_core::account::delegation::DelegationRecordV1) -> RpcDelegationRecord {
+    fn to_rpc(id: u64, record: &kaspa_wallet_core::account::delegation::DelegationRecordV1) -> RpcDelegationRecord {
         let status = match record.status {
             DelegationStatus::Active => "active".to_string(),
             DelegationStatus::Revoked { revoked_daa } => format!("revoked:{revoked_daa}"),
@@ -58,6 +58,7 @@ impl WalletDelegationProvider {
         RpcDelegationRecord {
             anchor: record.anchor,
             account_id: record.account_id.to_hex().into_bytes(),
+            delegation_id: id,
             spend_pubkey: record.spend_pubkey,
             scan_pubkey: record.scan_pubkey,
             valid_from_daa: record.valid_from_daa,
@@ -73,7 +74,7 @@ impl WalletDelegationProvider {
 impl DelegationProvider for WalletDelegationProvider {
     async fn list_by_anchor(&self, anchor: [u8; 32]) -> RpcResult<Vec<RpcDelegationRecord>> {
         let list = self.wallet.list_delegations_for_master(anchor).await.map_err(|_| RpcError::UnsupportedFeature)?;
-        Ok(list.iter().map(|(_, rec)| Self::to_rpc(rec)).collect())
+        Ok(list.iter().map(|(id, rec)| Self::to_rpc(id.0, rec)).collect())
     }
 
     async fn has_masters(&self) -> RpcResult<bool> {

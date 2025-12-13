@@ -638,7 +638,17 @@ impl Wallet {
 
         for record in validated_records.iter() {
             if let Some(existing) = store.find_by_anchor_account_nonce(&response.master_anchor, &record.account_id, record.nonce) {
-                if existing == *record {
+                // Делегации могут содержать локальные мета-поля (например, `warned_at_daa`)
+                // и/или получить локальный bump `version` при сохранении. Это не должно
+                // ломать идемпотентность apply для одного и того же (account_id, nonce).
+                let mut existing_cmp = existing.clone();
+                existing_cmp.warned_at_daa = None;
+                existing_cmp.version = 1;
+                let mut incoming_cmp = record.clone();
+                incoming_cmp.warned_at_daa = None;
+                incoming_cmp.version = 1;
+
+                if existing_cmp == incoming_cmp {
                     skipped += 1;
                     continue;
                 }

@@ -117,7 +117,6 @@ impl DelegationStore {
 
     pub fn mark_warned_at(&self, id: DelegationId, warned_at_daa: u64) {
         if let Some(mut entry) = self.by_id.get_mut(&id) {
-            entry.record.version = entry.record.version.max(2);
             entry.record.warned_at_daa = Some(warned_at_daa);
         }
     }

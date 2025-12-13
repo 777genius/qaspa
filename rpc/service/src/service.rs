@@ -1,6 +1,6 @@
 //! Core server implementation for ClientAPI
 
-use super::collector::{CollectorFromConsensus, StealthAwareIndexCollector};
+use super::collector::{MasterAwareConsensusCollector, StealthAwareIndexCollector};
 use crate::converter::feerate_estimate::{FeeEstimateConverter, FeeEstimateVerboseConverter};
 use crate::converter::{consensus::ConsensusConverter, index::IndexConverter, protocol::ProtocolConverter};
 use async_trait::async_trait;
@@ -79,7 +79,7 @@ use log::{error, info};
 use once_cell::sync::OnceCell;
 use std::time::Duration;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     iter::once,
     sync::{atomic::Ordering, Arc, Mutex},
     vec,
@@ -167,7 +167,8 @@ pub struct RpcCoreService {
     fee_estimate_verbose_cache: ExpiringCache<kaspa_mining::errors::MiningManagerResult<GetFeeEstimateExperimentalResponse>>,
     mining_rule_engine: Arc<MiningRuleEngine>,
     mldsa_anchors: Mutex<HashMap<[u8; 32], AnchorInfo>>,
-    delegation_provider: Mutex<Option<Arc<dyn DelegationProvider>>>,
+    mldsa_anchor_keys: Arc<Mutex<HashSet<[u8; 32]>>>,
+    delegation_provider: Arc<Mutex<Option<Arc<dyn DelegationProvider>>>>,
     anchor_hint_cache: Arc<StealthAnchorHintCache>,
 }
 
@@ -205,6 +206,10 @@ impl RpcCoreService {
             None => MutationPolicies::new(UtxosChangedMutationPolicy::Wildcard),
         };
 
+        // Wallet-provided hooks (optional)
+        let mldsa_anchor_keys: Arc<Mutex<HashSet<[u8; 32]>>> = Arc::new(Mutex::new(HashSet::new()));
+        let delegation_provider: Arc<Mutex<Option<Arc<dyn DelegationProvider>>>> = Arc::new(Mutex::new(None));
+
         // Prepare consensus-notify objects
         let consensus_notify_channel = Channel::<ConsensusNotification>::default();
         let consensus_notify_listener_id = consensus_notifier.register_new_listener(
@@ -217,14 +222,20 @@ impl RpcCoreService {
         consensus_events[EventType::UtxosChanged] = false;
         consensus_events[EventType::PruningPointUtxoSetOverride] = index_notifier.is_none();
         let consensus_converter = Arc::new(ConsensusConverter::new(consensus_manager.clone(), config.clone()));
-        let consensus_collector = Arc::new(CollectorFromConsensus::new(
+        let consensus_collector = Arc::new(MasterAwareConsensusCollector::new(
             "rpc-core <= consensus",
             consensus_notify_channel.receiver(),
             consensus_converter.clone(),
+            mldsa_anchor_keys.clone(),
+            delegation_provider.clone(),
+            1_000,
         ));
-        let consensus_subscriber =
-            Arc::new(Subscriber::new("rpc-core => consensus", consensus_events, consensus_notifier, consensus_notify_listener_id));
-
+        let consensus_subscriber = Arc::new(Subscriber::new(
+            "rpc-core => consensus",
+            consensus_events,
+            consensus_notifier.clone(),
+            consensus_notify_listener_id,
+        ));
         let mut collectors: Vec<DynCollector<Notification>> = vec![consensus_collector];
         let mut subscribers = vec![consensus_subscriber];
 
@@ -281,7 +292,8 @@ impl RpcCoreService {
             fee_estimate_verbose_cache: ExpiringCache::new(Duration::from_millis(500), Duration::from_millis(1000)),
             mining_rule_engine,
             mldsa_anchors: Mutex::new(HashMap::new()),
-            delegation_provider: Mutex::new(None),
+            mldsa_anchor_keys,
+            delegation_provider,
             anchor_hint_cache: anchor_hint_cache.unwrap_or_else(|| Arc::new(StealthAnchorHintCache::new())),
         }
     }
@@ -1442,6 +1454,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         // Basic input validation: anchor must be exactly 32 bytes (Guaranteed by type)
         // Idempotent insert into in-memory set.
         let RegisterMldsaAnchorRequest { anchor, metadata } = request;
+        let anchor_key = anchor;
         if let Some(ref meta) = metadata {
             if meta.len() > MAX_MLDSA_METADATA_LEN {
                 return Err(RpcError::General(format!("metadata is too long (max {MAX_MLDSA_METADATA_LEN} bytes)")));
@@ -1470,6 +1483,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         } else {
             info!("mldsa_anchor already registered: {}", anchor_hex);
         }
+        let _ = self.mldsa_anchor_keys.lock().unwrap().insert(anchor_key);
         Ok(RegisterMldsaAnchorResponse { accepted })
     }
 

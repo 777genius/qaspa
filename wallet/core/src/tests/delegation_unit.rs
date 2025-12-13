@@ -58,3 +58,20 @@ fn delegation_rejects_wrong_anchor() {
     let verified = verify_against_anchor(&anchor, master.public_key().as_bytes(), &bad).expect("verify");
     assert!(!verified, "anchor mismatch must fail verification");
 }
+
+#[test]
+fn delegation_signature_survives_warned_at_and_version_bump() {
+    let master = MlDsaKeypair::random(MlDsaLevel::Level2);
+    let anchor = master.anchor();
+    let mut record = sample_record(*anchor.as_bytes(), 1);
+    record.version = 1; // имитируем старую запись/протокол
+    sign_with_master(&master, &mut record).expect("sign");
+
+    // Локальные мета-поля не должны ломать верификацию подписи.
+    let mut mutated = record.clone();
+    mutated.version = 2; // например, повышено при сохранении мета-данных
+    mutated.warned_at_daa = Some(123_456);
+
+    let ok = verify_against_anchor(&anchor, master.public_key().as_bytes(), &mutated).expect("verify");
+    assert!(ok, "warning metadata must not invalidate signature");
+}

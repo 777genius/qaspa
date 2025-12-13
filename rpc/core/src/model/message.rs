@@ -2823,6 +2823,7 @@ impl Deserializer for ListMldsaDelegationsRequest {
 pub struct RpcDelegationRecord {
     pub anchor: [u8; 32],
     pub account_id: Vec<u8>,
+    pub delegation_id: u64,
     pub spend_pubkey: [u8; 32],
     pub scan_pubkey: [u8; 32],
     pub valid_from_daa: u64,
@@ -2834,9 +2835,10 @@ pub struct RpcDelegationRecord {
 
 impl Serializer for RpcDelegationRecord {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        store!(u16, &1, writer)?; // version
+        store!(u16, &2, writer)?; // version
         store!([u8; 32], &self.anchor, writer)?;
         store!(Vec<u8>, &self.account_id, writer)?;
+        store!(u64, &self.delegation_id, writer)?;
         store!([u8; 32], &self.spend_pubkey, writer)?;
         store!([u8; 32], &self.scan_pubkey, writer)?;
         store!(u64, &self.valid_from_daa, writer)?;
@@ -2850,9 +2852,10 @@ impl Serializer for RpcDelegationRecord {
 
 impl Deserializer for RpcDelegationRecord {
     fn deserialize<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let _version = load!(u16, reader)?;
+        let version = load!(u16, reader)?;
         let anchor = load!([u8; 32], reader)?;
         let account_id = load!(Vec<u8>, reader)?;
+        let delegation_id = if version >= 2 { load!(u64, reader)? } else { 0 };
         let spend_pubkey = load!([u8; 32], reader)?;
         let scan_pubkey = load!([u8; 32], reader)?;
         let valid_from_daa = load!(u64, reader)?;
@@ -2860,7 +2863,18 @@ impl Deserializer for RpcDelegationRecord {
         let nonce = load!(u64, reader)?;
         let status = load!(String, reader)?;
         let signature = load!(Vec<u8>, reader)?;
-        Ok(Self { anchor, account_id, spend_pubkey, scan_pubkey, valid_from_daa, valid_until_daa, nonce, status, signature })
+        Ok(Self {
+            anchor,
+            account_id,
+            delegation_id,
+            spend_pubkey,
+            scan_pubkey,
+            valid_from_daa,
+            valid_until_daa,
+            nonce,
+            status,
+            signature,
+        })
     }
 }
 

@@ -1269,6 +1269,7 @@ mod mockery {
             RpcDelegationRecord {
                 anchor,
                 account_id: vec![1, 2, 3],
+                delegation_id: mock(),
                 spend_pubkey: {
                     let mut bytes = [0u8; 32];
                     rand::thread_rng().fill(&mut bytes);

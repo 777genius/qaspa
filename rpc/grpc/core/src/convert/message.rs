@@ -1126,6 +1126,7 @@ try_from!(item: &protowire::RpcDelegationRecord, kaspa_rpc_core::RpcDelegationRe
     Self {
         anchor: item.anchor.clone().try_into().map_err(|_| RpcError::General("anchor must be 32 bytes".into()))?,
         account_id: item.account_id.clone(),
+        delegation_id: 0,
         spend_pubkey: item.spend_pubkey.clone().try_into().map_err(|_| RpcError::General("spend_pubkey must be 32 bytes".into()))?,
         scan_pubkey: item.scan_pubkey.clone().try_into().map_err(|_| RpcError::General("scan_pubkey must be 32 bytes".into()))?,
         valid_from_daa: item.valid_from_daa,
@@ -1390,6 +1391,7 @@ mod tests {
         let record = RpcDelegationRecord {
             anchor: [2u8; 32],
             account_id: vec![9u8; 4],
+            delegation_id: 0,
             spend_pubkey: [3u8; 32],
             scan_pubkey: [4u8; 32],
             valid_from_daa: 10,
