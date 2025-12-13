@@ -117,8 +117,10 @@ impl Daemon {
             }
         };
 
-        let rpc_port = args.rpclisten.map_or_else(&mut next_unique, |x| x.normalize(0).port);
-        let p2p_port = args.listen.map_or_else(&mut next_unique, |x| x.normalize(0).port);
+        // Always allocate fresh ports for integration tests. `Args::default()` comes with
+        // fixed listen ports which collide when multiple daemons are started in parallel.
+        let rpc_port = next_unique();
+        let p2p_port = next_unique();
         let rpc_json_port = match args.rpclisten_json.as_ref() {
             Some(WrpcNetAddress::Custom(addr)) if !addr.port_not_specified() => addr.normalize(0).port,
             _ => next_unique(),
