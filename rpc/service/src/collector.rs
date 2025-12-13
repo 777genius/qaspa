@@ -18,6 +18,9 @@ use std::sync::{
     Arc, Mutex,
 };
 
+type LastEmittedMap = std::collections::HashMap<([u8; 32], u64), u64>;
+type SharedLastEmittedMap = Arc<Mutex<LastEmittedMap>>;
+
 /// A consensus collector that additionally emits wallet-level
 /// `MasterDelegationExpiringSoon` notifications based on virtual DAA ticks.
 ///
@@ -32,7 +35,7 @@ pub struct MasterAwareConsensusCollector {
     check_in_progress: Arc<AtomicBool>,
     is_started: Arc<AtomicBool>,
     collect_shutdown: Arc<SingleTrigger>,
-    last_emitted: Arc<Mutex<std::collections::HashMap<([u8; 32], u64), u64>>>,
+    last_emitted: SharedLastEmittedMap,
 }
 
 impl std::fmt::Debug for MasterAwareConsensusCollector {
@@ -224,7 +227,7 @@ pub struct MasterDelegationExpiringSoonCollector {
     warn_window_daa: u64,
     is_started: Arc<AtomicBool>,
     collect_shutdown: Arc<SingleTrigger>,
-    last_emitted: Arc<Mutex<std::collections::HashMap<([u8; 32], u64), u64>>>,
+    last_emitted: SharedLastEmittedMap,
 }
 
 impl std::fmt::Debug for MasterDelegationExpiringSoonCollector {
