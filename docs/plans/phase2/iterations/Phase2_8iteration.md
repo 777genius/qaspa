@@ -25,7 +25,7 @@
 
 **Критерий успеха:** сеть/кошельки имеют чётко определённый момент включения MLDSA master root, документация и чек‑листы отражают реальный процесс миграции, devnet/testnet rehearsal успешно отыгран, а для mainnet есть понятный план и rollback.
 
-> Текущий статус (12.10.2025): кодовая часть активации выполнена — `Params` содержат `mldsa_master_activation` (mainnet=never, testnet=120_000_000, dev/sim=always), RPC отдаёт новые поля с поднятой ревизией, кошелёк уважает сетевой флаг и не автогенерирует master до активации. Добавлен строгий guardrail на overrides: если активация в прошлом или ближе буфера (`max(3 * merge_depth, DAA_сутки)`), RPC логирует ошибку один раз и принудительно отключает `mldsa_master_enabled`.
+> Текущий статус (14.12.2025): `Params` содержат `mldsa_master_activation` со значением `always` для всех сетей (dev/sim/test/mainnet), RPC отдаёт `mldsa_master_enabled=true` и `mldsa_master_activation_daa=0`. Guardrail для overrides остаётся: если override-активация в прошлом или ближе буфера (`max(3 * merge_depth, DAA_сутки)`), RPC логирует ошибку один раз и принудительно отключает `mldsa_master_enabled`.
 
 ## 1. Область изменений и файлы
 
@@ -59,13 +59,9 @@
 - **Simnet:**  
   - `ForkActivation::always()` — обязательный e2e/интеграционный контур.
 - **Testnet:**  
-  - В коде Iteration 8 выставляем конкретное значение `ForkActivation::new(<DAA>)` и коммитим его вместе с планом; мердж без заполненного значения запрещён.  
-  - Значение фиксируется в `MIGRATION_STRATEGY.md` и `TESTNET_DEPLOYMENT_GUIDE.md`, rehearsal обязателен.  
-  - Если testnet стартует с нуля — DAA выбираем явно (можно `0` или буфер `N` блоков от генезиса), чтобы CI/доки совпадали.  
-  - Если сохраняем историю — DAA обязан быть **в будущем** относительно текущего tip с буфером: `buffer_daa >= max(3 * expected_max_reorg_depth, DAA_сутки)`; проверяется на этапе конфигурации/CI.
+  - `mldsa_master_activation = ForkActivation::always()` (активация `DAA=0`), rehearsal обязателен.
 - **Mainnet:**  
-  - На момент Iteration 8: `ForkActivation::never()`.  
-  - Поле остаётся в `Params`, но активация выполняется отдельным change request после успешного testnet rehearsal и обновления доков (см. §7.3).
+  - `mldsa_master_activation = ForkActivation::always()` (активация `DAA=0`).
 
 ### 2.3. Связь с кошельком и локальным флагом
 
@@ -123,8 +119,8 @@
   - Инициализировать `mldsa_master_activation`:
     - `SIMNET_PARAMS`: `ForkActivation::always()`.
     - `DEVNET_PARAMS`: `ForkActivation::always()` (для максимально простого devnet‑rehearsal).
-    - `TESTNET_PARAMS`: `ForkActivation::never()` на момент начала Iteration 8; затем в ходе итерации заменить на конкретное значение и задокументировать его в `MIGRATION_STRATEGY.md` и `TESTNET_DEPLOYMENT_GUIDE.md`.
-    - `MAINNET_PARAMS`: `ForkActivation::never()` до отдельного решения (см. раздел про mainnet rollout).
+    - `TESTNET_PARAMS`: `ForkActivation::always()`.
+    - `MAINNET_PARAMS`: `ForkActivation::always()`.
 - Убедиться, что новое поле **не влияет** на существующую бизнес‑логику до тех пор, пока не будет использовано RPC/кошельком:
   - Нет прямых вызовов `mldsa_master_enabled` из консенсусного ядра (на этой итерации флаг используется только для информации и RPC).
 
@@ -304,8 +300,7 @@
   - **Сценарии для операторов нод:**
     - Последовательность обновления:  
       1. Обновить ноду до версии с поддержкой `mldsa_master_activation`.  
-      2. Дождаться активации на devnet/testnet, проверить метрики/логи.  
-      3. Для mainnet — следовать отдельному объявлению с DAA‑высотой.
+      2. Проверить `getServerInfo` → `mldsa_master_enabled=true`, `mldsa_master_activation_daa=0`, проверить метрики/логи.
   - **Сценарии для разработчиков кошельков:**
     - Когда включать `WalletSettings::EnableMldsaMaster` по умолчанию.
     - Как обрабатывать сети, где `mldsa_master_enabled == false`.
@@ -319,7 +314,7 @@
 
 - Добавить секцию **«Phase 2 — MLDSA Master Root»**:
   - **Code & Config:**
-    - `[ ]` Все сети имеют заданный `mldsa_master_activation` (devnet/simnet — always, testnet/mainnet — документированные значения или `never` с планом).
+    - `[ ]` Все сети имеют заданный `mldsa_master_activation` (devnet/sim/test/mainnet — always, `mldsa_master_activation_daa=0`).
     - `[ ]` RPC `get_info` возвращает флаг и DAA‑высоту, CLI умеет его показать.
   - **Wallet & UX:**
     - `[ ]` Master‑аккаунт/anchor корректно отображаются в CLI/GUI.

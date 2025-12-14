@@ -709,8 +709,8 @@ pub const MAINNET_PARAMS: Params = Params {
     crescendo: CRESCENDO,
     // Roughly 2025-05-05 1500 UTC
     crescendo_activation: ForkActivation::new(110_165_000),
-    // Mainnet: остаётся выключенным до отдельного решения
-    mldsa_master_activation: ForkActivation::never(),
+    // Mainnet: MLDSA master включён по умолчанию
+    mldsa_master_activation: ForkActivation::always(),
 };
 
 pub const TESTNET_PARAMS: Params = Params {
@@ -778,8 +778,8 @@ pub const TESTNET_PARAMS: Params = Params {
     crescendo: CRESCENDO,
     // 18:30 UTC, March 6, 2025
     crescendo_activation: ForkActivation::new(88_657_000),
-    // Iteration 8: зафиксированная DAA активации master root на testnet
-    mldsa_master_activation: ForkActivation::new(120_000_000),
+    // Testnet: MLDSA master включён по умолчанию
+    mldsa_master_activation: ForkActivation::always(),
 };
 
 pub const SIMNET_PARAMS: Params = Params {

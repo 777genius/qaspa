@@ -16,10 +16,10 @@
   - `cargo test -p kaspa-mldsa-ffi --release` (derive→sign→verify, 6 тестов, ok).
   - Собраны `target/release/libkaspa_mldsa_ffi.{dylib,a}`; экспорт `nm -gU .../libkaspa_mldsa_ffi.dylib` содержит `kaspa_mldsa_master_seed_len/derive_keypair/generate_keypair/sign/verify` и все size getters.
 
-- Добавлен консенсусный флаг `mldsa_master_activation` (dev/simnet — always, test/mainnet — never до решения) и хелпер `mldsa_master_enabled`.
+- Добавлен консенсусный флаг `mldsa_master_activation` (dev/sim/test/mainnet — always) и хелпер `mldsa_master_enabled`.
 - RPC `GetServerInfo` расширен полями `mldsa_master_enabled` и `mldsa_master_activation_daa`; поднят `RPC_API_REVISION` без смены `RPC_API_VERSION`.
 - Кошелёк читает сетевой флаг, эмитит `MasterNetworkStatus` и `MasterNetworkMismatch`, продолжает локальный мастер-режим без сетевых операций до активации.
-- Требование Iteration 8: testnet DAA зафиксирован в коде/доках (`mldsa_master_activation = 120_000_000`); devnet/testnet rehearsal описан.
+- Дефолт: `mldsa_master_activation = ForkActivation::always()` (в RPC это отражается как `mldsa_master_enabled=true`, `mldsa_master_activation_daa=0`).
 - Testnet deployment guide обновлён: фиксация DAA, шаги до/после активации, инварианты и rollback.
 
 Core задачи ML-DSA выполнены; доводим миграцию/документацию и rehearsal поток.

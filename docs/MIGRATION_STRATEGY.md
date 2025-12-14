@@ -10,8 +10,7 @@ QUBIC will support **all three signature types in parallel** to ensure smooth mi
 ## Phase 2: MLDSA Master Root Migration (Iteration 8)
 
 - **Форк-флаг:** `enable_mldsa_master` хранится в консенсусных `Params` как `mldsa_master_activation: ForkActivation`.
-- **Состояние сетей:** devnet/simnet — `always`, testnet/mainnet — `never` до явного решения; тестнет DAA обязателен к фиксации перед релизом.
-- **Testnet DAA (Iteration 8):** `mldsa_master_activation = ForkActivation::new(120_000_000)`; значение зафиксировано в коде и гайде по тестнету.
+- **Состояние сетей:** devnet/simnet/testnet/mainnet — `always` (активация `mldsa_master_activation = ForkActivation::always()`, `activation_daa=0`).
 - **RPC:** `GetServerInfo` теперь отдаёт `mldsa_master_enabled` и `mldsa_master_activation_daa`; `RPC_API_REVISION` повышен без смены `RPC_API_VERSION`.
 - **Клиент/кошелёк:** при создании/гидратации мастер-записей кошелёк читает сетевой статус, генерирует события `MasterNetworkStatus` и предупреждения `MasterNetworkMismatch`, не делает сетевые операции, если сеть ещё не активирована.
 - **Override:** `OverrideParams` позволяет задавать альтернативный DAA для rehearsal; запрещено мержить без зафиксированного testnet DAA.

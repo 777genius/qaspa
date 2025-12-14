@@ -191,23 +191,19 @@ Then run:
 
 ## MLDSA Master Root Activation (Iteration 8)
 
-### 0. Фиксация DAA
-- **Значение (Iteration 8):** `testnet_mldsa_master_activation_daa = 120_000_000` (записано в `consensus/core/src/config/params.rs`).
-- **История сохраняется?**
-  - Если история сохраняется — DAA должен быть **в будущем** с буфером `buffer_daa >= max(3 * expected_max_reorg_depth, DAA_сутки)`.
-  - Если чистый запуск — DAA задаётся явно (0 или буфер от генезиса), совпадает с CI/доками.
+### 0. Статус активации
+- Дефолт для testnet: `mldsa_master_activation = ForkActivation::always()` → `mldsa_master_activation_daa = 0`.
 
-### 1. До активации (devnet/testnet rehearsal)
-1) Обновить ноды на версию с полем `mldsa_master_activation` (testnet значение уже зафиксировано).
-2) Проверить RPC `getServerInfo` → `mldsa_master_enabled=false`, `mldsa_master_activation_daa=<ожидаемое>`.
+### 1. Проверка (devnet/testnet rehearsal)
+1) Обновить ноды на версию с полем `mldsa_master_activation`.
+2) Проверить RPC `getServerInfo` → `mldsa_master_enabled=true`, `mldsa_master_activation_daa=0`.
 3) Кошелёк:
    - Создать кошелёк, провести пару legacy/MLDSA/stealth транзакций.
-   - Убедиться, что при `EnableMldsaMaster=true` кошелёк не делает сетевые мастер-операции (только локально) и выдаёт предупреждение (`MasterNetworkMismatch`).
+   - Убедиться, что при `EnableMldsaMaster=true` доступны мастер-операции и нет предупреждений `MasterNetworkMismatch`.
 
-### 2. Момент активации
-1) Дождаться достижения `mldsa_master_activation_daa` (или ускорить devnet).
-2) Проверить RPC `getServerInfo` → `mldsa_master_enabled=true`, `has_stealth_support=true`, `mldsa_master_activation_daa` соответствует плану.
-3) Валидировать инвариант: конфигурации всех публичных узлов возвращают одинаковые значения флага.
+### 2. Инварианты
+1) Проверить RPC `getServerInfo` → `has_stealth_support=true`.
+2) Валидировать инвариант: конфигурации всех публичных узлов возвращают одинаковые значения `mldsa_master_enabled`/`mldsa_master_activation_daa`.
 
 ### 3. После активации
 1) Кошелёк обновлённой версии:

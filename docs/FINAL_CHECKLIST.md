@@ -33,10 +33,9 @@
 ---
 
 ### ⏳ Phase 2 — MLDSA Master Root (Iteration 8)
-- [x] `mldsa_master_activation` задан для всех сетей (dev/simnet — always, test/mainnet — never или зафиксированное DAA).
-- [x] Testnet DAA зафиксирован в коде/доках (`GetServerInfo` отражает ожидаемое значение).
+- [x] `mldsa_master_activation` задан для всех сетей (dev/sim/test/mainnet — always, `mldsa_master_activation_daa=0`).
 - [x] RPC `get_server_info` возвращает `mldsa_master_enabled` и `mldsa_master_activation_daa`, ревизия обновлена без смены версии.
-- [x] Кошелёк читает сетевой флаг, эмитит `MasterNetworkStatus/MasterNetworkMismatch`, не выполняет master-операции до активации сети.
+- [x] Кошелёк читает сетевой флаг, эмитит `MasterNetworkStatus/MasterNetworkMismatch` и координирует локальный флаг с сетевым.
 - [x] Rehearsal devnet/testnet проведён и задокументирован, rollback сценарий описан (см. TESTNET_DEPLOYMENT_GUIDE.md).
 - [x] Инвариант: при `mldsa_master_enabled=true` `has_stealth_support` тоже true; при некорректной активации (прошлое/слишком близко) RPC отключает master-флаг и логирует ошибку, требуется мониторинг согласованности флагов на публичных тестнет-нодах.
 

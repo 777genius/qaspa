@@ -6,7 +6,7 @@ Our goal is to build a high-performance DAG (based on Kaspa) that offers **Quant
 ### MLDSA master plan reference
 - Detailed plan for Phase 2 (master key, anchor, delegation): `docs/plans/phase2/Phase2_MLDSA_master_key.md`.
 - Wallet flag `enable_mldsa_master` (see `wallet/core/src/settings.rs`) controls auto-derivation/storage of the MLDSA master; default is `true`, can be disabled in test/dev.
-- **Статус Iteration 8:** активация мастер-рута управляется консенсусным флагом `mldsa_master_activation` (dev/simnet включены, test/mainnet ждут зафиксированного DAA); RPC `GetServerInfo` теперь сообщает `mldsa_master_enabled` и высоту активации, кошелёк отражает сетевой статус и предупреждает о расхождениях.
+- **Статус Iteration 8:** активация мастер-рута управляется консенсусным флагом `mldsa_master_activation` (dev/sim/test/mainnet включены); RPC `GetServerInfo` сообщает `mldsa_master_enabled` и `mldsa_master_activation_daa` (для `always` это `0`), кошелёк отражает сетевой статус и предупреждает о расхождениях.
 
 ## The "Smart" Architecture: Hybrid Approach
 
