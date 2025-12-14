@@ -637,7 +637,9 @@ impl Wallet {
         }
 
         for record in validated_records.iter() {
-            if let Some(existing) = store.find_by_anchor_account_nonce(&response.master_anchor, &record.account_id, record.nonce) {
+            if let Some((existing_id, existing)) =
+                store.find_entry_by_anchor_account_nonce(&response.master_anchor, &record.account_id, record.nonce)
+            {
                 // Делегации могут содержать локальные мета-поля (например, `warned_at_daa`)
                 // и/или получить локальный bump `version` при сохранении. Это не должно
                 // ломать идемпотентность apply для одного и того же (account_id, nonce).
@@ -649,6 +651,19 @@ impl Wallet {
                 incoming_cmp.version = 1;
 
                 if existing_cmp == incoming_cmp {
+                    // Делегация уже сохранена в store, но аккаунт мог не успеть
+                    // обновить ссылку на неё (например, при частичном применении из‑за I/O ошибки).
+                    if let Some(account) = self.get_account_by_id(&record.account_id, &guard).await? {
+                        let stealth_account = account.as_stealth_account()?;
+                        if stealth_account.master_anchor() != Some(record.anchor)
+                            || stealth_account.delegation_id() != Some(existing_id)
+                        {
+                            stealth_account.set_delegation(record.anchor, Some(existing_id));
+                            account_store.store_single(&stealth_account.to_storage()?, None).await?;
+                        }
+                    } else {
+                        missing_accounts.push(record.account_id);
+                    }
                     skipped += 1;
                     continue;
                 }
@@ -1794,9 +1809,16 @@ impl Wallet {
         let master = self.find_active_master_by_anchor(&anchor).ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
         let level = master.level();
 
-        let current_daa = self.current_daa_score().unwrap_or(0);
+        let current_daa_opt = self.current_daa_score();
+        let current_daa = current_daa_opt.unwrap_or(0);
         let valid_from = current_daa.saturating_sub(window_daa);
-        let valid_until = valid_for_daa.map(|v| current_daa.saturating_add(v));
+        let valid_until = match (current_daa_opt, valid_for_daa) {
+            (Some(current), Some(v)) => Some(current.saturating_add(v)),
+            (None, Some(_)) => {
+                return Err(Error::Custom("valid_for_daa requires current DAA score (connect wallet to a node first)".to_string()));
+            }
+            (_, None) => None,
+        };
 
         let next_nonce = self
             .delegation_store()

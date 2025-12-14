@@ -52,6 +52,8 @@ use workflow_core::time::Instant;
 /// Account kind identifier for stealth accounts
 pub const STEALTH_ACCOUNT_KIND: &str = "kaspa-stealth";
 
+const CREATION_DAA_OVERRIDE_NONE: u64 = u64::MAX;
+
 /// BIP-44 coin type for stealth derivation (custom, as per etap3_answers.md)
 pub const STEALTH_COIN_TYPE: u32 = 111111;
 
@@ -376,6 +378,7 @@ pub struct StealthAccount {
 
     /// DAA score when account was created
     creation_daa_score: Option<u64>,
+    creation_daa_score_override: AtomicU64,
 
     /// Optional master anchor link (Iteration 3)
     master_anchor: Mutex<Option<[u8; 32]>>,
@@ -459,6 +462,15 @@ impl StealthAccount {
         FALLBACK_SCAN_LOOKBACK_OVERRIDE.store(value, Ordering::Relaxed);
     }
 
+    fn effective_creation_daa_score(&self) -> Option<u64> {
+        let override_val = self.creation_daa_score_override.load(Ordering::Relaxed);
+        if override_val != CREATION_DAA_OVERRIDE_NONE {
+            Some(override_val)
+        } else {
+            self.creation_daa_score
+        }
+    }
+
     /// Creates a new stealth account
     pub async fn try_new(
         wallet: &Arc<Wallet>,
@@ -492,6 +504,7 @@ impl StealthAccount {
             ephemeral_keys,
             pending_ephemeral_persist: Arc::new(AsyncMutex::new(PendingEphemeralPersist::new())),
             creation_daa_score,
+            creation_daa_score_override: AtomicU64::new(CREATION_DAA_OVERRIDE_NONE),
             master_anchor: Mutex::new(None),
             delegation_id: Mutex::new(None),
             orphan_overlay: Arc::new(DashMap::new()),
@@ -499,14 +512,9 @@ impl StealthAccount {
     }
 
     /// Testing helper: override stored creation DAA score to control fallback window.
-    ///
-    /// # Safety
-    /// This uses interior mutation to adjust an immutable field and is intended strictly for tests.
     pub fn override_creation_daa_score_for_testing(&self, value: Option<u64>) {
-        unsafe {
-            let ptr = self as *const Self as *mut Self;
-            (*ptr).creation_daa_score = value;
-        }
+        let v = value.unwrap_or(CREATION_DAA_OVERRIDE_NONE);
+        self.creation_daa_score_override.store(v, Ordering::Relaxed);
     }
 
     /// Loads an existing stealth account from storage
@@ -534,6 +542,7 @@ impl StealthAccount {
             ephemeral_keys,
             pending_ephemeral_persist: Arc::new(AsyncMutex::new(PendingEphemeralPersist::new())),
             creation_daa_score: payload.creation_daa_score,
+            creation_daa_score_override: AtomicU64::new(CREATION_DAA_OVERRIDE_NONE),
             master_anchor: Mutex::new(payload.master_anchor),
             delegation_id: Mutex::new(payload.delegation_id.map(DelegationId)),
             orphan_overlay: Arc::new(DashMap::new()),
@@ -1065,7 +1074,7 @@ impl StealthAccount {
         let mut header_only_encountered = false;
         let mut header_only_before_first_full = false;
         let mut earliest_header_daa: Option<u64> = None;
-        let creation_daa_score = self.creation_daa_score.unwrap_or(0);
+        let creation_daa_score = self.effective_creation_daa_score().unwrap_or(0);
         let lookback_daa = fallback_scan_lookback_daa();
         let reference_daa = if creation_daa_score == 0 { current_daa_score } else { creation_daa_score };
         let min_daa_score = Some(reference_daa).map(|score| score.saturating_sub(lookback_daa)).filter(|score| *score > 0);

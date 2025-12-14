@@ -158,11 +158,22 @@ impl DelegationStore {
             .collect()
     }
 
-    pub fn find_by_anchor_account_nonce(&self, anchor: &[u8; 32], account_id: &AccountId, nonce: u64) -> Option<DelegationRecordV1> {
+    pub(crate) fn find_entry_by_anchor_account_nonce(
+        &self,
+        anchor: &[u8; 32],
+        account_id: &AccountId,
+        nonce: u64,
+    ) -> Option<(DelegationId, DelegationRecordV1)> {
         let key = (*anchor, *account_id);
         self.by_anchor_account.get(&key).and_then(|ids| {
-            ids.iter().find_map(|id| self.by_id(*id).and_then(|rec| if rec.nonce == nonce { Some(rec.clone()) } else { None }))
+            ids.iter().find_map(|id| {
+                self.by_id.get(id).and_then(|entry| (entry.record.nonce == nonce).then_some((*id, entry.record.clone())))
+            })
         })
+    }
+
+    pub fn find_by_anchor_account_nonce(&self, anchor: &[u8; 32], account_id: &AccountId, nonce: u64) -> Option<DelegationRecordV1> {
+        self.find_entry_by_anchor_account_nonce(anchor, account_id, nonce).map(|(_, rec)| rec)
     }
 
     pub fn has_request(&self, request_id: &[u8; 32]) -> bool {
