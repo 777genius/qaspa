@@ -1,6 +1,8 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case to watch transaction history stream.
+@injectable
 class WatchTransactionHistoryUseCase {
   final TransactionRepository _transactionRepository;
 

@@ -612,10 +612,10 @@ packages:
     dependency: transitive
     description:
       name: modularity_injectable
-      sha256: "09ee50d89e5542327e839928f0a1327de6d49c129a41c0a558161c50ae357084"
+      sha256: "74c133f87c76d65813e256a92668abd325fcc0bcd75fa2459d7b98f737e8defd"
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.0"
+    version: "0.1.1"
   modularity_test:
     dependency: transitive
     description:

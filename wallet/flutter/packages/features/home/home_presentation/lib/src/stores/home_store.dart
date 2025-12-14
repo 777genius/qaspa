@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:home_domain/home_domain.dart';
+import 'package:injectable/injectable.dart';
 import 'package:mobx/mobx.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 part 'home_store.g.dart';
 
 /// MobX store for home feature state management.
+@lazySingleton
 class HomeStore = _HomeStoreBase with _$HomeStore;
 
 abstract class _HomeStoreBase with Store {

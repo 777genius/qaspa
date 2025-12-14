@@ -570,10 +570,14 @@ impl KaspaRpcClient {
                         if let Ok(msg) = msg {
                             match msg {
                                 WrpcCtl::Connect => {
-                                    inner.rpc_ctl.signal_open().await.expect("(KaspaRpcClient) rpc_ctl.signal_open() error");
+                                    if let Err(err) = inner.rpc_ctl.signal_open().await {
+                                        log_warn!("(KaspaRpcClient) rpc_ctl.signal_open() error: {err}");
+                                    }
                                 }
                                 WrpcCtl::Disconnect => {
-                                    inner.rpc_ctl.signal_close().await.expect("(KaspaRpcClient) rpc_ctl.signal_close() error");
+                                    if let Err(err) = inner.rpc_ctl.signal_close().await {
+                                        log_warn!("(KaspaRpcClient) rpc_ctl.signal_close() error: {err}");
+                                    }
                                 }
                             }
                         } else {
@@ -582,7 +586,7 @@ impl KaspaRpcClient {
                     }
                 }
             }
-            inner.service_ctl.response.send(()).await.unwrap();
+            inner.service_ctl.response.send(()).await.ok();
         });
 
         Ok(())

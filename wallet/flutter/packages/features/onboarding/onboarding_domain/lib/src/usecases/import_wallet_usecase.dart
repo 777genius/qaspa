@@ -1,3 +1,4 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 import '../services/bip39_wordlist_service.dart';
@@ -6,6 +7,7 @@ import '../services/bip39_wordlist_service.dart';
 ///
 /// This is the main step in the wallet import flow, after:
 /// 1. User enters mnemonic words (ImportMnemonicPage)
+@injectable
 class ImportWalletUseCase {
   final WalletRepository _walletRepository;
   final Bip39WordlistService _wordlistService;

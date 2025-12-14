@@ -13,36 +13,19 @@ class SendModule extends Module {
 
   @override
   void binds(Binder i) {
-    // Auto-register services without parent dependencies via injectable
+    // Register domain use cases (with auto parent scope resolution)
+    ModularityInjectableBridge.configureInternal(
+      i,
+      configureSendDomainDependencies,
+    );
+
+    // Register presentation layer (SendStore)
     ModularityInjectableBridge.configureInternal(i, configureSendDependencies);
-
-    // Use cases with parent dependencies (manual registration)
-    i.factory<EstimateTransactionUseCase>(
-      () => EstimateTransactionUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
-
-    i.factory<SendTransactionUseCase>(
-      () => SendTransactionUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
-
-    i.factory<ValidateAddressUseCase>(
-      () => ValidateAddressUseCase(),
-    );
   }
 
   @override
   void exports(Binder i) {
-    // Note: dispose() should be called manually when module scope is destroyed
-    i.singleton<SendStore>(
-      () => SendStore(
-        estimateTransactionUseCase: i.get<EstimateTransactionUseCase>(),
-        sendTransactionUseCase: i.get<SendTransactionUseCase>(),
-        validateAddressUseCase: i.get<ValidateAddressUseCase>(),
-      ),
-    );
+    // Export SendStore for page access
+    i.singleton<SendStore>(() => i.get<SendStore>());
   }
 }

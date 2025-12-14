@@ -2,7 +2,7 @@ use super::GrpcClient;
 use async_channel::{SendError, Sender};
 use futures_util::Future;
 use itertools::Itertools;
-use kaspa_core::trace;
+use kaspa_core::{trace, warn};
 use kaspa_utils::{any::type_name_short, channel::Channel, triggers::SingleTrigger};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -51,7 +51,9 @@ impl<T: Send + 'static> ClientPool<T> {
                             break;
                         }
                     }
-                    client.disconnect().await.unwrap();
+                    if let Err(err) = client.disconnect().await {
+                        warn!("Client pool {} task {} disconnect error: {err}", type_name_short::<Self>(), index);
+                    }
                     trace!("Client pool {} task {} exited", type_name_short::<Self>(), index);
                     if running_tasks.fetch_sub(1, Ordering::SeqCst) == 1 {
                         shutdown_trigger.trigger();

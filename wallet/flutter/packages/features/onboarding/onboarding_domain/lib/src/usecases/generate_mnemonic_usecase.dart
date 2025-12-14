@@ -1,9 +1,11 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case for generating a new BIP-39 mnemonic phrase.
 ///
 /// This is the first step in wallet creation flow.
 /// The generated mnemonic should be shown to the user for backup.
+@injectable
 class GenerateMnemonicUseCase {
   final WalletRepository _walletRepository;
 

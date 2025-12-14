@@ -5,11 +5,11 @@ import 'package:onboarding_domain/onboarding_domain.dart';
 import 'mnemonic_verification_grid.dart';
 
 /// Current verification challenge display.
-class VerificationChallenge extends StatelessWidget {
-  final MnemonicChallenge challenge;
+class VerificationChallengeWidget extends StatelessWidget {
+  final VerificationChallenge challenge;
   final ValueChanged<String> onOptionSelected;
 
-  const VerificationChallenge({
+  const VerificationChallengeWidget({
     super.key,
     required this.challenge,
     required this.onOptionSelected,

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:injectable/injectable.dart';
 import 'package:mobx/mobx.dart';
 import 'package:receive_domain/receive_domain.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -8,6 +9,7 @@ import 'package:wallet_domain/wallet_domain.dart';
 part 'receive_store.g.dart';
 
 /// MobX store for receive feature state management.
+@lazySingleton
 class ReceiveStore = _ReceiveStoreBase with _$ReceiveStore;
 
 abstract class _ReceiveStoreBase with Store {

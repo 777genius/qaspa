@@ -65,7 +65,7 @@ class VerifyMnemonicPage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xl),
               if (!verification.isComplete && verification.currentChallenge != null)
-                VerificationChallenge(
+                VerificationChallengeWidget(
                   challenge: verification.currentChallenge!,
                   onOptionSelected: (word) {
                     store.submitVerificationAnswer(word);

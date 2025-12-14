@@ -7,7 +7,8 @@ use crate::utils::*;
 use crate::utxo::*;
 use kaspa_addresses::Version;
 use kaspa_rpc_core::message::{StealthUtxosChangedNotification, UtxosChangedNotification};
-use kaspa_rpc_core::{RpcTransactionOutpoint, RpcUtxoEntry, RpcUtxosByAddressesEntry};
+use kaspa_rpc_core::{RpcFeeEstimate, RpcFeerateBucket, RpcTransactionOutpoint, RpcUtxoEntry, RpcUtxosByAddressesEntry};
+use std::time::Duration;
 
 #[tokio::test]
 async fn test_utxo_subsystem_bootstrap() -> Result<()> {
@@ -103,6 +104,25 @@ async fn utxo_context_revive_moves_utxo_from_stasis_to_pending() -> Result<()> {
     assert_eq!(balance.stasis_utxo_count, 0);
     assert_eq!(processor.stasis().len(), 0);
     assert_eq!(processor.pending().len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn fee_rate_poller_does_not_panic_on_empty_buckets() -> Result<()> {
+    let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
+    let rpc_api_mock = Arc::new(RpcCoreMock::new());
+    rpc_api_mock.mock_set_fee_estimate(RpcFeeEstimate {
+        priority_bucket: RpcFeerateBucket { feerate: 1.0, estimated_seconds: 0.1 },
+        normal_buckets: vec![],
+        low_buckets: vec![],
+    });
+
+    let processor = UtxoProcessor::new(Some(rpc_api_mock.clone().into()), Some(network_id), None, None);
+
+    processor.start_fee_rate_poller(Duration::from_millis(1)).await?;
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    processor.stop_fee_rate_poller().await?;
 
     Ok(())
 }

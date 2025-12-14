@@ -21,7 +21,7 @@ dependencies:
   go_router: ^15.1.2
   modularity_core: ^0.1.0
   modularity_flutter: ^0.1.0
-  modularity_injectable: ^0.1.0
+  modularity_injectable: ^0.1.1
   injectable: ^2.7.0
   get_it: ^8.0.3
 

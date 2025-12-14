@@ -1,6 +1,8 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case for getting account balance.
+@injectable
 class GetBalanceUseCase {
   final AccountRepository _accountRepository;
 

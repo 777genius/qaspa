@@ -13,52 +13,19 @@ class StealthModule extends Module {
 
   @override
   void binds(Binder i) {
-    // Auto-register services without parent dependencies via injectable
+    // Register domain use cases (with auto parent scope resolution)
+    ModularityInjectableBridge.configureInternal(
+      i,
+      configureStealthDomainDependencies,
+    );
+
+    // Register presentation layer (StealthStore)
     ModularityInjectableBridge.configureInternal(i, configureStealthDependencies);
-
-    // Use cases with parent dependencies (manual registration)
-    i.factory<GetStealthAddressUseCase>(
-      () => GetStealthAddressUseCase(
-        accountRepository: i.parent<AccountRepository>(),
-      ),
-    );
-
-    i.factory<ScanStealthPaymentsUseCase>(
-      () => ScanStealthPaymentsUseCase(
-        accountRepository: i.parent<AccountRepository>(),
-      ),
-    );
-
-    i.factory<SendStealthPaymentUseCase>(
-      () => SendStealthPaymentUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
-
-    i.factory<GetStealthBalanceUseCase>(
-      () => GetStealthBalanceUseCase(
-        accountRepository: i.parent<AccountRepository>(),
-      ),
-    );
-
-    i.factory<GetStealthTransactionsUseCase>(
-      () => GetStealthTransactionsUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
   }
 
   @override
   void exports(Binder i) {
-    // Note: dispose() should be called manually when module scope is destroyed
-    i.singleton<StealthStore>(
-      () => StealthStore(
-        getStealthAddressUseCase: i.get<GetStealthAddressUseCase>(),
-        scanStealthPaymentsUseCase: i.get<ScanStealthPaymentsUseCase>(),
-        sendStealthPaymentUseCase: i.get<SendStealthPaymentUseCase>(),
-        getStealthBalanceUseCase: i.get<GetStealthBalanceUseCase>(),
-        getStealthTransactionsUseCase: i.get<GetStealthTransactionsUseCase>(),
-      ),
-    );
+    // Export StealthStore for page access
+    i.singleton<StealthStore>(() => i.get<StealthStore>());
   }
 }

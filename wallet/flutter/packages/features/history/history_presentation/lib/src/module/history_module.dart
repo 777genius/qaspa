@@ -13,38 +13,19 @@ class HistoryModule extends Module {
 
   @override
   void binds(Binder i) {
-    // Auto-register services without parent dependencies via injectable
+    // Register domain use cases (with auto parent scope resolution)
+    ModularityInjectableBridge.configureInternal(
+      i,
+      configureHistoryDomainDependencies,
+    );
+
+    // Register presentation layer (HistoryStore)
     ModularityInjectableBridge.configureInternal(i, configureHistoryDependencies);
-
-    // Use cases with parent dependencies (manual registration)
-    i.factory<GetTransactionHistoryUseCase>(
-      () => GetTransactionHistoryUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
-
-    i.factory<WatchTransactionHistoryUseCase>(
-      () => WatchTransactionHistoryUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
-
-    i.factory<GetTransactionDetailsUseCase>(
-      () => GetTransactionDetailsUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
   }
 
   @override
   void exports(Binder i) {
-    // Note: dispose() should be called manually when module scope is destroyed
-    i.singleton<HistoryStore>(
-      () => HistoryStore(
-        getTransactionHistoryUseCase: i.get<GetTransactionHistoryUseCase>(),
-        watchTransactionHistoryUseCase: i.get<WatchTransactionHistoryUseCase>(),
-        getTransactionDetailsUseCase: i.get<GetTransactionDetailsUseCase>(),
-      ),
-    );
+    // Export HistoryStore for page access
+    i.singleton<HistoryStore>(() => i.get<HistoryStore>());
   }
 }

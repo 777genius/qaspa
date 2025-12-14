@@ -110,13 +110,15 @@ impl Metrics {
                 }
             }
 
-            task_ctl_sender.send(()).await.unwrap();
+            task_ctl_sender.send(()).await.ok();
         });
         Ok(())
     }
 
     pub async fn stop_task(&self) -> Result<()> {
-        self.task_ctl.signal(()).await.expect("Metrics::stop_task() signal error");
+        if let Err(err) = self.task_ctl.signal(()).await {
+            log_warn!("Metrics::stop_task() signal error: {err}");
+        }
         Ok(())
     }
 

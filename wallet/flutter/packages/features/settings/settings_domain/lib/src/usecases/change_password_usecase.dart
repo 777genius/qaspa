@@ -1,6 +1,8 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case to change wallet password.
+@injectable
 class ChangePasswordUseCase {
   final WalletRepository _walletRepository;
 

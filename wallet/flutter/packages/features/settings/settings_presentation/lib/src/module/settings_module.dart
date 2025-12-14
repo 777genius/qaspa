@@ -13,45 +13,19 @@ class SettingsModule extends Module {
 
   @override
   void binds(Binder i) {
-    // Auto-register services without parent dependencies via injectable
+    // Register domain use cases (with auto parent scope resolution)
+    ModularityInjectableBridge.configureInternal(
+      i,
+      configureSettingsDomainDependencies,
+    );
+
+    // Register presentation layer (SettingsStore)
     ModularityInjectableBridge.configureInternal(i, configureSettingsDependencies);
-
-    // Use cases with parent dependencies (manual registration)
-    i.factory<GetWalletInfoUseCase>(
-      () => GetWalletInfoUseCase(
-        walletRepository: i.parent<WalletRepository>(),
-      ),
-    );
-
-    i.factory<ExportMnemonicUseCase>(
-      () => ExportMnemonicUseCase(
-        walletRepository: i.parent<WalletRepository>(),
-      ),
-    );
-
-    i.factory<ChangePasswordUseCase>(
-      () => ChangePasswordUseCase(
-        walletRepository: i.parent<WalletRepository>(),
-      ),
-    );
-
-    i.factory<DeleteWalletUseCase>(
-      () => DeleteWalletUseCase(
-        walletRepository: i.parent<WalletRepository>(),
-      ),
-    );
   }
 
   @override
   void exports(Binder i) {
-    // Note: dispose() should be called manually when module scope is destroyed
-    i.singleton<SettingsStore>(
-      () => SettingsStore(
-        getWalletInfoUseCase: i.get<GetWalletInfoUseCase>(),
-        exportMnemonicUseCase: i.get<ExportMnemonicUseCase>(),
-        changePasswordUseCase: i.get<ChangePasswordUseCase>(),
-        deleteWalletUseCase: i.get<DeleteWalletUseCase>(),
-      ),
-    );
+    // Export SettingsStore for page access
+    i.singleton<SettingsStore>(() => i.get<SettingsStore>());
   }
 }

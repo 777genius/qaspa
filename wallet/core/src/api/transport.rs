@@ -249,12 +249,14 @@ impl WalletServer {
                 }
             }
 
-            task_ctl_sender.send(()).await.unwrap();
+            task_ctl_sender.send(()).await.ok();
         });
     }
 
     pub async fn stop_task(&self) -> Result<()> {
-        self.task_ctl.signal(()).await.expect("Wallet::stop_task() `signal` error");
+        if let Err(err) = self.task_ctl.signal(()).await {
+            log_warn!("Wallet::stop_task() `signal` error: {err}");
+        }
         Ok(())
     }
 }

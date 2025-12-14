@@ -1,8 +1,10 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case to send a stealth (private) payment.
 ///
 /// Uses standard transaction sending for stealth accounts.
+@injectable
 class SendStealthPaymentUseCase {
   final TransactionRepository _transactionRepository;
 

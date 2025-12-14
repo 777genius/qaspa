@@ -11,7 +11,7 @@ use kaspa_notify::subscription::{MutationPolicies, UtxosChangedMutationPolicy};
 use kaspa_rpc_core::api::ctl::RpcCtl;
 use kaspa_rpc_core::{api::connection::DynRpcConnection, api::rpc::RpcApi, *};
 use kaspa_rpc_core::{notify::connection::ChannelConnection, RpcResult};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub type RpcCoreNotifier = Notifier<Notification, ChannelConnection>;
 
@@ -25,6 +25,7 @@ pub struct RpcCoreMock {
     ctl: RpcCtl,
     core_notifier: Arc<RpcCoreNotifier>,
     _sync_receiver: Receiver<()>,
+    fee_estimate: Mutex<Option<RpcFeeEstimate>>,
 }
 
 impl RpcCoreMock {
@@ -41,7 +42,7 @@ impl RpcCoreMock {
             policies,
             Some(sync_sender),
         ));
-        Self { core_notifier, _sync_receiver: sync_receiver, ctl: RpcCtl::new() }
+        Self { core_notifier, _sync_receiver: sync_receiver, ctl: RpcCtl::new(), fee_estimate: Mutex::new(None) }
     }
 
     pub fn core_notifier(&self) -> Arc<RpcCoreNotifier> {
@@ -71,6 +72,10 @@ impl RpcCoreMock {
 
     pub fn ctl(&self) -> RpcCtl {
         self.ctl.clone()
+    }
+
+    pub fn mock_set_fee_estimate(&self, estimate: RpcFeeEstimate) {
+        *self.fee_estimate.lock().unwrap() = Some(estimate);
     }
 }
 
@@ -384,7 +389,8 @@ impl RpcApi for RpcCoreMock {
         _connection: Option<&DynRpcConnection>,
         _request: GetFeeEstimateRequest,
     ) -> RpcResult<GetFeeEstimateResponse> {
-        Err(RpcError::NotImplemented)
+        let estimate = self.fee_estimate.lock().unwrap().clone().ok_or(RpcError::NotImplemented)?;
+        Ok(GetFeeEstimateResponse { estimate })
     }
 
     async fn get_fee_estimate_experimental_call(

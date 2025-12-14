@@ -269,16 +269,6 @@ mixin _$StealthStore on _StealthStoreBase, Store {
     return _$scanForPaymentsAsyncAction.run(() => super.scanForPayments());
   }
 
-  late final _$_loadTransactionsAsyncAction = AsyncAction(
-    '_StealthStoreBase._loadTransactions',
-    context: context,
-  );
-
-  @override
-  Future<void> _loadTransactions() {
-    return _$_loadTransactionsAsyncAction.run(() => super._loadTransactions());
-  }
-
   late final _$sendStealthPaymentAsyncAction = AsyncAction(
     '_StealthStoreBase.sendStealthPayment',
     context: context,

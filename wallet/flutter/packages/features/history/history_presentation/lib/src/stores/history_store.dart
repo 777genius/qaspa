@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:mobx/mobx.dart';
 import 'package:history_domain/history_domain.dart';
+import 'package:injectable/injectable.dart';
+import 'package:mobx/mobx.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 part 'history_store.g.dart';
 
 /// MobX store for history feature state management.
+@lazySingleton
 class HistoryStore = _HistoryStoreBase with _$HistoryStore;
 
 abstract class _HistoryStoreBase with Store {

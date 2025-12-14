@@ -8,21 +8,23 @@ import '../services/bip39_wordlist_service.dart';
 ///
 /// Used in the wallet creation flow to verify that the user has
 /// correctly written down their seed phrase.
-@Injectable()
+@injectable
 class VerifyMnemonicUseCase {
   final Bip39WordlistService _wordlistService;
 
-  /// Number of words to verify (default 3)
-  final int challengeCount;
+  /// Number of words to verify
+  static const int defaultChallengeCount = 3;
 
-  /// Number of options per challenge (default 4)
+  /// Number of options per challenge
+  static const int defaultOptionsPerChallenge = 4;
+
+  final int challengeCount;
   final int optionsPerChallenge;
 
   VerifyMnemonicUseCase(
-    this._wordlistService, {
-    this.challengeCount = 3,
-    this.optionsPerChallenge = 4,
-  });
+    this._wordlistService,
+  )   : challengeCount = defaultChallengeCount,
+        optionsPerChallenge = defaultOptionsPerChallenge;
 
   /// Generate verification challenges for a mnemonic.
   ///

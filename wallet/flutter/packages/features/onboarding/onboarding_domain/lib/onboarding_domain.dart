@@ -1,6 +1,9 @@
 /// Onboarding domain layer - use cases and entities for wallet creation/import
 library onboarding_domain;
 
+// DI
+export 'di/onboarding_domain_injectable.dart';
+
 // Entities
 export 'src/entities/mnemonic_verification.dart';
 

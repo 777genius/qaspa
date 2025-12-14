@@ -144,7 +144,7 @@ impl IbdFlow {
                 self.sync_headers(
                     &session,
                     negotiation_output.syncer_virtual_selected_parent,
-                    negotiation_output.highest_known_syncer_chain_hash.unwrap(),
+                    negotiation_output.highest_known_syncer_chain_hash.ok_or(ProtocolError::Other("peer has no known block"))?,
                     &relay_block,
                 )
                 .await?;
@@ -154,7 +154,10 @@ impl IbdFlow {
                 let staging = self.ctx.consensus_manager.new_staging_consensus();
                 match self.ibd_with_headers_proof(&staging, negotiation_output.syncer_virtual_selected_parent, &relay_block).await {
                     Ok(()) => {
-                        spawn_blocking(|| staging.commit()).await.unwrap();
+                        if let Err(err) = spawn_blocking(|| staging.commit()).await {
+                            warn!("staging.commit join error: {err}");
+                            return Err(ProtocolError::OtherOwned(format!("staging.commit join error: {err}")));
+                        }
                         info!(
                             "Header download stage of IBD with headers proof completed successfully from {}. Committed staging consensus.",
                                     self.router
@@ -278,7 +281,7 @@ impl IbdFlow {
             return Err(ProtocolError::Other("peer is in a finality conflict with the local pruning point"));
         }
 
-        let hst_header = consensus.async_get_header(consensus.async_get_headers_selected_tip().await).await.unwrap();
+        let hst_header = consensus.async_get_header(consensus.async_get_headers_selected_tip().await).await?;
         let pruning_depth = self.ctx.config.pruning_depth().after();
         if relay_header.blue_score >= hst_header.blue_score + pruning_depth && relay_header.blue_work > hst_header.blue_work {
             let finality_duration_in_milliseconds = self.ctx.config.finality_duration_in_milliseconds().after();
@@ -316,7 +319,9 @@ impl IbdFlow {
         // to ensure that  we will locally have sufficient headers on top of  the syncer's pruning point
         let syncer_pp = negotiation_output.syncer_pruning_point;
         let syncer_sink = negotiation_output.syncer_virtual_selected_parent;
-        self.sync_headers(consensus, syncer_sink, negotiation_output.highest_known_syncer_chain_hash.unwrap(), relay_block).await?;
+        let highest_known_syncer_chain_hash =
+            negotiation_output.highest_known_syncer_chain_hash.ok_or(ProtocolError::Other("peer has no known block"))?;
+        self.sync_headers(consensus, syncer_sink, highest_known_syncer_chain_hash, relay_block).await?;
 
         // This function's main effect is to confirm the syncer's pruning point can be finalized into the consensus, and to update
         // all the relevant stores
@@ -327,7 +332,7 @@ impl IbdFlow {
         // and is the head of a pruning points "chain" leading all the way down to genesis
         // TODO(relaxed): once the catchup functionality has sufficiently matured, consider only doing this test if sanity checks are enabled
         info!("validating pruning points consistency");
-        consensus.async_validate_pruning_points(syncer_sink).await.unwrap();
+        consensus.async_validate_pruning_points(syncer_sink).await?;
         info!("pruning points consistency validated");
         Ok(())
     }
@@ -620,8 +625,8 @@ impl IbdFlow {
     ) -> Result<(), ProtocolError> {
         // The purpose of this check is to prevent the potential abuse explained here:
         // https://github.com/kaspanet/research/issues/3#issuecomment-895243792
-        let staging_hst = staging_consensus.async_get_header(staging_consensus.async_get_headers_selected_tip().await).await.unwrap();
-        let current_hst = consensus.async_get_header(consensus.async_get_headers_selected_tip().await).await.unwrap();
+        let staging_hst = staging_consensus.async_get_header(staging_consensus.async_get_headers_selected_tip().await).await?;
+        let current_hst = consensus.async_get_header(consensus.async_get_headers_selected_tip().await).await?;
         // If staging is behind current or within 10 minutes ahead of it, then something is wrong and we reject the IBD
         if staging_hst.timestamp < current_hst.timestamp || staging_hst.timestamp - current_hst.timestamp < 600_000 {
             Err(ProtocolError::OtherOwned(format!(

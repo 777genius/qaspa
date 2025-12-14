@@ -1,6 +1,7 @@
 /// Stealth feature domain layer for privacy transactions.
 library stealth_domain;
 
+export 'di/stealth_domain_injectable.dart';
 export 'src/usecases/get_stealth_address_usecase.dart';
 export 'src/usecases/get_stealth_balance_usecase.dart';
 export 'src/usecases/get_stealth_transactions_usecase.dart';

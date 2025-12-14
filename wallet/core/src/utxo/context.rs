@@ -270,7 +270,12 @@ impl UtxoContext {
     }
 
     pub(crate) async fn notify_outgoing_transaction(&self, pending_tx: &PendingTransaction) -> Result<()> {
-        let outgoing_tx = self.processor().outgoing().get(&pending_tx.id()).expect("outgoing transaction for notification");
+        let outgoing_tx = self
+            .processor()
+            .outgoing()
+            .get(&pending_tx.id())
+            .map(|x| x.clone())
+            .ok_or_else(|| Error::Custom(format!("Outgoing transaction not found for {}", pending_tx.id())))?;
 
         if pending_tx.is_batch() {
             let record = TransactionRecord::new_batch(self, &outgoing_tx, None)?;
@@ -290,7 +295,10 @@ impl UtxoContext {
 
         let mut context = self.context();
 
-        let outgoing_transaction = context.outgoing.remove(&pending_tx.id()).expect("outgoing transaction");
+        let Some(outgoing_transaction) = context.outgoing.remove(&pending_tx.id()) else {
+            log_warn!("cancel_outgoing_transaction: outgoing transaction {} not found in context", pending_tx.id());
+            return Ok(());
+        };
         outgoing_transaction.utxo_entries().iter().for_each(|(_, entry)| {
             context.mature.push(entry.clone());
         });

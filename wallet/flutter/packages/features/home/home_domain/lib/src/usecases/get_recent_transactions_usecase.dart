@@ -1,6 +1,8 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case for getting recent transactions.
+@injectable
 class GetRecentTransactionsUseCase {
   final TransactionRepository _transactionRepository;
 

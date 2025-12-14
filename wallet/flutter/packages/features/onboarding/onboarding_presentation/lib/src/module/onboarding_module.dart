@@ -16,46 +16,20 @@ class OnboardingModule extends Module {
 
   @override
   void binds(Binder i) {
-    // Auto-register services without parent dependencies via injectable
+    // Register domain use cases (with auto parent scope resolution)
+    ModularityInjectableBridge.configureInternal(
+      i,
+      configureOnboardingDomainDependencies,
+    );
+
+    // Register presentation layer (OnboardingStore)
     ModularityInjectableBridge.configureInternal(i, configureOnboardingDependencies);
-
-    // Use cases with parent dependencies (manual registration)
-    i.factory<GenerateMnemonicUseCase>(
-      () => GenerateMnemonicUseCase(
-        walletRepository: i.parent<WalletRepository>(),
-      ),
-    );
-
-    i.factory<CreateWalletUseCase>(
-      () => CreateWalletUseCase(
-        walletRepository: i.parent<WalletRepository>(),
-      ),
-    );
-
-    i.factory<ImportWalletUseCase>(
-      () => ImportWalletUseCase(
-        walletRepository: i.parent<WalletRepository>(),
-        wordlistService: i.get<Bip39WordlistService>(),
-      ),
-    );
   }
 
   @override
   void exports(Binder i) {
-    // OnboardingStore (public - for UI)
-    i.singleton<OnboardingStore>(
-      () => OnboardingStore(
-        generateMnemonicUseCase: i.get<GenerateMnemonicUseCase>(),
-        validateMnemonicUseCase: i.get<ValidateMnemonicUseCase>(),
-        verifyMnemonicUseCase: i.get<VerifyMnemonicUseCase>(),
-        createWalletUseCase: i.get<CreateWalletUseCase>(),
-        importWalletUseCase: i.get<ImportWalletUseCase>(),
-        wordlistService: i.get<Bip39WordlistService>(),
-      ),
-    );
-
-    // Bip39WordlistService is already registered via injectable in binds()
-    // and can be accessed via i.get<Bip39WordlistService>() from bindings
+    // Export OnboardingStore for page access
+    i.singleton<OnboardingStore>(() => i.get<OnboardingStore>());
   }
 
   @override

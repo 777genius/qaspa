@@ -217,6 +217,18 @@ mixin _$SettingsStore on _SettingsStoreBase, Store {
   }
 
   @override
+  void onAppPaused() {
+    final _$actionInfo = _$_SettingsStoreBaseActionController.startAction(
+      name: '_SettingsStoreBase.onAppPaused',
+    );
+    try {
+      return super.onAppPaused();
+    } finally {
+      _$_SettingsStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
   void clearMessages() {
     final _$actionInfo = _$_SettingsStoreBaseActionController.startAction(
       name: '_SettingsStoreBase.clearMessages',

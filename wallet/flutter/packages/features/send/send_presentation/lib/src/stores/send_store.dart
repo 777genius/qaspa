@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:injectable/injectable.dart';
 import 'package:mobx/mobx.dart';
 import 'package:send_domain/send_domain.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -8,6 +9,7 @@ import 'package:wallet_domain/wallet_domain.dart';
 part 'send_store.g.dart';
 
 /// MobX store for send feature state management.
+@lazySingleton
 class SendStore = _SendStoreBase with _$SendStore;
 
 abstract class _SendStoreBase with Store {

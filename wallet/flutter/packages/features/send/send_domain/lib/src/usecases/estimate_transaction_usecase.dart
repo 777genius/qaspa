@@ -1,6 +1,8 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case for estimating transaction fees.
+@injectable
 class EstimateTransactionUseCase {
   final TransactionRepository _transactionRepository;
 

@@ -1,3 +1,4 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case for creating a new wallet with a previously generated mnemonic.
@@ -6,6 +7,7 @@ import 'package:wallet_domain/wallet_domain.dart';
 /// 1. Generating mnemonic (GenerateMnemonicUseCase)
 /// 2. User backup (BackupMnemonicPage)
 /// 3. Verification (VerifyMnemonicUseCase)
+@injectable
 class CreateWalletUseCase {
   final WalletRepository _walletRepository;
 

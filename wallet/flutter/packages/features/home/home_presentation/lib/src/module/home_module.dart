@@ -21,39 +21,19 @@ class HomeModule extends Module {
 
   @override
   void binds(Binder i) {
-    // Auto-register services without parent dependencies via injectable
+    // Register domain use cases (with auto parent scope resolution)
+    ModularityInjectableBridge.configureInternal(
+      i,
+      configureHomeDomainDependencies,
+    );
+
+    // Register presentation layer (HomeStore)
     ModularityInjectableBridge.configureInternal(i, configureHomeDependencies);
-
-    // Use cases with parent dependencies (manual registration)
-    i.factory<GetBalanceUseCase>(
-      () => GetBalanceUseCase(
-        accountRepository: i.parent<AccountRepository>(),
-      ),
-    );
-
-    i.factory<GetRecentTransactionsUseCase>(
-      () => GetRecentTransactionsUseCase(
-        transactionRepository: i.parent<TransactionRepository>(),
-      ),
-    );
-
-    i.factory<WatchBalanceUseCase>(
-      () => WatchBalanceUseCase(
-        accountRepository: i.parent<AccountRepository>(),
-      ),
-    );
   }
 
   @override
   void exports(Binder i) {
-    // HomeStore (singleton - one per module lifecycle)
-    // Note: dispose() should be called manually when module scope is destroyed
-    i.singleton<HomeStore>(
-      () => HomeStore(
-        getBalanceUseCase: i.get<GetBalanceUseCase>(),
-        getRecentTransactionsUseCase: i.get<GetRecentTransactionsUseCase>(),
-        watchBalanceUseCase: i.get<WatchBalanceUseCase>(),
-      ),
-    );
+    // Export HomeStore for page access
+    i.singleton<HomeStore>(() => i.get<HomeStore>());
   }
 }

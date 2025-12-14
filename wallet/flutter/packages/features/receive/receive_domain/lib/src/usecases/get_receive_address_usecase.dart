@@ -1,6 +1,8 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case to get current receive address for an account.
+@injectable
 class GetReceiveAddressUseCase {
   final AccountRepository _accountRepository;
 

@@ -13,31 +13,19 @@ class ReceiveModule extends Module {
 
   @override
   void binds(Binder i) {
-    // Auto-register services without parent dependencies via injectable
+    // Register domain use cases (with auto parent scope resolution)
+    ModularityInjectableBridge.configureInternal(
+      i,
+      configureReceiveDomainDependencies,
+    );
+
+    // Register presentation layer (ReceiveStore)
     ModularityInjectableBridge.configureInternal(i, configureReceiveDependencies);
-
-    // Use cases with parent dependencies (manual registration)
-    i.factory<GetReceiveAddressUseCase>(
-      () => GetReceiveAddressUseCase(
-        accountRepository: i.parent<AccountRepository>(),
-      ),
-    );
-
-    i.factory<GenerateNewAddressUseCase>(
-      () => GenerateNewAddressUseCase(
-        accountRepository: i.parent<AccountRepository>(),
-      ),
-    );
   }
 
   @override
   void exports(Binder i) {
-    // Note: dispose() should be called manually when module scope is destroyed
-    i.singleton<ReceiveStore>(
-      () => ReceiveStore(
-        getReceiveAddressUseCase: i.get<GetReceiveAddressUseCase>(),
-        generateNewAddressUseCase: i.get<GenerateNewAddressUseCase>(),
-      ),
-    );
+    // Export ReceiveStore for page access
+    i.singleton<ReceiveStore>(() => i.get<ReceiveStore>());
   }
 }

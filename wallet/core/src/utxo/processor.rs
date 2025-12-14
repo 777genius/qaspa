@@ -193,11 +193,11 @@ impl UtxoProcessor {
     }
 
     pub fn rpc_url(&self) -> Option<String> {
-        self.rpc_ctl().descriptor()
+        self.try_rpc_ctl().and_then(|ctl| ctl.descriptor())
     }
 
     pub fn rpc_client(&self) -> Option<Arc<KaspaRpcClient>> {
-        self.rpc_api().clone().downcast_arc::<KaspaRpcClient>().ok()
+        self.try_rpc_api().and_then(|api| api.downcast_arc::<KaspaRpcClient>().ok())
     }
 
     pub async fn bind_rpc(&self, rpc: Option<Rpc>) -> Result<()> {
@@ -1021,7 +1021,7 @@ impl UtxoProcessor {
 
     pub async fn start_metrics(&self) -> Result<()> {
         self.inner.metrics.start_task().await?;
-        self.inner.metrics.bind_rpc(Some(self.rpc_api().clone()));
+        self.inner.metrics.bind_rpc(self.try_rpc_api());
 
         Ok(())
     }
@@ -1038,8 +1038,11 @@ impl UtxoProcessor {
         if this.inner.task_is_running.load(Ordering::SeqCst) {
             return Err(Error::custom("UtxoProcessor::start() called while task is already running"));
         }
+        let Some(rpc_ctl) = this.try_rpc_ctl() else {
+            return Err(Error::custom("UtxoProcessor RPC not initialized"));
+        };
         this.inner.task_is_running.store(true, Ordering::SeqCst);
-        let rpc_ctl_channel = this.rpc_ctl().multiplexer().channel();
+        let rpc_ctl_channel = rpc_ctl.multiplexer().channel();
         let task_ctl_receiver = self.inner.task_ctl.request.receiver.clone();
         let task_ctl_sender = self.inner.task_ctl.response.sender.clone();
         let notification_receiver = self.inner.notification_channel.receiver.clone();
@@ -1047,7 +1050,7 @@ impl UtxoProcessor {
         // handle power up on an already connected rpc channel
         // clients relying on UtxoProcessor state should monitor
         // for and handle `UtxoProcStart` and `UtxoProcStop` events.
-        if this.rpc_ctl().is_connected() {
+        if rpc_ctl.is_connected() {
             this.handle_connect().await.unwrap_or_else(|err| log_error!("{err}"));
         }
 
@@ -1062,18 +1065,26 @@ impl UtxoProcessor {
                                 match msg {
                                     RpcState::Connected => {
                                         if !this.is_connected() && this.handle_connect().await.is_ok() {
-                                            this.inner.multiplexer.try_broadcast(Box::new(Events::Connect {
-                                                network_id : this.network_id().expect("network id expected during connection"),
-                                                url : this.rpc_url()
-                                            })).unwrap_or_else(|err| log_error!("{err}"));
+                                            if let Ok(network_id) = this.network_id() {
+                                                this.inner
+                                                    .multiplexer
+                                                    .try_broadcast(Box::new(Events::Connect { network_id, url: this.rpc_url() }))
+                                                    .unwrap_or_else(|err| log_error!("{err}"));
+                                            } else {
+                                                log_warn!("UtxoProcessor missing network id during connection; Connect event skipped");
+                                            }
                                         }
                                     },
                                     RpcState::Disconnected => {
                                         if this.is_connected() {
-                                            this.inner.multiplexer.try_broadcast(Box::new(Events::Disconnect {
-                                                network_id : this.network_id().expect("network id expected during connection"),
-                                                url : this.rpc_url()
-                                            })).unwrap_or_else(|err| log_error!("{err}"));
+                                            if let Ok(network_id) = this.network_id() {
+                                                this.inner
+                                                    .multiplexer
+                                                    .try_broadcast(Box::new(Events::Disconnect { network_id, url: this.rpc_url() }))
+                                                    .unwrap_or_else(|err| log_error!("{err}"));
+                                            } else {
+                                                log_warn!("UtxoProcessor missing network id during disconnect; Disconnect event skipped");
+                                            }
                                             this.handle_disconnect().await.unwrap_or_else(|err| log_error!("{err}"));
                                         }
                                     }
@@ -1118,7 +1129,7 @@ impl UtxoProcessor {
             }
 
             this.inner.task_is_running.store(false, Ordering::SeqCst);
-            task_ctl_sender.send(()).await.unwrap();
+            task_ctl_sender.send(()).await.ok();
         });
         Ok(())
     }
@@ -1126,7 +1137,9 @@ impl UtxoProcessor {
     pub async fn stop(&self) -> Result<()> {
         if self.inner.task_is_running.load(Ordering::SeqCst) {
             self.inner.sync_proc.stop().await?;
-            self.inner.task_ctl.signal(()).await.expect("UtxoProcessor::stop_task() `signal` error");
+            if let Err(err) = self.inner.task_ctl.signal(()).await {
+                log_warn!("UtxoProcessor::stop_task() `signal` error: {err}");
+            }
         }
         Ok(())
     }
@@ -1158,12 +1171,24 @@ impl UtxoProcessor {
             loop {
                 select_biased! {
                     _ = interval.next().fuse() => {
-                        if let Ok(fee_rate) = this.rpc_api().get_fee_estimate().await {
+                        let Some(rpc_api) = this.try_rpc_api() else {
+                            log_warn!("Fee rate poller tick while RPC is not initialized");
+                            continue;
+                        };
+                        if let Ok(fee_rate) = rpc_api.get_fee_estimate().await {
                             let RpcFeeEstimate { priority_bucket, normal_buckets, low_buckets } = fee_rate;
+                            let Some(normal_bucket) = normal_buckets.first().copied() else {
+                                log_warn!("Fee rate poller received empty normal_buckets");
+                                continue;
+                            };
+                            let Some(low_bucket) = low_buckets.first().copied() else {
+                                log_warn!("Fee rate poller received empty low_buckets");
+                                continue;
+                            };
                             this.notify(Events::FeeRate {
                                 priority : priority_bucket.into(),
-                                normal : normal_buckets.first().expect("missing normal feerate bucket").into(),
-                                low : low_buckets.first().expect("missing normal feerate bucket").into()
+                                normal : normal_bucket.into(),
+                                low : low_bucket.into()
                             }).await.ok();
                         }
                     },
@@ -1173,7 +1198,8 @@ impl UtxoProcessor {
                 }
             }
 
-            fee_rate_task_ctl_sender.send(()).await.unwrap();
+            this.inner.fee_rate_task_is_running.store(false, Ordering::SeqCst);
+            fee_rate_task_ctl_sender.send(()).await.ok();
         });
 
         Ok(())
@@ -1181,7 +1207,9 @@ impl UtxoProcessor {
 
     pub async fn stop_fee_rate_poller(&self) -> Result<()> {
         if self.inner.fee_rate_task_is_running.load(Ordering::SeqCst) {
-            self.inner.fee_rate_task_ctl.signal(()).await.expect("UtxoProcessor::stop_task() `signal` error");
+            if let Err(err) = self.inner.fee_rate_task_ctl.signal(()).await {
+                log_warn!("UtxoProcessor::stop_fee_rate_poller() `signal` error: {err}");
+            }
         }
         Ok(())
     }

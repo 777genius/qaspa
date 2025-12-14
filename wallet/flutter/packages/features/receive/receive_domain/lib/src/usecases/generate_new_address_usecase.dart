@@ -1,6 +1,8 @@
+import 'package:injectable/injectable.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
 /// Use case to generate a new receive address.
+@injectable
 class GenerateNewAddressUseCase {
   final AccountRepository _accountRepository;
 

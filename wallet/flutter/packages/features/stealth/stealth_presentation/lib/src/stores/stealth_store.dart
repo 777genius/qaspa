@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:injectable/injectable.dart';
 import 'package:mobx/mobx.dart';
 import 'package:stealth_domain/stealth_domain.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -7,6 +8,7 @@ import 'package:wallet_domain/wallet_domain.dart';
 part 'stealth_store.g.dart';
 
 /// MobX store for stealth feature state management.
+@lazySingleton
 class StealthStore = _StealthStoreBase with _$StealthStore;
 
 abstract class _StealthStoreBase with Store {

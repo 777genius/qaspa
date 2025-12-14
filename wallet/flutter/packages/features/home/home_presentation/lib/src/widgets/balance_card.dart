@@ -33,7 +33,7 @@ class BalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
-            balance?.formatted ?? '0.00 KAS',
+            '${balance?.formatAvailable() ?? '0.00'} KAS',
             style: theme.textTheme.headlineLarge?.copyWith(
               color: theme.colorScheme.onPrimary,
               fontWeight: FontWeight.bold,

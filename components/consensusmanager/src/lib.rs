@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use kaspa_consensus_core::api::{ConsensusApi, DynConsensus};
-use kaspa_core::{core::Core, debug, service::Service};
+use kaspa_core::{core::Core, debug, service::Service, warn};
 use parking_lot::RwLock;
 use std::{collections::VecDeque, ops::Deref, sync::Arc, thread::JoinHandle};
 
@@ -220,7 +220,16 @@ impl StagingConsensus {
     pub fn cancel(self) {
         self.staging.ctl.stop();
         for handle in self.handles {
-            handle.join().unwrap();
+            if let Err(err) = handle.join() {
+                let msg = if let Some(s) = err.as_ref().downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = err.as_ref().downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic payload".to_string()
+                };
+                warn!("[Consensus manager] staging consensus thread panicked during cancel: {msg}");
+            }
         }
         // Drop staging (and DB refs therein) so that the delete operation below succeeds
         drop(self.staging);

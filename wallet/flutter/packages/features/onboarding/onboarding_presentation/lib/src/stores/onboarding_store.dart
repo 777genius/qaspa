@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:injectable/injectable.dart';
 import 'package:mobx/mobx.dart';
 import 'package:onboarding_domain/onboarding_domain.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -7,6 +8,7 @@ import 'package:wallet_domain/wallet_domain.dart';
 part 'onboarding_store.g.dart';
 
 /// MobX store for managing onboarding flow state.
+@lazySingleton
 class OnboardingStore = _OnboardingStoreBase with _$OnboardingStore;
 
 abstract class _OnboardingStoreBase with Store {

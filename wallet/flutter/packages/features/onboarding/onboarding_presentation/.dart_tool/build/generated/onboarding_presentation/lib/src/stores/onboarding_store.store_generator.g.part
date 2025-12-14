@@ -525,6 +525,18 @@ mixin _$OnboardingStore on _OnboardingStoreBase, Store {
   }
 
   @override
+  void clearSensitiveData() {
+    final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
+      name: '_OnboardingStoreBase.clearSensitiveData',
+    );
+    try {
+      return super.clearSensitiveData();
+    } finally {
+      _$_OnboardingStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
   void goBack() {
     final _$actionInfo = _$_OnboardingStoreBaseActionController.startAction(
       name: '_OnboardingStoreBase.goBack',
