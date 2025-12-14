@@ -19,6 +19,36 @@ class App extends StatelessWidget {
     final router = GoRouter(
       initialLocation: OnboardingRoutes.welcome,
       observers: [Modularity.observer],
+      errorBuilder: (context, state) => Scaffold(
+        appBar: AppBar(title: const Text('Page Not Found')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Page not found',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                state.uri.toString(),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () => context.go(HomeRoutes.main),
+                child: const Text('Go Home'),
+              ),
+            ],
+          ),
+        ),
+      ),
       routes: [
         ...OnboardingRoutes.routes(
           onComplete: () => _navigateToHome(context),

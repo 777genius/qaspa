@@ -298,6 +298,9 @@ impl Wallet {
         let guard = guard_handle.lock().await;
         let anchors = self.list_master_accounts().await?;
         let anchor_bytes = if let Some(hex) = master_anchor {
+            if hex.len() != 64 {
+                return Err(Error::Custom("anchor must be 32 bytes".to_string()));
+            }
             let bytes = Vec::from_hex(&hex).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
             let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
             anchor
@@ -713,9 +716,11 @@ impl Wallet {
     }
 
     async fn save_delegations(&self, wallet_secret: &Secret) -> Result<()> {
-        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
-            if let Ok(network_id) = self.network_id() {
-                self.delegation_store().save_to_storage(&wallet_folder, network_id, wallet_secret).await?;
+        if let Ok(descriptor) = self.store().location() {
+            if let Some(wallet_folder) = descriptor.data_root() {
+                if let Ok(network_id) = self.network_id() {
+                    self.delegation_store().save_to_storage(&wallet_folder, network_id, wallet_secret).await?;
+                }
             }
         }
         Ok(())
@@ -730,29 +735,33 @@ impl Wallet {
     }
 
     async fn save_delegation_request(&self, request: &MasterDelegationRequestBodyV1) -> Result<()> {
-        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
-            if let Ok(network_id) = self.network_id() {
-                let path = Self::delegation_request_path(&wallet_folder, network_id, &request.request_id);
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent).await?;
+        if let Ok(descriptor) = self.store().location() {
+            if let Some(wallet_folder) = descriptor.data_root() {
+                if let Ok(network_id) = self.network_id() {
+                    let path = Self::delegation_request_path(&wallet_folder, network_id, &request.request_id);
+                    if let Some(parent) = path.parent() {
+                        fs::create_dir_all(parent).await?;
+                    }
+                    let json =
+                        serde_json::to_vec_pretty(request).map_err(|e| Error::Custom(format!("serialize delegation request: {e}")))?;
+                    fs::write(&path, json.as_slice()).await?;
                 }
-                let json =
-                    serde_json::to_vec_pretty(request).map_err(|e| Error::Custom(format!("serialize delegation request: {e}")))?;
-                fs::write(&path, json.as_slice()).await?;
             }
         }
         Ok(())
     }
 
     pub async fn load_cached_master_delegation_request(&self, request_id: &[u8; 32]) -> Result<Option<MasterDelegationRequestBodyV1>> {
-        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
-            if let Ok(network_id) = self.network_id() {
-                let path = Self::delegation_request_path(&wallet_folder, network_id, request_id);
-                if fs::exists(&path).await? {
-                    let data = fs::read(&path).await?;
-                    let request =
-                        serde_json::from_slice(&data).map_err(|e| Error::Custom(format!("read cached delegation request: {e}")))?;
-                    return Ok(Some(request));
+        if let Ok(descriptor) = self.store().location() {
+            if let Some(wallet_folder) = descriptor.data_root() {
+                if let Ok(network_id) = self.network_id() {
+                    let path = Self::delegation_request_path(&wallet_folder, network_id, request_id);
+                    if fs::exists(&path).await? {
+                        let data = fs::read(&path).await?;
+                        let request = serde_json::from_slice(&data)
+                            .map_err(|e| Error::Custom(format!("read cached delegation request: {e}")))?;
+                        return Ok(Some(request));
+                    }
                 }
             }
         }
@@ -914,9 +923,11 @@ impl Wallet {
         }
 
         // Load delegations storage (best-effort; ignore if storage is non-internal)
-        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.store().location() {
-            if let Ok(network_id) = self.network_id() {
-                let _ = self.delegation_store().load_from_storage(&wallet_folder, network_id, wallet_secret).await;
+        if let Ok(descriptor) = self.store().location() {
+            if let Some(wallet_folder) = descriptor.data_root() {
+                if let Ok(network_id) = self.network_id() {
+                    let _ = self.delegation_store().load_from_storage(&wallet_folder, network_id, wallet_secret).await;
+                }
             }
         }
 

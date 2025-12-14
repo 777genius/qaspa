@@ -727,6 +727,76 @@ async fn test_mldsa_delegation_revocation_propagates() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mldsa_delegation_revocation_orphans_existing_utxos() {
+    let env = StealthTestEnv::new().await;
+    env.daemon.rpc_core_service().set_delegation_provider(Arc::new(WalletDelegationProvider { wallet: env.wallet.clone() }));
+    let wallet = env.wallet.clone();
+
+    env.mine_blocks(env.coinbase_maturity + 12).await;
+
+    let (anchor_bytes, master_account_id) = create_master_account(&env, &wallet).await;
+    register_anchor(&env, anchor_bytes).await;
+    activate_account(&wallet, &master_account_id).await;
+    unlock_master_account(&env, &wallet, &master_account_id).await;
+
+    let stealth_account = env.create_stealth_account("delegated-revoke-orphan").await;
+    stealth_account.unlock(&env.wallet_secret, None).await.expect("unlock stealth");
+    stealth_account.clone().connect().await.expect("connect stealth");
+    attach_stealth_to_master(&wallet, &env.wallet_secret, stealth_account.id(), &master_account_id).await;
+
+    let current_daa = env.rpc_client.get_server_info().await.expect("server info").virtual_daa_score;
+    let delegation_id = wallet
+        .link_stealth_to_master(&env.wallet_secret, *stealth_account.id(), anchor_bytes, 0, Some(current_daa + 50_000))
+        .await
+        .expect("delegation");
+
+    // Fund the delegated stealth account
+    let send_amount = 2_000_000_000u64;
+    let (_, outpoint) = env.send_to_stealth(send_amount, stealth_account.stealth_address()).await;
+    env.mine_blocks(2).await;
+
+    wait_for(
+        200,
+        100,
+        || {
+            let acc = stealth_account.clone();
+            let op = outpoint;
+            async move { acc.ephemeral_keys().contains(&op) }
+        },
+        "delegated stealth UTXO not detected",
+    )
+    .await;
+
+    let entry =
+        stealth_account.ephemeral_keys().entries().into_iter().find(|e| e.outpoint == outpoint).expect("ephemeral entry missing");
+    assert_eq!(entry.delegation_id, Some(delegation_id.0), "delegation id should be stored on entry");
+    assert_eq!(entry.master_anchor, Some(anchor_bytes), "master anchor should be stored on entry");
+
+    // Revoke delegation and advance DAA to trigger on_daa_score_changed
+    wallet.revoke_delegation(&env.wallet_secret, delegation_id).await.expect("revoke");
+    env.mine_blocks(1).await;
+
+    wait_for(
+        200,
+        100,
+        || {
+            let acc = stealth_account.clone();
+            let op = outpoint;
+            async move {
+                matches!(
+                    acc.ephemeral_keys().status(&op),
+                    Some(EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationRevoked })
+                )
+            }
+        },
+        "delegated stealth UTXO not orphaned after revocation",
+    )
+    .await;
+
+    env.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mldsa_delegation_expiry_emits_event_and_orphans() {
     let env = StealthTestEnv::new().await;
     env.daemon.rpc_core_service().set_delegation_provider(Arc::new(WalletDelegationProvider { wallet: env.wallet.clone() }));

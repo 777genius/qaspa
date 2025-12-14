@@ -11,6 +11,8 @@ import '../stores/onboarding_store.dart';
 /// Provides OnboardingStore and BIP-39 wordlist service for the onboarding flow.
 /// Requires WalletRepository from parent scope.
 class OnboardingModule extends Module {
+  OnboardingStore? _store;
+
   @override
   List<Type> get expects => [WalletRepository];
 
@@ -28,12 +30,14 @@ class OnboardingModule extends Module {
 
   @override
   void exports(Binder i) {
-    // Export OnboardingStore for page access
-    i.singleton<OnboardingStore>(() => i.get<OnboardingStore>());
+    // Export OnboardingStore for page access and keep reference for dispose
+    _store = i.get<OnboardingStore>();
+    i.singleton<OnboardingStore>(() => _store!);
   }
 
   @override
   void onDispose() {
-    // Reset store state when module is disposed
+    _store?.dispose();
+    _store = null;
   }
 }

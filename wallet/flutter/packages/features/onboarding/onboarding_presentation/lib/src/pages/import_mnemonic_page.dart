@@ -71,7 +71,12 @@ class _ImportMnemonicPageState extends State<ImportMnemonicPage> {
               child: FilledButton(
                 onPressed: store.canProceedFromImport
                     ? () async {
-                        await store.validateImportedMnemonic();
+                        try {
+                          await store.validateImportedMnemonic();
+                        } catch (_) {
+                          // Store handles error message display
+                          return;
+                        }
                         if (!mounted) return;
                         if (store.errorMessage == null) {
                           widget.onContinue();

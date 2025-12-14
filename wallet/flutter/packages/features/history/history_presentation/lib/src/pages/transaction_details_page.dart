@@ -42,6 +42,18 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
   }
 
   @override
+  void dispose() {
+    // Clear selected transaction when leaving details page
+    try {
+      final store = ModuleProvider.of(context).get<HistoryStore>();
+      store.clearSelectedTransaction();
+    } catch (_) {
+      // Module may already be disposed
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final store = ModuleProvider.of(context).get<HistoryStore>();
 
@@ -138,11 +150,16 @@ class _DetailCard extends StatelessWidget {
                 if (copyable)
                   IconButton(
                     icon: const Icon(Icons.copy, size: 20),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: value));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Copied to clipboard')),
-                      );
+                    onPressed: () async {
+                      try {
+                        await Clipboard.setData(ClipboardData(text: value));
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Copied to clipboard')),
+                        );
+                      } catch (_) {
+                        // Clipboard operation failed silently
+                      }
                     },
                   ),
               ],

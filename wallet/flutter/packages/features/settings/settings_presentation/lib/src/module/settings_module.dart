@@ -8,6 +8,8 @@ import '../stores/settings_store.dart';
 
 /// Modularity module for settings feature.
 class SettingsModule extends Module {
+  SettingsStore? _store;
+
   @override
   List<Type> get expects => [WalletRepository];
 
@@ -25,7 +27,14 @@ class SettingsModule extends Module {
 
   @override
   void exports(Binder i) {
-    // Export SettingsStore for page access
-    i.singleton<SettingsStore>(() => i.get<SettingsStore>());
+    // Export SettingsStore for page access and keep reference for dispose
+    _store = i.get<SettingsStore>();
+    i.singleton<SettingsStore>(() => _store!);
+  }
+
+  @override
+  void onDispose() {
+    _store?.dispose();
+    _store = null;
   }
 }

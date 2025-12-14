@@ -8,6 +8,8 @@ import 'package:wallet_domain/wallet_domain.dart';
 
 part 'send_store.g.dart';
 
+const _errorMapper = ErrorMessageMapperImpl();
+
 /// MobX store for send feature state management.
 @lazySingleton
 class SendStore = _SendStoreBase with _$SendStore;
@@ -75,7 +77,7 @@ abstract class _SendStoreBase with Store {
       return Amount.fromKas(amount).sompiValue;
     } catch (e) {
       developer.log(
-        'Failed to parse amount: $amount',
+        'Failed to parse amount',
         error: e,
         name: 'SendStore',
       );
@@ -97,6 +99,7 @@ abstract class _SendStoreBase with Store {
     _scheduleEstimateFee();
   }
 
+  @action
   void _scheduleEstimateFee() {
     if (_isDisposed) return;
     _debounceTimer?.cancel();
@@ -112,8 +115,10 @@ abstract class _SendStoreBase with Store {
     currentAccountId = accountId;
   }
 
+  @action
   Future<void> _estimateFee() async {
     final accountId = currentAccountId;
+    final accountIdSnapshot = accountId;
     if (!isAddressValid || !isAmountValid || accountId == null) {
       estimatedFee = null;
       return;
@@ -121,12 +126,16 @@ abstract class _SendStoreBase with Store {
 
     isLoading = true;
     try {
-      estimatedFee = await _estimateTransactionUseCase(
+      final result = await _estimateTransactionUseCase(
         accountId: accountId,
         destination: Address.fromString(recipientAddress),
         amount: Amount.fromSompi(amountInSompi),
       );
+      // Race condition check
+      if (currentAccountId != accountIdSnapshot) return;
+      estimatedFee = result;
     } catch (e) {
+      if (currentAccountId != accountIdSnapshot) return;
       estimatedFee = null;
       developer.log(
         'Failed to estimate fee',
@@ -134,7 +143,9 @@ abstract class _SendStoreBase with Store {
         name: 'SendStore',
       );
     } finally {
-      isLoading = false;
+      if (currentAccountId == accountIdSnapshot) {
+        isLoading = false;
+      }
     }
   }
 
@@ -165,27 +176,10 @@ abstract class _SendStoreBase with Store {
         error: e,
         name: 'SendStore',
       );
-      errorMessage = _getGenericErrorMessage(e);
+      errorMessage = _errorMapper.mapTransactionError(e);
     } finally {
       isSending = false;
     }
-  }
-
-  String _getGenericErrorMessage(Object error) {
-    // Map known exceptions to user-friendly messages
-    if (error is InsufficientFundsException) {
-      return 'Insufficient funds for this transaction';
-    } else if (error is InvalidPasswordException) {
-      return 'Invalid password';
-    } else if (error is InvalidAddressException) {
-      return 'Invalid recipient address';
-    } else if (error is InvalidAmountException) {
-      return 'Invalid amount';
-    } else if (error is NotConnectedException || error is RpcException) {
-      return 'Network error. Please check your connection';
-    }
-    // Generic fallback - never expose raw error details
-    return 'Transaction failed. Please try again';
   }
 
   @action

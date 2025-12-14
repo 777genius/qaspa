@@ -7,6 +7,8 @@ import 'package:wallet_domain/wallet_domain.dart';
 
 part 'stealth_store.g.dart';
 
+const _errorMapper = ErrorMessageMapperImpl();
+
 /// MobX store for stealth feature state management.
 @lazySingleton
 class StealthStore = _StealthStoreBase with _$StealthStore;
@@ -85,7 +87,7 @@ abstract class _StealthStoreBase with Store {
       return Amount.fromKas(sendAmount).sompiValue;
     } catch (e) {
       developer.log(
-        'Failed to parse amount: $sendAmount',
+        'Failed to parse amount',
         error: e,
         name: 'StealthStore',
       );
@@ -217,6 +219,7 @@ abstract class _StealthStoreBase with Store {
     }
   }
 
+  @action
   Future<void> _loadTransactionsForAccount(String accountId) async {
     try {
       final transactions = await _getStealthTransactionsUseCase(
@@ -292,28 +295,11 @@ abstract class _StealthStoreBase with Store {
         error: e,
         name: 'StealthStore',
       );
-      errorMessage = _getSendErrorMessage(e);
+      errorMessage = _errorMapper.mapTransactionError(e);
       return null;
     } finally {
       isSending = false;
     }
-  }
-
-  String _getSendErrorMessage(Object error) {
-    // Map known exceptions to user-friendly messages
-    if (error is InsufficientFundsException) {
-      return 'Insufficient funds for this transaction';
-    } else if (error is InvalidPasswordException) {
-      return 'Invalid password';
-    } else if (error is InvalidAddressException) {
-      return 'Invalid recipient address';
-    } else if (error is InvalidAmountException) {
-      return 'Invalid amount';
-    } else if (error is NotConnectedException || error is RpcException) {
-      return 'Network error. Please check your connection';
-    }
-    // Generic fallback - never expose raw error details
-    return 'Transaction failed. Please try again';
   }
 
   @action

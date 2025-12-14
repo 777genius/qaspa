@@ -8,6 +8,8 @@ import '../stores/stealth_store.dart';
 
 /// Modularity module for stealth (privacy) feature.
 class StealthModule extends Module {
+  StealthStore? _store;
+
   @override
   List<Type> get expects => [AccountRepository, TransactionRepository];
 
@@ -25,7 +27,14 @@ class StealthModule extends Module {
 
   @override
   void exports(Binder i) {
-    // Export StealthStore for page access
-    i.singleton<StealthStore>(() => i.get<StealthStore>());
+    // Export StealthStore for page access and keep reference for dispose
+    _store = i.get<StealthStore>();
+    i.singleton<StealthStore>(() => _store!);
+  }
+
+  @override
+  void onDispose() {
+    _store?.dispose();
+    _store = null;
   }
 }

@@ -8,6 +8,8 @@ import 'package:wallet_domain/wallet_domain.dart';
 
 part 'settings_store.g.dart';
 
+const _errorMapper = ErrorMessageMapperImpl();
+
 /// MobX store for settings feature state management.
 @lazySingleton
 class SettingsStore = _SettingsStoreBase with _$SettingsStore;
@@ -23,6 +25,7 @@ abstract class _SettingsStoreBase with Store {
   static const _mnemonicClearTimeout = Duration(seconds: 10);
 
   Timer? _mnemonicClearTimer;
+  bool _isDisposed = false;
 
   _SettingsStoreBase({
     required GetWalletInfoUseCase getWalletInfoUseCase,
@@ -95,7 +98,7 @@ abstract class _SettingsStoreBase with Store {
       _startMnemonicClearTimer();
     } catch (e) {
       developer.log('Export mnemonic failed', error: e, name: 'SettingsStore');
-      errorMessage = _getPasswordErrorMessage(e);
+      errorMessage = _errorMapper.mapWalletError(e);
     } finally {
       isProcessing = false;
     }
@@ -143,7 +146,7 @@ abstract class _SettingsStoreBase with Store {
       return true;
     } catch (e) {
       developer.log('Change password failed', error: e, name: 'SettingsStore');
-      errorMessage = _getPasswordErrorMessage(e);
+      errorMessage = _errorMapper.mapWalletError(e);
       return false;
     } finally {
       isProcessing = false;
@@ -165,20 +168,11 @@ abstract class _SettingsStoreBase with Store {
       return true;
     } catch (e) {
       developer.log('Delete wallet failed', error: e, name: 'SettingsStore');
-      errorMessage = _getPasswordErrorMessage(e);
+      errorMessage = _errorMapper.mapWalletError(e);
       return false;
     } finally {
       isProcessing = false;
     }
-  }
-
-  String _getPasswordErrorMessage(Object error) {
-    if (error is InvalidPasswordException) {
-      return 'Invalid password';
-    } else if (error is WalletNotFoundException) {
-      return 'Wallet not found';
-    }
-    return 'Operation failed. Please try again';
   }
 
   @action

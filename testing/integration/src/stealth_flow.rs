@@ -1887,6 +1887,83 @@ async fn test_stealth_to_stealth_full_flow() {
 }
 
 // ============================================================================
+// TEST 12.1: Sweep stores stealth change keys (regression)
+// ============================================================================
+
+/// Regression: `sweep_allowing_orphans` must sign stealth inputs and persist
+/// precomputed stealth change keys (so change is spendable even before mining/scanning).
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_stealth_sweep_stores_change_ephemeral_key() {
+    use kaspa_rpc_core::GetMempoolEntryRequest;
+    use kaspa_txscript::STEALTH_SCRIPT_VERSION;
+    use workflow_core::abortable::Abortable;
+
+    let env = StealthTestEnv::new().await;
+    let sender = env.create_stealth_account("sweep-sender").await;
+
+    sender.unlock(&env.wallet_secret, None).await.expect("unlock sender");
+    sender.clone().connect().await.expect("connect sender");
+
+    // Fund and mature one stealth UTXO
+    env.mine_blocks(env.coinbase_maturity + 10).await;
+    // Create multiple UTXOs so sweep actually produces consolidation txs
+    let per_utxo = 3_000_000_000u64; // 3 KAS
+    for _ in 0..3 {
+        env.send_to_stealth(per_utxo, sender.stealth_address()).await;
+        env.mine_blocks(1).await;
+    }
+
+    wait_for(
+        200,
+        200,
+        || {
+            let s = sender.clone();
+            async move { s.balance().map(|b| b.mature + b.pending).unwrap_or(0) > 0 }
+        },
+        "Sender should detect stealth UTXO",
+    )
+    .await;
+
+    env.mine_blocks(105).await; // maturity period = 100 on simnet
+
+    wait_for(
+        200,
+        100,
+        || {
+            let s = sender.clone();
+            async move { s.balance().map(|b| b.mature).unwrap_or(0) > 0 }
+        },
+        "Sender balance should be mature",
+    )
+    .await;
+
+    // Sweep to stealth change (self)
+    let abortable = Abortable::new();
+    let (_summary, tx_ids) = sender.clone().sweep(env.wallet_secret.clone(), None, None, &abortable, None).await.expect("sweep");
+    assert!(!tx_ids.is_empty(), "sweep must produce at least one transaction");
+
+    // The change output is a stealth output; the wallet must have stored its ephemeral key immediately.
+    let tx_id = tx_ids[0];
+    let mempool_entry =
+        env.rpc_client.get_mempool_entry_call(None, GetMempoolEntryRequest::new(tx_id, true, false)).await.expect("mempool entry");
+    let tx = mempool_entry.mempool_entry.transaction;
+    let stealth_out_idx = tx
+        .outputs
+        .iter()
+        .enumerate()
+        .find_map(|(idx, out)| (out.script_public_key.version == STEALTH_SCRIPT_VERSION).then_some(idx as u32))
+        .expect("expected at least one stealth output in sweep tx");
+    let change_outpoint = TransactionOutpoint::new(tx_id, stealth_out_idx);
+    assert!(
+        sender.ephemeral_keys().contains(&change_outpoint),
+        "ephemeral key for stealth change output must be stored immediately (outpoint={:?})",
+        change_outpoint
+    );
+
+    env.shutdown().await;
+}
+
+// ============================================================================
 // TEST 13: Stress Test (Multiple Accounts, Many Transactions)
 // ============================================================================
 

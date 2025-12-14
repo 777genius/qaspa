@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:go_router/go_router.dart';
 import 'package:modularity_flutter/modularity_flutter.dart';
+import 'package:onboarding_presentation/onboarding_presentation.dart';
 
 import '../navigation/settings_routes.dart';
 import '../stores/settings_store.dart';
@@ -140,7 +141,9 @@ class SettingsPage extends StatelessWidget {
                         if (success) {
                           Navigator.pop(dialogContext);
                           if (context.mounted) {
-                            context.go('/onboarding/welcome');
+                            if (context.mounted) {
+                              context.go(OnboardingRoutes.welcome);
+                            }
                           }
                         }
                       } finally {

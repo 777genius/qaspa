@@ -70,7 +70,55 @@ impl std::fmt::Display for StorageDescriptor {
     }
 }
 
+impl StorageDescriptor {
+    /// Returns a per-wallet filesystem root for auxiliary data (stealth keys, delegations, etc.).
+    ///
+    /// On native platforms `StorageDescriptor::Internal` обычно указывает на файл кошелька
+    /// (`.../<name>.wallet`). Для доп. файлов используем отдельную директорию рядом с файлом:
+    /// `.../<name>/...`, чтобы избежать конфликта "файл vs директория".
+    ///
+    /// В web окружениях путь является логическим ключом, поэтому оставляем его как есть.
+    pub fn data_root(&self) -> Option<String> {
+        match self {
+            StorageDescriptor::Internal(path) => Some(internal_data_root(path)),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn internal_data_root(path: &str) -> String {
+    use std::path::Path;
+    let p = Path::new(path);
+    let stem = p.file_stem().and_then(|s| s.to_str());
+    let parent = p.parent();
+    match (parent, stem) {
+        (Some(parent), Some(stem)) => parent.join(stem).to_string_lossy().to_string(),
+        _ => path.to_string(),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn internal_data_root(path: &str) -> String {
+    path.to_string()
+}
+
 pub type StorageStream<T> = Pin<Box<dyn Stream<Item = Result<T>> + Send>>;
+
+#[cfg(test)]
+mod tests {
+    use super::StorageDescriptor;
+
+    #[test]
+    fn storage_descriptor_data_root_derives_non_conflicting_dir() {
+        let d = StorageDescriptor::Internal("/tmp/example.wallet".to_string());
+        let root = d.data_root().expect("data_root");
+        #[cfg(not(target_arch = "wasm32"))]
+        assert_eq!(root, "/tmp/example");
+        #[cfg(target_arch = "wasm32")]
+        assert_eq!(root, "/tmp/example.wallet");
+    }
+}
 
 #[async_trait]
 pub trait PrvKeyDataStore: Send + Sync {

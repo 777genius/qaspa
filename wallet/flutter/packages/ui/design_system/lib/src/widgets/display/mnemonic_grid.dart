@@ -67,10 +67,15 @@ class _CopyAllButton extends StatefulWidget {
 class _CopyAllButtonState extends State<_CopyAllButton> {
   bool _copied = false;
   Timer? _resetTimer;
+  bool _hasCopied = false;
 
   @override
   void dispose() {
     _resetTimer?.cancel();
+    // Security: Clear clipboard if mnemonic was copied
+    if (_hasCopied) {
+      Clipboard.setData(const ClipboardData(text: ''));
+    }
     super.dispose();
   }
 
@@ -95,13 +100,17 @@ class _CopyAllButtonState extends State<_CopyAllButton> {
 
   Future<void> _copyToClipboard() async {
     await Clipboard.setData(ClipboardData(text: widget.words.join(' ')));
+    _hasCopied = true;
     setState(() => _copied = true);
 
     // Cancel any existing timer and start a new one
     _resetTimer?.cancel();
-    _resetTimer = Timer(const Duration(seconds: 2), () {
+    // Security: Clear clipboard after 10 seconds (mnemonic is sensitive)
+    _resetTimer = Timer(const Duration(seconds: 10), () {
       if (mounted) {
         setState(() => _copied = false);
+        Clipboard.setData(const ClipboardData(text: ''));
+        _hasCopied = false;
       }
     });
   }

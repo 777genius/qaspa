@@ -14,7 +14,6 @@ dependencies:
   onboarding_domain:
   onboarding_data:
   wallet_domain:
-  wallet_data:
   design_system:
   mobx: ^2.4.0
   flutter_mobx: ^2.2.1+1

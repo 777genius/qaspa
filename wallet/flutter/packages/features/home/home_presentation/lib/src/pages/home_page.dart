@@ -4,7 +4,11 @@ import 'package:design_system/design_system.dart' hide BalanceCard;
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:go_router/go_router.dart';
+import 'package:history_presentation/history_presentation.dart';
 import 'package:modularity_flutter/modularity_flutter.dart';
+import 'package:receive_presentation/receive_presentation.dart';
+import 'package:send_presentation/send_presentation.dart';
+import 'package:settings_presentation/settings_presentation.dart';
 
 import '../stores/home_store.dart';
 import '../widgets/balance_card.dart';
@@ -50,7 +54,7 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push('/settings'),
+            onPressed: () => context.push(SettingsRoutes.main),
           ),
         ],
       ),
@@ -60,14 +64,14 @@ class _HomePageState extends State<HomePage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (store.errorMessage != null) {
+          if (store.errorMessage case final errorMsg?) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.error_outline, size: 64, color: AppColors.error),
                   const SizedBox(height: 16),
-                  Text(store.errorMessage!),
+                  Text(errorMsg),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => store.loadHomeData(accountId: 'default'),
@@ -94,9 +98,9 @@ class _HomePageState extends State<HomePage> {
 
                 // Quick Actions
                 QuickActionsRow(
-                  onSendTap: () => context.push('/send'),
-                  onReceiveTap: () => context.push('/receive'),
-                  onHistoryTap: () => context.push('/history'),
+                  onSendTap: () => context.push(SendRoutes.main),
+                  onReceiveTap: () => context.push(ReceiveRoutes.main),
+                  onHistoryTap: () => context.push(HistoryRoutes.main),
                 ),
                 const SizedBox(height: AppSpacing.lg),
 

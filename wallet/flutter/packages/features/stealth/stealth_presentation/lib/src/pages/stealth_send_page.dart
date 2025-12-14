@@ -1,6 +1,7 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:go_router/go_router.dart';
 import 'package:modularity_flutter/modularity_flutter.dart';
 
 import '../stores/stealth_store.dart';
@@ -51,7 +52,7 @@ class StealthSendPage extends StatelessWidget {
                   hintText: 'qs:... / qstest:...',
                   counterText: '',
                 ),
-                maxLength: 120,
+                maxLength: 3000,
                 onChanged: (value) => store.setRecipientStealthAddress(value.trim()),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -139,7 +140,9 @@ class StealthSendPage extends StatelessWidget {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Private payment sent')),
                           );
-                          Navigator.pop(context);
+                          if (context.mounted) {
+                            context.pop();
+                          }
                         }
                       } else if (store.errorMessage != null) {
                         if (dialogContext.mounted) {

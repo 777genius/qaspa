@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:go_router/go_router.dart';
 import 'package:modularity_flutter/modularity_flutter.dart';
 
 import '../stores/send_store.dart';
@@ -56,7 +57,7 @@ class _SendPageState extends State<SendPage> {
                       ? 'Invalid Kaspa address'
                       : null,
                 ),
-                maxLength: 80,
+                maxLength: 3000,
                 onChanged: (value) => store.setRecipientAddress(value.trim()),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -146,7 +147,9 @@ class _SendPageState extends State<SendPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Transaction sent!')),
                           );
-                          Navigator.pop(context);
+                          if (context.mounted) {
+                            context.pop();
+                          }
                         }
                       } else if (store.errorMessage != null) {
                         if (dialogContext.mounted) {

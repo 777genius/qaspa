@@ -8,6 +8,8 @@ import '../stores/send_store.dart';
 
 /// Modularity module for send feature.
 class SendModule extends Module {
+  SendStore? _store;
+
   @override
   List<Type> get expects => [AccountRepository, TransactionRepository];
 
@@ -25,7 +27,14 @@ class SendModule extends Module {
 
   @override
   void exports(Binder i) {
-    // Export SendStore for page access
-    i.singleton<SendStore>(() => i.get<SendStore>());
+    // Export SendStore for page access and keep reference for dispose
+    _store = i.get<SendStore>();
+    i.singleton<SendStore>(() => _store!);
+  }
+
+  @override
+  void onDispose() {
+    _store?.dispose();
+    _store = null;
   }
 }

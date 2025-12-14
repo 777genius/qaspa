@@ -49,16 +49,22 @@ abstract class _ReceiveStoreBase with Store {
   @action
   Future<void> loadAddress() async {
     final accountId = currentAccountId;
+    final accountIdSnapshot = accountId;
     if (accountId == null) return;
 
     isLoading = true;
     errorMessage = null;
 
     try {
-      currentAddress = await _getReceiveAddressUseCase(
+      final address = await _getReceiveAddressUseCase(
         accountId: accountId,
       );
+      // Race condition check: only update if account hasn't changed
+      if (currentAccountId != accountIdSnapshot) return;
+      currentAddress = address;
     } catch (e) {
+      // Race condition check: only show error if account hasn't changed
+      if (currentAccountId != accountIdSnapshot) return;
       developer.log(
         'Failed to load address',
         error: e,
@@ -66,23 +72,31 @@ abstract class _ReceiveStoreBase with Store {
       );
       errorMessage = 'Failed to load address';
     } finally {
-      isLoading = false;
+      if (currentAccountId == accountIdSnapshot) {
+        isLoading = false;
+      }
     }
   }
 
   @action
   Future<void> generateNewAddress() async {
     final accountId = currentAccountId;
+    final accountIdSnapshot = accountId;
     if (accountId == null) return;
 
     isLoading = true;
     errorMessage = null;
 
     try {
-      currentAddress = await _generateNewAddressUseCase(
+      final address = await _generateNewAddressUseCase(
         accountId: accountId,
       );
+      // Race condition check: only update if account hasn't changed
+      if (currentAccountId != accountIdSnapshot) return;
+      currentAddress = address;
     } catch (e) {
+      // Race condition check: only show error if account hasn't changed
+      if (currentAccountId != accountIdSnapshot) return;
       developer.log(
         'Failed to generate new address',
         error: e,
@@ -90,7 +104,9 @@ abstract class _ReceiveStoreBase with Store {
       );
       errorMessage = 'Failed to generate address';
     } finally {
-      isLoading = false;
+      if (currentAccountId == accountIdSnapshot) {
+        isLoading = false;
+      }
     }
   }
 

@@ -14,7 +14,6 @@ use crate::imports::*;
 use crate::serializer::StorageHeader;
 use crate::storage::account::{AccountSettings, AccountStorable, AccountStorage};
 use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStatus, EphemeralKeyStore, OrphanReason};
-use crate::storage::interface::StorageDescriptor;
 use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use crate::tx::generator::stealth_change::{DynStealthChangeCreator, PendingStealthChange, StealthChangeCreator};
 use crate::tx::generator::stealth_signer::StealthSigner;
@@ -418,6 +417,21 @@ fn select_delegation_from_records(
         return (None, None, Some(OrphanReason::NoDelegation));
     }
 
+    // Если самая свежая (по nonce) запись — revoked, то она перекрывает все предыдущие
+    // активные делегации: UTXO должны считаться orphaned (revoked), а не «валидными» по старым
+    // активным записям.
+    if let Some((_id, latest)) = candidates.iter().max_by_key(|(_, r)| r.nonce) {
+        if matches!(latest.status, DelegationStatus::Revoked { .. }) {
+            let max_until = candidates.iter().filter_map(|(_, r)| r.valid_until_daa).max();
+            if let Some(limit) = max_until {
+                if block_daa > limit {
+                    return (None, None, Some(OrphanReason::DelegationExpired));
+                }
+            }
+            return (None, Some(latest.clone()), Some(OrphanReason::DelegationRevoked));
+        }
+    }
+
     let mut covering: Option<(DelegationId, DelegationRecordV1)> = None;
     for (id, rec) in candidates.iter().cloned() {
         if !matches!(rec.status, DelegationStatus::Active) {
@@ -632,9 +646,11 @@ impl StealthAccount {
         *cached = Some(wallet_secret.clone());
 
         // Load ephemeral keys from storage
-        if let Ok(StorageDescriptor::Internal(wallet_folder)) = self.wallet().store().location() {
-            if let Ok(network_id) = self.wallet().network_id() {
-                let _ = self.ephemeral_keys.load_from_storage(&wallet_folder, network_id, wallet_secret).await;
+        if let Ok(descriptor) = self.wallet().store().location() {
+            if let Some(wallet_folder) = descriptor.data_root() {
+                if let Ok(network_id) = self.wallet().network_id() {
+                    let _ = self.ephemeral_keys.load_from_storage(&wallet_folder, network_id, wallet_secret).await;
+                }
             }
         }
         self.rebuild_orphan_overlay_from_store();
@@ -759,14 +775,22 @@ impl StealthAccount {
         select_delegation_from_records(block_daa, candidates)
     }
 
-    fn mark_delegation_as_orphaned(&self, delegation_id: DelegationId, reason: OrphanReason, current_daa: u64) {
+    fn mark_delegation_as_orphaned(&self, delegation_id: DelegationId, reason: OrphanReason, current_daa: u64) -> bool {
+        let mut changed = false;
         for entry in self.ephemeral_keys.entries() {
             if entry.delegation_id == Some(delegation_id.0) {
+                match entry.status {
+                    EphemeralKeyStatus::Expired => continue,
+                    EphemeralKeyStatus::Orphaned { reason: ref existing } if *existing == reason => continue,
+                    _ => {}
+                }
+                changed = true;
                 let reason_clone = reason.clone();
                 self.ephemeral_keys.set_status(entry.outpoint, EphemeralKeyStatus::Orphaned { reason: reason_clone.clone() });
                 self.mark_orphan_overlay(entry.outpoint, reason_clone, current_daa);
             }
         }
+        changed
     }
 
     fn validate_delegation_record(&self, record: &DelegationRecordV1, expected_anchor: Option<[u8; 32]>) -> Result<()> {
@@ -866,24 +890,38 @@ impl StealthAccount {
     }
 
     async fn flush_pending_ephemeral_keys(&self) -> Result<()> {
-        {
+        let pending_dirty = {
             let pending = self.pending_ephemeral_persist.lock().await;
-            if !pending.is_dirty() {
-                return Ok(());
-            }
+            pending.is_dirty()
+        };
+        let store_modified = self.ephemeral_keys.is_modified();
+        if !pending_dirty && !store_modified {
+            return Ok(());
         }
 
         let secret = { self.wallet_secret_cache.read().await.clone() };
-        let wallet_folder = match self.wallet().store().location() {
-            Ok(StorageDescriptor::Internal(path)) => Some(path),
-            _ => None,
-        };
+        let wallet_folder = self.wallet().store().location().ok().and_then(|d| d.data_root());
         let network_id = self.wallet().network_id().ok();
 
-        {
+        if pending_dirty {
             let mut pending = self.pending_ephemeral_persist.lock().await;
             pending.try_flush(secret.as_ref(), wallet_folder.as_deref(), network_id, &self.ephemeral_keys).await?;
+            return Ok(());
         }
+
+        // Best-effort flush for status-only changes (orphan/expired/mark_removed):
+        // these do not go through `PendingEphemeralPersist::mark_dirty`, but still must be persisted,
+        // otherwise lock/unlock (or crash) can silently lose the updated status.
+        let Some(secret) = secret.as_ref() else {
+            return Ok(());
+        };
+        let Some(wallet_folder) = wallet_folder.as_deref() else {
+            return Ok(());
+        };
+        let Some(network_id) = network_id else {
+            return Ok(());
+        };
+        self.ephemeral_keys.save_to_storage(wallet_folder, network_id, secret).await?;
 
         Ok(())
     }
@@ -1500,8 +1538,13 @@ impl Account for StealthAccount {
         use futures::TryStreamExt;
         use workflow_core::task::yield_executor;
 
-        let keydata = self.prv_key_data(wallet_secret).await?;
+        if !self.is_unlocked().await {
+            return Err(Error::AccountLocked);
+        }
+
+        let keydata = self.prv_key_data(wallet_secret.clone()).await?;
         let signer = Arc::new(Signer::new(self.clone().as_dyn_arc(), keydata, payment_secret));
+        let stealth_signer = StealthSigner::new(self.ephemeral_keys.clone());
         let settings = GeneratorSettings::try_new_with_account(
             self.clone().as_dyn_arc(),
             PaymentDestination::Change,
@@ -1518,7 +1561,14 @@ impl Account for StealthAccount {
         let mut ids = vec![];
         while let Some(transaction) = stream.try_next().await? {
             transaction.try_sign()?;
-            ids.push(transaction.try_submit(&self.wallet().rpc_api()).await?);
+            if transaction.has_stealth_inputs() {
+                transaction.try_sign_stealth(&stealth_signer).await?;
+            }
+            let tx_id = transaction.try_submit(&self.wallet().rpc_api()).await?;
+            if let Some(pending_change) = transaction.take_stealth_change() {
+                self.finalize_stealth_change(tx_id, &pending_change, &wallet_secret).await?;
+            }
+            ids.push(tx_id);
 
             if let Some(notifier) = notifier.as_ref() {
                 notifier(&transaction);
@@ -1653,6 +1703,9 @@ impl StealthUtxoHandler for StealthAccount {
         let current_daa = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
         self.ephemeral_keys.mark_removed(outpoint, current_daa).await?;
         self.orphan_overlay.remove(outpoint);
+        if let Err(err) = self.flush_pending_ephemeral_keys().await {
+            log_warn!("Failed to persist stealth keys after utxo removal: {}", err);
+        }
         Ok(())
     }
 
@@ -1668,51 +1721,58 @@ impl StealthUtxoHandler for StealthAccount {
 
         if let Some(anchor) = self.master_anchor() {
             let store = self.wallet().delegation_store();
-            let mut expired_events = Vec::new();
-            let mut revoked_events = Vec::new();
+            let records: Vec<(DelegationId, DelegationRecordV1)> =
+                store.by_anchor(&anchor).into_iter().filter(|(_, r)| r.account_id == *self.id()).collect();
 
-            for (id, rec) in store.by_anchor(&anchor).into_iter().filter(|(_, r)| r.account_id == *self.id()) {
-                match rec.status {
-                    DelegationStatus::Active => {
-                        if let Some(until) = rec.valid_until_daa {
-                            // `valid_until_daa` включительно: делегация считается истёкшей только когда DAA > until.
-                            if current_daa_score > until {
-                                expired_events.push((id, rec));
+            // 1) Истечение по valid_until для активных записей (per-id).
+            for (id, rec) in records.iter() {
+                if matches!(rec.status, DelegationStatus::Active) {
+                    if let Some(until) = rec.valid_until_daa {
+                        // `valid_until_daa` включительно: делегация считается истёкшей только когда DAA > until.
+                        if current_daa_score > until {
+                            if self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationExpired, current_daa_score) {
+                                let _ = self
+                                    .wallet()
+                                    .notify(Events::MasterDelegationExpired {
+                                        account_id: *self.id(),
+                                        delegation_id: id.0,
+                                        anchor,
+                                        valid_until_daa: until,
+                                    })
+                                    .await;
+                                log_warn!(
+                                    "Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}",
+                                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)),
+                                    id.0,
+                                    until,
+                                    current_daa_score
+                                );
                             }
                         }
                     }
-                    DelegationStatus::Revoked { .. } => revoked_events.push((id, rec)),
-                    _ => {}
                 }
             }
 
-            for (id, rec) in expired_events {
-                self.mark_delegation_as_orphaned(id, OrphanReason::DelegationExpired, current_daa_score);
-                let _ = self
-                    .wallet()
-                    .notify(Events::MasterDelegationExpired {
-                        account_id: *self.id(),
-                        delegation_id: id.0,
-                        anchor,
-                        valid_until_daa: rec.valid_until_daa.unwrap_or_default(),
-                    })
-                    .await;
-                log_warn!(
-                    "Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}",
-                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)),
-                    id.0,
-                    rec.valid_until_daa.unwrap_or_default(),
-                    current_daa_score
-                );
+            // 2) Revoked: если самая свежая запись (по nonce) — revoked, то она перекрывает
+            // предыдущие active-делегации. Помечаем UTXO, которые были получены под такими
+            // делегациями, как orphaned (DelegationRevoked).
+            if let Some((_latest_id, latest_rec)) = records.iter().max_by_key(|(_, r)| r.nonce) {
+                if matches!(latest_rec.status, DelegationStatus::Revoked { .. }) {
+                    for (id, rec) in records.iter() {
+                        if rec.nonce < latest_rec.nonce && matches!(rec.status, DelegationStatus::Active) {
+                            if self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationRevoked, current_daa_score) {
+                                let _ = self
+                                    .wallet()
+                                    .notify(Events::MasterDelegationRevoked { account_id: *self.id(), delegation_id: id.0, anchor })
+                                    .await;
+                            }
+                        }
+                    }
+                }
             }
-
-            for (id, _rec) in revoked_events {
-                self.mark_delegation_as_orphaned(id, OrphanReason::DelegationRevoked, current_daa_score);
-                let _ = self
-                    .wallet()
-                    .notify(Events::MasterDelegationRevoked { account_id: *self.id(), delegation_id: id.0, anchor })
-                    .await;
-            }
+        }
+        if let Err(err) = self.flush_pending_ephemeral_keys().await {
+            log_warn!("Failed to persist stealth keys after DAA update: {}", err);
         }
         Ok(())
     }
@@ -1836,8 +1896,13 @@ impl StealthAccount {
         use futures::TryStreamExt;
         use workflow_core::task::yield_executor;
 
-        let keydata = self.prv_key_data(wallet_secret).await?;
+        if !self.is_unlocked().await {
+            return Err(Error::AccountLocked);
+        }
+
+        let keydata = self.prv_key_data(wallet_secret.clone()).await?;
         let signer = Arc::new(Signer::new(self.clone().as_dyn_arc(), keydata, payment_secret));
+        let stealth_signer = StealthSigner::new(self.ephemeral_keys.clone());
         let settings = GeneratorSettings::try_new_with_account(
             self.clone().as_dyn_arc(),
             PaymentDestination::Change,
@@ -1854,7 +1919,14 @@ impl StealthAccount {
         let mut ids = vec![];
         while let Some(transaction) = stream.try_next().await? {
             transaction.try_sign()?;
-            ids.push(transaction.try_submit(&self.wallet().rpc_api()).await?);
+            if transaction.has_stealth_inputs() {
+                transaction.try_sign_stealth(&stealth_signer).await?;
+            }
+            let tx_id = transaction.try_submit(&self.wallet().rpc_api()).await?;
+            if let Some(pending_change) = transaction.take_stealth_change() {
+                self.finalize_stealth_change(tx_id, &pending_change, &wallet_secret).await?;
+            }
+            ids.push(tx_id);
 
             if let Some(notifier) = notifier.as_ref() {
                 notifier(&transaction);
@@ -1876,6 +1948,12 @@ mod tests {
     use crate::account::delegation::DelegationId;
     use crate::deterministic::AccountId;
     use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStore};
+    use crate::storage::interface::{
+        AccountStore, AddressBookStore, CreateArgs, Interface, OpenArgs, PrvKeyDataStore, StorageDescriptor, TransactionRecordStore,
+        WalletDescriptor, WalletExportOptions,
+    };
+    use crate::storage::Hint;
+    use async_trait::async_trait;
     use kaspa_consensus_core::network::{NetworkId, NetworkType};
     use kaspa_consensus_core::subnets;
     use kaspa_hashes::Hash;
@@ -1885,6 +1963,7 @@ mod tests {
     use kaspa_txscript::pay_to_stealth;
     use kaspa_wallet_keys::secret::Secret;
     use rand::{rngs::StdRng, SeedableRng};
+    use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
     use tempfile::tempdir;
 
@@ -1923,11 +2002,173 @@ mod tests {
     }
 
     #[test]
+    fn select_delegation_rejects_when_latest_record_is_revoked() {
+        let active = DelegationRecordV1 { nonce: 1, valid_from_daa: 10, valid_until_daa: Some(20), ..make_record(10, Some(20)) };
+        let revoked = DelegationRecordV1 {
+            nonce: 2,
+            valid_from_daa: 10,
+            valid_until_daa: Some(20),
+            status: DelegationStatus::Revoked { revoked_daa: 15 },
+            ..make_record(10, Some(20))
+        };
+
+        let (id, rec, reason) =
+            select_delegation_from_records(15, vec![(DelegationId(1), active), (DelegationId(2), revoked.clone())]);
+        assert!(id.is_none(), "revoked must supersede older active records");
+        assert!(matches!(reason, Some(OrphanReason::DelegationRevoked)));
+        assert_eq!(rec.unwrap().nonce, revoked.nonce);
+    }
+
+    #[test]
     fn select_delegation_anchor_mismatch_when_no_records() {
         let (id, rec, reason) = select_delegation_from_records(15, vec![]);
         assert!(id.is_none());
         assert!(rec.is_none());
         assert!(matches!(reason, Some(OrphanReason::NoDelegation)));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn stealth_ephemeral_status_is_persisted_even_without_pending_queue() {
+        #[derive(Clone)]
+        struct TestInterface {
+            folder: String,
+        }
+
+        #[async_trait]
+        impl Interface for TestInterface {
+            async fn wallet_list(&self) -> Result<Vec<WalletDescriptor>> {
+                Ok(vec![])
+            }
+
+            fn is_open(&self) -> bool {
+                true
+            }
+
+            fn location(&self) -> Result<StorageDescriptor> {
+                Ok(StorageDescriptor::Internal(self.folder.clone()))
+            }
+
+            fn descriptor(&self) -> Option<WalletDescriptor> {
+                None
+            }
+
+            fn encryption_kind(&self) -> Result<EncryptionKind> {
+                Ok(EncryptionKind::XChaCha20Poly1305)
+            }
+
+            async fn rename(&self, _wallet_secret: &Secret, _title: Option<&str>, _filename: Option<&str>) -> Result<()> {
+                Err(Error::NotImplemented)
+            }
+
+            async fn change_secret(&self, _old_wallet_secret: &Secret, _new_wallet_secret: &Secret) -> Result<()> {
+                Err(Error::NotImplemented)
+            }
+
+            async fn exists(&self, _name: Option<&str>) -> Result<bool> {
+                Ok(false)
+            }
+
+            async fn create(&self, _wallet_secret: &Secret, _args: CreateArgs) -> Result<WalletDescriptor> {
+                Err(Error::NotImplemented)
+            }
+
+            async fn open(&self, _wallet_secret: &Secret, _args: OpenArgs) -> Result<()> {
+                Err(Error::NotImplemented)
+            }
+
+            async fn batch(&self) -> Result<()> {
+                Ok(())
+            }
+
+            async fn flush(&self, _wallet_secret: &Secret) -> Result<()> {
+                Ok(())
+            }
+
+            async fn commit(&self, _wallet_secret: &Secret) -> Result<()> {
+                Ok(())
+            }
+
+            async fn close(&self) -> Result<()> {
+                Ok(())
+            }
+
+            async fn wallet_export(&self, _wallet_secret: &Secret, _options: WalletExportOptions) -> Result<Vec<u8>> {
+                Err(Error::NotImplemented)
+            }
+
+            async fn wallet_import(&self, _wallet_secret: &Secret, _serialized_wallet_storage: &[u8]) -> Result<WalletDescriptor> {
+                Err(Error::NotImplemented)
+            }
+
+            async fn get_user_hint(&self) -> Result<Option<Hint>> {
+                Ok(None)
+            }
+
+            async fn set_user_hint(&self, _hint: Option<Hint>) -> Result<()> {
+                Ok(())
+            }
+
+            fn as_prv_key_data_store(&self) -> Result<Arc<dyn PrvKeyDataStore>> {
+                Err(Error::NotImplemented)
+            }
+
+            fn as_account_store(&self) -> Result<Arc<dyn AccountStore>> {
+                Err(Error::NotImplemented)
+            }
+
+            fn as_address_book_store(&self) -> Result<Arc<dyn AddressBookStore>> {
+                Err(Error::NotImplemented)
+            }
+
+            fn as_transaction_record_store(&self) -> Result<Arc<dyn TransactionRecordStore>> {
+                Err(Error::NotImplemented)
+            }
+        }
+
+        let temp = tempdir().expect("tempdir");
+        let wallet_folder = temp.path().to_string_lossy().to_string();
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 17);
+        let store: Arc<dyn Interface> = Arc::new(TestInterface { folder: wallet_folder.clone() });
+        let wallet = Arc::new(crate::wallet::Wallet::try_with_rpc(None, store, Some(network_id)).expect("wallet"));
+
+        let wallet_secret = Secret::new(b"persist-test-secret".to_vec());
+
+        let prv_key_data_id = crate::storage::PrvKeyDataId::new_from_slice(&[7u8; 8]);
+        let scan_secret = secp256k1::SecretKey::from_slice(&[1u8; 32]).expect("scan sk");
+        let spend_secret = secp256k1::SecretKey::from_slice(&[2u8; 32]).expect("spend sk");
+        let scan_pubkey = scan_secret.public_key(SECP256K1).x_only_public_key().0;
+        let spend_pubkey = spend_secret.public_key(SECP256K1).x_only_public_key().0;
+
+        let stealth =
+            StealthAccount::try_new(&wallet, Some("persist-test".into()), prv_key_data_id, 0, scan_pubkey, spend_pubkey, Some(0))
+                .await
+                .expect("create stealth");
+
+        // Provide wallet secret for persistence flush.
+        {
+            let mut cache = stealth.wallet_secret_cache.write().await;
+            *cache = Some(wallet_secret.clone());
+        }
+
+        let outpoint = TransactionOutpoint::new(Hash::from_bytes([9u8; 32]), 0);
+        let key_data = EphemeralKeyData::new_xonly([3u8; 32], [4u8; 32], [5u8; 32]);
+
+        // Persist initial entry via the normal "pending" path.
+        stealth.ephemeral_keys.store(outpoint, key_data, 100, None, None).await.expect("store eph");
+        stealth.note_pending_ephemeral_key(outpoint).await;
+
+        // Mutate status only (does not go through pending queue).
+        stealth.ephemeral_keys.set_status(outpoint, EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired });
+
+        // Must still be persisted (otherwise lock/unlock can lose orphan status).
+        stealth.flush_pending_ephemeral_keys().await.expect("flush");
+
+        // Load from disk and verify status matches.
+        let loaded = EphemeralKeyStore::new(*stealth.id());
+        loaded.load_from_storage(&wallet_folder, network_id, &wallet_secret).await.expect("load");
+        let entry = loaded.entries().into_iter().find(|e| e.outpoint == outpoint).expect("entry");
+        assert!(matches!(entry.status, EphemeralKeyStatus::Orphaned { reason: OrphanReason::DelegationExpired }));
     }
 
     #[test]

@@ -26,14 +26,15 @@ class HistoryPage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (store.errorMessage != null && store.transactions.isEmpty) {
+          if (store.errorMessage case final errorMsg?
+              when store.transactions.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.error_outline, size: 64, color: AppColors.error),
                   const SizedBox(height: AppSpacing.md),
-                  Text(store.errorMessage!),
+                  Text(errorMsg),
                   const SizedBox(height: AppSpacing.md),
                   ElevatedButton(
                     onPressed: store.loadTransactions,

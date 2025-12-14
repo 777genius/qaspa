@@ -212,6 +212,9 @@ impl WalletApi for super::Wallet {
 
     async fn delegation_create_call(self: Arc<Self>, request: DelegationCreateRequest) -> Result<DelegationCreateResponse> {
         let DelegationCreateRequest { wallet_secret, master_anchor, stealth_account_id, valid_for_daa } = request;
+        if master_anchor.len() != 64 {
+            return Err(Error::Custom("anchor must be 32 bytes".to_string()));
+        }
         let bytes = Vec::from_hex(&master_anchor).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
         let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
 
@@ -221,6 +224,9 @@ impl WalletApi for super::Wallet {
 
     async fn delegation_list_call(self: Arc<Self>, request: DelegationListRequest) -> Result<DelegationListResponse> {
         let DelegationListRequest { master_anchor } = request;
+        if master_anchor.len() != 64 {
+            return Err(Error::Custom("anchor must be 32 bytes".to_string()));
+        }
         let bytes = Vec::from_hex(&master_anchor).map_err(|e| Error::Custom(format!("invalid anchor hex: {e}")))?;
         let anchor: [u8; 32] = bytes.try_into().map_err(|_| Error::Custom("anchor must be 32 bytes".to_string()))?;
 

@@ -63,6 +63,7 @@ abstract class _HistoryStoreBase with Store {
     loadTransactions();
   }
 
+  @action
   void _subscribeToTransactions() {
     _transactionSubscription?.cancel();
     final accountId = currentAccountId;
@@ -72,13 +73,13 @@ abstract class _HistoryStoreBase with Store {
       accountId: accountId,
     ).listen(
       (newTransactions) {
-        if (_isDisposed) return;
+        if (_isDisposed || currentAccountId != accountId) return;
         transactions
           ..clear()
           ..addAll(newTransactions);
       },
       onError: (error) {
-        if (_isDisposed) return;
+        if (_isDisposed || currentAccountId != accountId) return;
         developer.log('Transaction stream error', error: error, name: 'HistoryStore');
         errorMessage = 'Failed to sync transactions';
       },
@@ -88,6 +89,7 @@ abstract class _HistoryStoreBase with Store {
   @action
   Future<void> loadTransactions() async {
     final accountId = currentAccountId;
+    final accountIdSnapshot = accountId;
     if (accountId == null) return;
 
     isLoading = true;
@@ -100,16 +102,21 @@ abstract class _HistoryStoreBase with Store {
         limit: _pageSize,
         offset: 0,
       );
+      // Race condition check
+      if (currentAccountId != accountIdSnapshot) return;
       transactions
         ..clear()
         ..addAll(result);
       hasMoreData = result.length >= _pageSize;
       _currentOffset = result.length;
     } catch (e) {
+      if (currentAccountId != accountIdSnapshot) return;
       developer.log('Failed to load transactions', error: e, name: 'HistoryStore');
       errorMessage = 'Failed to load transactions';
     } finally {
-      isLoading = false;
+      if (currentAccountId == accountIdSnapshot) {
+        isLoading = false;
+      }
     }
   }
 
@@ -139,6 +146,7 @@ abstract class _HistoryStoreBase with Store {
 
   @action
   Future<void> selectTransaction(TransactionId transactionId) async {
+    errorMessage = null;
     try {
       selectedTransaction = await _getTransactionDetailsUseCase(
         transactionId: transactionId,

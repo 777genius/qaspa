@@ -1,6 +1,7 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:go_router/go_router.dart';
 import 'package:modularity_flutter/modularity_flutter.dart';
 
 import '../stores/settings_store.dart';
@@ -123,17 +124,17 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     return null;
                   },
                 ),
-                if (store.errorMessage != null) ...[
+                if (store.errorMessage case final errorMsg?) ...[
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    store.errorMessage!,
+                    errorMsg,
                     style: TextStyle(color: AppColors.error),
                   ),
                 ],
-                if (store.successMessage != null) ...[
+                if (store.successMessage case final successMsg?) ...[
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    store.successMessage!,
+                    successMsg,
                     style: TextStyle(color: AppColors.success),
                   ),
                 ],
@@ -159,7 +160,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                                     content: Text('Password changed successfully'),
                                   ),
                                 );
-                                Navigator.pop(context);
+                                context.pop();
                               }
                             } finally {
                               // Always clear passwords from memory for security

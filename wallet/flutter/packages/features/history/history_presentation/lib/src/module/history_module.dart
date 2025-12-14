@@ -8,6 +8,8 @@ import '../stores/history_store.dart';
 
 /// Modularity module for history feature.
 class HistoryModule extends Module {
+  HistoryStore? _store;
+
   @override
   List<Type> get expects => [TransactionRepository];
 
@@ -25,7 +27,14 @@ class HistoryModule extends Module {
 
   @override
   void exports(Binder i) {
-    // Export HistoryStore for page access
-    i.singleton<HistoryStore>(() => i.get<HistoryStore>());
+    // Export HistoryStore for page access and keep reference for dispose
+    _store = i.get<HistoryStore>();
+    i.singleton<HistoryStore>(() => _store!);
+  }
+
+  @override
+  void onDispose() {
+    _store?.dispose();
+    _store = null;
   }
 }

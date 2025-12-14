@@ -28,3 +28,5 @@ package-sizes.js
 .qoder/rules/byterover-rules.md
 .augment/rules/byterover-rules.md
 tmp/
+**/build/**
+**/test_cache/**

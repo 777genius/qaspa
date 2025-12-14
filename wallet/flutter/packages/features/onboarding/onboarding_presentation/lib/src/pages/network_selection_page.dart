@@ -49,7 +49,13 @@ class NetworkSelectionPage extends StatelessWidget {
                 onPressed: store.isLoading
                     ? null
                     : () async {
-                        await store.createWallet();
+                        try {
+                          await store.createWallet();
+                        } catch (_) {
+                          // Store handles error message display
+                          return;
+                        }
+                        if (!context.mounted) return;
                         if (store.createdWallet != null) {
                           onContinue();
                         }

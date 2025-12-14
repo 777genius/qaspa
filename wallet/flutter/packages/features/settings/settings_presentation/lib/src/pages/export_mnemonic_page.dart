@@ -4,6 +4,7 @@ import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:go_router/go_router.dart';
 import 'package:modularity_flutter/modularity_flutter.dart';
 
 import '../stores/settings_store.dart';
@@ -35,12 +36,12 @@ class _ExportMnemonicPageState extends State<ExportMnemonicPage> {
       appBar: AppBar(title: const Text('Export Recovery Phrase')),
       body: Observer(
         builder: (_) {
-          if (store.exportedMnemonic != null) {
+          if (store.exportedMnemonic case final mnemonic?) {
             return _MnemonicDisplay(
-              mnemonic: store.exportedMnemonic!,
+              mnemonic: mnemonic,
               onDone: () {
                 store.clearExportedMnemonic();
-                Navigator.pop(context);
+                context.pop();
               },
             );
           }
@@ -98,10 +99,10 @@ class _ExportMnemonicPageState extends State<ExportMnemonicPage> {
                     ),
                   ),
                 ),
-                if (store.errorMessage != null) ...[
+                if (store.errorMessage case final errorMsg?) ...[
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    store.errorMessage!,
+                    errorMsg,
                     style: TextStyle(color: AppColors.error),
                   ),
                 ],

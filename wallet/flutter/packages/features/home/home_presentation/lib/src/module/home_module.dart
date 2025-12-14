@@ -12,6 +12,8 @@ import '../stores/home_store.dart';
 /// Requires WalletRepository, AccountRepository, and TransactionRepository
 /// from parent scope.
 class HomeModule extends Module {
+  HomeStore? _store;
+
   @override
   List<Type> get expects => [
         WalletRepository,
@@ -33,7 +35,14 @@ class HomeModule extends Module {
 
   @override
   void exports(Binder i) {
-    // Export HomeStore for page access
-    i.singleton<HomeStore>(() => i.get<HomeStore>());
+    // Export HomeStore for page access and keep reference for dispose
+    _store = i.get<HomeStore>();
+    i.singleton<HomeStore>(() => _store!);
+  }
+
+  @override
+  void onDispose() {
+    _store?.dispose();
+    _store = null;
   }
 }

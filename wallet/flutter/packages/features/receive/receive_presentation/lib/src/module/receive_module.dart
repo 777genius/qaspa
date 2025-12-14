@@ -8,6 +8,8 @@ import '../stores/receive_store.dart';
 
 /// Modularity module for receive feature.
 class ReceiveModule extends Module {
+  ReceiveStore? _store;
+
   @override
   List<Type> get expects => [AccountRepository];
 
@@ -25,7 +27,14 @@ class ReceiveModule extends Module {
 
   @override
   void exports(Binder i) {
-    // Export ReceiveStore for page access
-    i.singleton<ReceiveStore>(() => i.get<ReceiveStore>());
+    // Export ReceiveStore for page access and keep reference for dispose
+    _store = i.get<ReceiveStore>();
+    i.singleton<ReceiveStore>(() => _store!);
+  }
+
+  @override
+  void onDispose() {
+    _store?.dispose();
+    _store = null;
   }
 }

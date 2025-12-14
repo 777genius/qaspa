@@ -67,7 +67,10 @@ abstract class _HomeStoreBase with Store {
           error: e,
           name: 'HomeStore',
         );
-        errorMessage = 'Failed to load balance';
+        // Only set error if accountId hasn't changed (race condition prevention)
+        if (currentAccountId == accountIdSnapshot) {
+          errorMessage = 'Failed to load balance';
+        }
         return null;
       });
 
@@ -80,7 +83,8 @@ abstract class _HomeStoreBase with Store {
           error: e,
           name: 'HomeStore',
         );
-        if (errorMessage == null) {
+        // Only set error if accountId hasn't changed (race condition prevention)
+        if (currentAccountId == accountIdSnapshot && errorMessage == null) {
           errorMessage = 'Failed to load transactions';
         }
         return null;
@@ -158,15 +162,16 @@ abstract class _HomeStoreBase with Store {
     }
   }
 
+  @action
   void _startWatchingBalance(String accountId) {
     _balanceSubscription?.cancel();
     _balanceSubscription = _watchBalanceUseCase(accountId: accountId).listen(
       (newBalance) {
-        if (_isDisposed) return;
+        if (_isDisposed || currentAccountId != accountId) return;
         balance = newBalance;
       },
       onError: (e) {
-        if (_isDisposed) return;
+        if (_isDisposed || currentAccountId != accountId) return;
         developer.log(
           'Balance watch error',
           error: e,

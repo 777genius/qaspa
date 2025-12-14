@@ -29,3 +29,6 @@ export 'src/repositories/transaction_repository.dart'
 
 // Errors
 export 'src/errors/wallet_exception.dart';
+
+// Services
+export 'src/services/error_message_mapper.dart';
