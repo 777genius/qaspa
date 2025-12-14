@@ -5,6 +5,8 @@ use crate::tx::generator::test::*;
 use crate::tx::*;
 use crate::utils::*;
 use crate::utxo::*;
+use kaspa_addresses::Version;
+use kaspa_rpc_core::{RpcTransactionOutpoint, RpcUtxoEntry, RpcUtxosByAddressesEntry};
 
 #[tokio::test]
 async fn test_utxo_subsystem_bootstrap() -> Result<()> {
@@ -17,6 +19,32 @@ async fn test_utxo_subsystem_bootstrap() -> Result<()> {
     processor.handle_daa_score_change(1).await?;
     // println!("daa score: {:?}", processor.current_daa_score());
     // context.register_addresses(&[output_address(network_id.into())]).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn utxo_context_revive_does_not_panic_when_utxo_missing_from_stasis() -> Result<()> {
+    let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
+    let rpc_api_mock = Arc::new(RpcCoreMock::new());
+    let processor = UtxoProcessor::new(Some(rpc_api_mock.clone().into()), Some(network_id), None, None);
+
+    // Keep at least one receiver alive so notify() doesn't fail.
+    let _events = processor.multiplexer().channel();
+
+    let context = UtxoContext::new(&processor, UtxoContextBinding::default());
+    assert_eq!(context.pending_utxo_size(), 0);
+
+    let address = Address::new(Prefix::Testnet, Version::PubKey, &[1u8; 32]);
+    let entry = RpcUtxosByAddressesEntry {
+        address: Some(address),
+        outpoint: RpcTransactionOutpoint { transaction_id: TransactionId::from_bytes([7u8; 32]), index: 0 },
+        utxo_entry: RpcUtxoEntry::new(100, ScriptPublicKey::from_vec(0u16, vec![]), 1, true),
+    };
+    let utxo_ref: UtxoEntryReference = entry.into();
+
+    context.revive(vec![utxo_ref]).await?;
+    assert_eq!(context.pending_utxo_size(), 1);
+
     Ok(())
 }
 

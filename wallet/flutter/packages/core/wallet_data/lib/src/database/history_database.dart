@@ -102,8 +102,11 @@ class HistoryDatabase extends _$HistoryDatabase {
               ).get();
 
               if (hasBackup.isNotEmpty) {
+                _log.info('Starting data migration from backup table');
+
+                // Use INSERT OR REPLACE to handle any potential duplicates
                 await customStatement('''
-                  INSERT OR IGNORE INTO transaction_records
+                  INSERT OR REPLACE INTO transaction_records
                   (id, account_id, kind, network_id, timestamp, amount, fee,
                    from_addresses, to_addresses, note, metadata,
                    accepted_daa_score, is_confirmed)
@@ -128,14 +131,23 @@ class HistoryDatabase extends _$HistoryDatabase {
                 final newRowCount = newCount.read<int>('cnt');
 
                 if (newRowCount < oldRowCount) {
+                  _log.severe(
+                    'Migration verification failed: expected $oldRowCount rows, got $newRowCount. '
+                    'Backup table preserved for manual recovery.',
+                  );
                   throw Exception(
                     'Migration verification failed: '
                     'expected $oldRowCount rows, got $newRowCount',
                   );
                 }
 
+                _log.info(
+                  'Migration successful: $newRowCount transactions migrated',
+                );
+
                 // 7. Drop backup table only after verification
                 await customStatement('DROP TABLE transaction_records_backup');
+                _log.info('Backup table dropped after successful migration');
               }
 
               // 8. Create indexes

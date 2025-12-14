@@ -99,13 +99,12 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
                               await Clipboard.setData(
                                 ClipboardData(text: store.stealthAddress!.value),
                               );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Stealth address copied (auto-clears in 60s)'),
-                                  ),
-                                );
-                              }
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Stealth address copied (auto-clears in 60s)'),
+                                ),
+                              );
                               // Cancel any existing timer and start new one
                               _clipboardClearTimer?.cancel();
                               _clipboardClearTimer = Timer(_clipboardClearTimeout, () {

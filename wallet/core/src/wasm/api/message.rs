@@ -43,22 +43,62 @@ const TS_CATEGORY_WALLET: &'static str = r#"
 
 // ---
 
+const JS_MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0; // 2^53 - 1
+
+fn f64_to_u64_safe_integer(num: f64, field: &str) -> Result<u64> {
+    if !num.is_finite() {
+        return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
+    }
+    if num < 0.0 {
+        return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
+    }
+    if num.fract() != 0.0 {
+        return Err(Error::InvalidArgument(format!("{field} must be an integer")));
+    }
+    if num > JS_MAX_SAFE_INTEGER {
+        return Err(Error::InvalidArgument(format!("{field} exceeds JS MAX_SAFE_INTEGER")));
+    }
+
+    Ok(num as u64)
+}
+
 fn js_value_to_optional_u64(value: JsValue, field: &str) -> Result<Option<u64>> {
     if value.is_undefined() || value.is_null() {
         return Ok(None);
     }
 
     if let Some(num) = value.as_f64() {
-        if !num.is_finite() {
-            return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
-        }
-        if num < 0.0 {
-            return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
-        }
-        return Ok(Some(num as u64));
+        return Ok(Some(f64_to_u64_safe_integer(num, field)?));
     }
 
     Err(Error::InvalidArgument(format!("{field} must be a number")))
+}
+
+#[cfg(test)]
+mod js_number_parsing_tests {
+    use super::f64_to_u64_safe_integer;
+
+    #[test]
+    fn f64_to_u64_safe_integer_accepts_valid_integers() {
+        assert_eq!(f64_to_u64_safe_integer(0.0, "x").unwrap(), 0);
+        assert_eq!(f64_to_u64_safe_integer(42.0, "x").unwrap(), 42);
+        assert_eq!(f64_to_u64_safe_integer(9_007_199_254_740_991.0, "x").unwrap(), 9_007_199_254_740_991);
+    }
+
+    #[test]
+    fn f64_to_u64_safe_integer_rejects_fractional() {
+        assert!(f64_to_u64_safe_integer(1.5, "x").is_err());
+    }
+
+    #[test]
+    fn f64_to_u64_safe_integer_rejects_negative() {
+        assert!(f64_to_u64_safe_integer(-1.0, "x").is_err());
+    }
+
+    #[test]
+    fn f64_to_u64_safe_integer_rejects_above_max_safe_integer() {
+        assert!(f64_to_u64_safe_integer(9_007_199_254_740_992.0, "x").is_err());
+    }
 }
 
 fn build_fee_randomization_from_js(min: Option<u64>, max: Option<u64>) -> Result<Option<RandomFeeSettings>> {

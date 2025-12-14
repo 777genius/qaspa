@@ -239,6 +239,13 @@ class MockWalletBridge implements WalletBridge {
     _accounts.remove(accountId);
     _balances.remove(accountId);
     _transactions.remove(accountId);
+
+    // Close and remove stream controllers to prevent memory leaks
+    final balanceController = _balanceControllers.remove(accountId);
+    await balanceController?.close();
+
+    final txController = _transactionControllers.remove(accountId);
+    await txController?.close();
   }
 
   @override

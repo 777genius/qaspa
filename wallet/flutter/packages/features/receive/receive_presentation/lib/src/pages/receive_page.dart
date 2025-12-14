@@ -123,14 +123,13 @@ class _ReceivePageState extends State<ReceivePage> {
                           await Clipboard.setData(
                             ClipboardData(text: store.currentAddress!.value),
                           );
+                          if (!mounted) return;
                           store.setAddressCopied(true);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Address copied (auto-clears in 60s)'),
-                              ),
-                            );
-                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Address copied (auto-clears in 60s)'),
+                            ),
+                          );
                           // Cancel any existing timer and start new one
                           _clipboardClearTimer?.cancel();
                           _clipboardClearTimer = Timer(_clipboardClearTimeout, () {

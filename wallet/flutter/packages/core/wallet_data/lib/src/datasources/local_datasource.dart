@@ -56,7 +56,10 @@ class LocalDatasource {
       offset: offset,
       kind: kindFilter?.name,
     );
-    return records.map(_recordToTransaction).toList();
+    return records
+        .map(_safeRecordToTransaction)
+        .whereType<Transaction>()
+        .toList();
   }
 
   /// Watch transactions for account (reactive stream).
@@ -66,14 +69,17 @@ class LocalDatasource {
     int limit = 100,
   }) {
     return _db.watchTransactions(accountId: accountId, limit: limit).map(
-          (records) => records.map(_recordToTransaction).toList(),
+          (records) => records
+              .map(_safeRecordToTransaction)
+              .whereType<Transaction>()
+              .toList(),
         );
   }
 
   /// Get single transaction by ID.
   Future<Transaction?> getTransaction({required TransactionId id}) async {
     final record = await _db.getTransactionById(id.hex);
-    return record != null ? _recordToTransaction(record) : null;
+    return record != null ? _safeRecordToTransaction(record) : null;
   }
 
   /// Update transaction note.
@@ -179,16 +185,31 @@ class LocalDatasource {
     }
   }
 
+  /// Safe wrapper for _recordToTransaction that catches and logs errors.
+  /// Returns null for corrupted records instead of crashing the entire list.
+  Transaction? _safeRecordToTransaction(TransactionRecord record) {
+    try {
+      return _recordToTransaction(record);
+    } catch (e, stack) {
+      developer.log(
+        'CRITICAL: Failed to parse transaction record ${record.id}. '
+        'This transaction will be skipped! Data may be corrupted.',
+        name: _logName,
+        level: 1200, // SEVERE
+        error: e,
+        stackTrace: stack,
+      );
+      return null;
+    }
+  }
+
   Transaction _recordToTransaction(TransactionRecord record) {
     // Parse amount - this is critical and MUST not fail silently
     final amount = _parseRequiredBigInt(record.amount, 'amount');
 
     return Transaction(
       id: TransactionId.fromHex(record.id),
-      kind: TransactionKind.values.firstWhere(
-        (k) => k.name == record.kind,
-        orElse: () => TransactionKind.incoming,
-      ),
+      kind: _parseTransactionKind(record.kind),
       networkId: NetworkId.fromString(record.networkId),
       timestamp: record.timestamp,
       amount: amount,
@@ -200,5 +221,26 @@ class LocalDatasource {
       acceptedDaaScore: record.acceptedDaaScore,
       isConfirmed: record.isConfirmed,
     );
+  }
+
+  /// Parse transaction kind with logging for unknown values.
+  /// CRITICAL: Unknown values should NOT silently become 'incoming'
+  /// as this could show outgoing transactions as incoming!
+  TransactionKind _parseTransactionKind(String kind) {
+    try {
+      return TransactionKind.values.byName(kind);
+    } on ArgumentError {
+      // Log SEVERE warning - this could cause financial confusion!
+      developer.log(
+        'CRITICAL: Unknown TransactionKind "$kind" in database! '
+        'This transaction will be shown as "incoming" but may actually be outgoing. '
+        'Database may be corrupted or app version mismatch.',
+        name: _logName,
+        level: 1200, // SEVERE
+      );
+      // Fallback to incoming for backwards compatibility,
+      // but this is logged as SEVERE
+      return TransactionKind.incoming;
+    }
   }
 }

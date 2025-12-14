@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:wallet_domain/wallet_domain.dart';
 
@@ -43,8 +44,18 @@ class WalletBridgeWeb implements WalletBridge {
 
   @override
   Future<void> dispose() async {
-    // Close all stream controllers
-    await _eventsController.close();
+    // Close all stream controllers safely
+    try {
+      if (!_eventsController.isClosed) {
+        await _eventsController.close();
+      }
+    } catch (e) {
+      developer.log(
+        'Error closing events controller',
+        name: 'WalletBridgeWeb',
+        error: e,
+      );
+    }
     // TODO: Dispose WASM resources
     // _jsWallet?.dispose();
   }

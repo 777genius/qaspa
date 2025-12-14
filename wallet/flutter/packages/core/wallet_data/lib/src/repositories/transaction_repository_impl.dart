@@ -95,6 +95,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
         _log.info('Transaction sync stream completed for $capturedAccountId');
         _accountSubscriptions.remove(capturedAccountId);
       },
+      cancelOnError: true,
     );
 
     // Start global events subscription (only once)
@@ -114,6 +115,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
         _log.info('Events stream completed');
         _eventsSubscription = null;
       },
+      cancelOnError: true,
     );
   }
 

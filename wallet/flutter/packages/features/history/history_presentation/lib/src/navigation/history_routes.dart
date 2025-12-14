@@ -56,6 +56,14 @@ abstract final class HistoryRoutes {
                   ),
                 );
               }
+              // Validate hex format to prevent TransactionId.fromHex crash
+              if (!RegExp(r'^[a-fA-F0-9]+$').hasMatch(transactionId)) {
+                return const Scaffold(
+                  body: Center(
+                    child: Text('Invalid transaction ID format'),
+                  ),
+                );
+              }
               return TransactionDetailsPage(transactionId: transactionId);
             },
           ),

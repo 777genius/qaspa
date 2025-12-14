@@ -62,10 +62,11 @@ abstract class _HistoryStoreBase with Store {
 
   void _subscribeToTransactions() {
     _transactionSubscription?.cancel();
-    if (currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (accountId == null) return;
 
     _transactionSubscription = _watchTransactionHistoryUseCase(
-      accountId: currentAccountId!,
+      accountId: accountId,
     ).listen(
       (newTransactions) {
         if (_isDisposed) return;
@@ -82,7 +83,8 @@ abstract class _HistoryStoreBase with Store {
 
   @action
   Future<void> loadTransactions() async {
-    if (currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (accountId == null) return;
 
     isLoading = true;
     errorMessage = null;
@@ -90,7 +92,7 @@ abstract class _HistoryStoreBase with Store {
 
     try {
       final result = await _getTransactionHistoryUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
         limit: _pageSize,
         offset: 0,
       );
@@ -108,13 +110,14 @@ abstract class _HistoryStoreBase with Store {
 
   @action
   Future<void> loadMore() async {
-    if (currentAccountId == null || isLoadingMore || !hasMoreData) return;
+    final accountId = currentAccountId;
+    if (accountId == null || isLoadingMore || !hasMoreData) return;
 
     isLoadingMore = true;
 
     try {
       final result = await _getTransactionHistoryUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
         limit: _pageSize,
         offset: _currentOffset,
       );

@@ -104,6 +104,7 @@ class _TransactionListItem extends StatelessWidget {
   final VoidCallback onTap;
 
   const _TransactionListItem({
+    super.key,
     required this.transaction,
     required this.onTap,
   });

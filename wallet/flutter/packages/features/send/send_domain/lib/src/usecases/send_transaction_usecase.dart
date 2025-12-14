@@ -35,8 +35,8 @@ class SendTransactionUseCase {
       );
     }
 
-    // Validate password
-    if (password.isEmpty) {
+    // Validate password (trim to reject whitespace-only passwords)
+    if (password.trim().isEmpty) {
       throw InvalidPasswordException(
         code: 'EMPTY_PASSWORD',
         message: 'Password cannot be empty',

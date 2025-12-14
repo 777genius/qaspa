@@ -144,13 +144,13 @@ abstract class _StealthStoreBase with Store {
         return;
       }
 
-      final addressResult = results[0] as Address?;
-      final balanceResult = results[1] as Balance?;
+      final addressResult = results[0];
+      final balanceResult = results[1];
 
-      if (addressResult != null) {
+      if (addressResult is Address) {
         stealthAddress = addressResult;
       }
-      if (balanceResult != null) {
+      if (balanceResult is Balance) {
         stealthBalance = balanceResult;
       }
 

@@ -140,9 +140,11 @@ class StealthSendPage extends StatelessWidget {
                           Navigator.pop(context);
                         }
                       } else if (store.errorMessage != null) {
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          SnackBar(content: Text('Error: ${store.errorMessage}')),
-                        );
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            SnackBar(content: Text('Error: ${store.errorMessage}')),
+                          );
+                        }
                       }
                     },
               child: store.isSending

@@ -44,7 +44,7 @@ class Mnemonic extends Equatable {
   /// Word count
   int get wordCount => words.length;
 
-  /// Get word at index (1-based for display)
+  /// Get word at index (0-based)
   String wordAt(int index) => words[index];
 
   /// Convert to phrase string

@@ -32,6 +32,7 @@ class _GenerateMnemonicPageState extends State<GenerateMnemonicPage> {
     super.initState();
     // Generate mnemonic when page loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final store = ModuleProvider.of(context).get<OnboardingStore>();
       if (store.mnemonic == null) {
         store.generateMnemonic();

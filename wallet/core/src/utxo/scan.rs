@@ -26,6 +26,46 @@ enum Provider {
     AddressSet(HashSet<Address>),
 }
 
+fn filter_scan_window_utxos<T>(
+    entries: Vec<T>,
+    local_address_to_index_map: &HashMap<Address, u32>,
+    last_address_index: &mut u32,
+    first: u32,
+    last: u32,
+) -> Vec<UtxoEntryReference>
+where
+    T: Into<UtxoEntryReference>,
+{
+    let mut refs = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let utxo_ref: UtxoEntryReference = entry.into();
+        let Some(address) = utxo_ref.utxo.address.as_ref() else {
+            log_warn!(
+                "scan_with_address_manager(): rpc returned UTXO without address for derivation window {}..{} (outpoint={:?})",
+                first,
+                last,
+                utxo_ref.utxo.outpoint
+            );
+            continue;
+        };
+
+        let Some(utxo_address_index) = local_address_to_index_map.get(address) else {
+            log_warn!(
+                "scan_with_address_manager(): rpc returned UTXO for unknown address `{}` (outpoint={:?})",
+                address,
+                utxo_ref.utxo.outpoint
+            );
+            continue;
+        };
+
+        if *last_address_index < *utxo_address_index {
+            *last_address_index = *utxo_address_index;
+        }
+        refs.push(utxo_ref);
+    }
+    refs
+}
+
 pub struct Scan {
     provider: Provider,
     window_size: Option<usize>,
@@ -81,6 +121,10 @@ impl Scan {
 
             // generate address derivations
             let addresses = address_manager.get_range(first..last)?;
+            let mut local_address_to_index_map = HashMap::with_capacity(addresses.len());
+            for (offset, address) in addresses.iter().enumerate() {
+                local_address_to_index_map.insert(address.clone(), first + offset as u32);
+            }
             // register address in the utxo context; NOTE:  during the scan,
             // before `get_utxos_by_addresses()` is complete we may receive
             // new transactions  as such utxo context should be aware of the
@@ -95,20 +139,9 @@ impl Scan {
             }
             yield_executor().await;
 
-            if !resp.is_empty() {
-                let refs: Vec<UtxoEntryReference> = resp.into_iter().map(UtxoEntryReference::from).collect();
-                for utxo_ref in refs.iter() {
-                    if let Some(address) = utxo_ref.utxo.address.as_ref() {
-                        if let Some(utxo_address_index) = address_manager.inner().address_to_index_map.get(address) {
-                            if last_address_index < *utxo_address_index {
-                                last_address_index = *utxo_address_index;
-                            }
-                        } else {
-                            panic!("Account::scan_address_manager() has received an unknown address: `{address}`");
-                        }
-                    }
-                }
+            let refs = filter_scan_window_utxos(resp, &local_address_to_index_map, &mut last_address_index, first, last);
 
+            if !refs.is_empty() {
                 let balance: Balance = refs.iter().fold(Balance::default(), |mut balance, r| {
                     let entry_balance = r.balance(params, self.current_daa_score);
                     balance.mature += entry_balance.mature;
@@ -171,5 +204,50 @@ impl Scan {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaspa_addresses::Version;
+    use kaspa_rpc_core::{RpcTransactionOutpoint, RpcUtxoEntry, RpcUtxosByAddressesEntry};
+
+    #[test]
+    fn filter_scan_window_utxos_skips_unknown_addresses_instead_of_panicking() {
+        let known_0 = Address::new(Prefix::Testnet, Version::PubKey, &[1u8; 32]);
+        let known_1 = Address::new(Prefix::Testnet, Version::PubKey, &[2u8; 32]);
+        let unknown = Address::new(Prefix::Testnet, Version::PubKey, &[3u8; 32]);
+
+        let mut local_address_to_index_map = HashMap::new();
+        local_address_to_index_map.insert(known_0.clone(), 10);
+        local_address_to_index_map.insert(known_1.clone(), 12);
+
+        let spk = ScriptPublicKey::from_vec(0u16, vec![]);
+        let mk_entry = |address: Option<Address>, txid_byte: u8, index: u32| RpcUtxosByAddressesEntry {
+            address,
+            outpoint: RpcTransactionOutpoint { transaction_id: TransactionId::from_bytes([txid_byte; 32]), index },
+            utxo_entry: RpcUtxoEntry::new(100, spk.clone(), 0, false),
+        };
+
+        let mut last_index = 0;
+        let refs = filter_scan_window_utxos(
+            vec![
+                mk_entry(Some(known_0.clone()), 1, 0),
+                mk_entry(Some(unknown), 2, 0),
+                mk_entry(None, 3, 0),
+                mk_entry(Some(known_1.clone()), 4, 0),
+            ],
+            &local_address_to_index_map,
+            &mut last_index,
+            10,
+            13,
+        );
+
+        assert_eq!(refs.len(), 2);
+        assert_eq!(last_index, 12);
+        let addresses: Vec<Address> = refs.iter().filter_map(|r| r.utxo.address.clone()).collect();
+        assert!(addresses.contains(&known_0));
+        assert!(addresses.contains(&known_1));
     }
 }

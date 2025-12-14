@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:mobx/mobx.dart';
 import 'package:onboarding_domain/onboarding_domain.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -348,10 +350,22 @@ abstract class _OnboardingStoreBase with Store {
       clearSensitiveData();
       currentStep = OnboardingStep.success;
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Wallet creation failed', error: e, name: 'OnboardingStore');
+      errorMessage = _getWalletCreationErrorMessage(e);
     } finally {
       isLoading = false;
     }
+  }
+
+  String _getWalletCreationErrorMessage(Object error) {
+    if (error is InvalidMnemonicException) {
+      return 'Invalid recovery phrase';
+    } else if (error is InvalidPasswordException) {
+      return 'Invalid password';
+    } else if (error is WalletAlreadyExistsException) {
+      return 'A wallet with this name already exists';
+    }
+    return 'Failed to create wallet. Please try again';
   }
 
   /// Reset store to initial state

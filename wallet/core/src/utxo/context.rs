@@ -433,12 +433,10 @@ impl UtxoContext {
         for (txid, utxos) in transactions.into_iter() {
             for utxo_entry in utxos.iter() {
                 let mut context = self.context();
-                if context.stasis.remove(utxo_entry.id_as_ref()).is_some() {
-                    context.pending.insert(utxo_entry.id(), utxo_entry.clone());
-                } else {
-                    log_error!("Error: non-stasis utxo revival!");
-                    panic!("Error: non-stasis utxo revival!");
+                if context.stasis.remove(utxo_entry.id_as_ref()).is_none() {
+                    log_error!("Error: non-stasis utxo revival (id={:?})", utxo_entry.id_as_ref());
                 }
+                context.pending.insert(utxo_entry.id(), utxo_entry.clone());
             }
 
             let record = TransactionRecord::new_incoming(self, txid, &utxos);

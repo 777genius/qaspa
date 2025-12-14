@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:mobx/mobx.dart';
 import 'package:settings_domain/settings_domain.dart';
@@ -90,7 +91,8 @@ abstract class _SettingsStoreBase with Store {
       exportedMnemonic = mnemonic.toPhrase();
       _startMnemonicClearTimer();
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Export mnemonic failed', error: e, name: 'SettingsStore');
+      errorMessage = _getPasswordErrorMessage(e);
     } finally {
       isProcessing = false;
     }
@@ -137,7 +139,8 @@ abstract class _SettingsStoreBase with Store {
       successMessage = 'Password changed successfully';
       return true;
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Change password failed', error: e, name: 'SettingsStore');
+      errorMessage = _getPasswordErrorMessage(e);
       return false;
     } finally {
       isProcessing = false;
@@ -158,11 +161,21 @@ abstract class _SettingsStoreBase with Store {
       );
       return true;
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Delete wallet failed', error: e, name: 'SettingsStore');
+      errorMessage = _getPasswordErrorMessage(e);
       return false;
     } finally {
       isProcessing = false;
     }
+  }
+
+  String _getPasswordErrorMessage(Object error) {
+    if (error is InvalidPasswordException) {
+      return 'Invalid password';
+    } else if (error is WalletNotFoundException) {
+      return 'Wallet not found';
+    }
+    return 'Operation failed. Please try again';
   }
 
   @action

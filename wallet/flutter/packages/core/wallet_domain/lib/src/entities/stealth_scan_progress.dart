@@ -30,13 +30,16 @@ sealed class StealthScanProgress with _$StealthScanProgress {
   int get progressPercent => (progress * 100).round();
 
   /// Estimated time remaining based on elapsed time.
+  /// Returns null if progress is too small (< 2%) for stable estimation.
   Duration? get estimatedTimeRemaining {
     final start = startedAt;
-    if (start == null || progress == 0 || isComplete) return null;
+    final currentProgress = progress;
+    // Need at least 2% progress for stable time estimation
+    if (start == null || currentProgress < 0.02 || isComplete) return null;
 
     final elapsed = DateTime.now().difference(start);
-    final remainingProgress = 1.0 - progress;
-    final estimatedTotal = elapsed.inMilliseconds / progress;
+    final remainingProgress = 1.0 - currentProgress;
+    final estimatedTotal = elapsed.inMilliseconds / currentProgress;
     final remaining = (estimatedTotal * remainingProgress).round();
 
     return Duration(milliseconds: remaining);

@@ -95,13 +95,13 @@ abstract class _HomeStoreBase with Store {
         return;
       }
 
-      final balanceResult = results[0] as Balance?;
-      final transactionsResult = results[1] as List<Transaction>?;
+      final balanceResult = results[0];
+      final transactionsResult = results[1];
 
-      if (balanceResult != null) {
+      if (balanceResult is Balance) {
         balance = balanceResult;
       }
-      if (transactionsResult != null) {
+      if (transactionsResult is List<Transaction>) {
         recentTransactions = ObservableList.of(transactionsResult);
       }
 

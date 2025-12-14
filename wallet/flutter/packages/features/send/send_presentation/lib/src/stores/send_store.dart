@@ -156,10 +156,33 @@ abstract class _SendStoreBase with Store {
       amount = '';
       estimatedFee = null;
     } catch (e) {
-      errorMessage = e.toString();
+      // Use generic message to avoid leaking sensitive data
+      developer.log(
+        'Send transaction failed',
+        error: e,
+        name: 'SendStore',
+      );
+      errorMessage = _getGenericErrorMessage(e);
     } finally {
       isSending = false;
     }
+  }
+
+  String _getGenericErrorMessage(Object error) {
+    // Map known exceptions to user-friendly messages
+    if (error is InsufficientFundsException) {
+      return 'Insufficient funds for this transaction';
+    } else if (error is InvalidPasswordException) {
+      return 'Invalid password';
+    } else if (error is InvalidAddressException) {
+      return 'Invalid recipient address';
+    } else if (error is InvalidAmountException) {
+      return 'Invalid amount';
+    } else if (error is NotConnectedException || error is RpcException) {
+      return 'Network error. Please check your connection';
+    }
+    // Generic fallback - never expose raw error details
+    return 'Transaction failed. Please try again';
   }
 
   @action

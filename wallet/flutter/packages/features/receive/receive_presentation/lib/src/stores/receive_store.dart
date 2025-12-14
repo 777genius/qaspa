@@ -45,14 +45,15 @@ abstract class _ReceiveStoreBase with Store {
 
   @action
   Future<void> loadAddress() async {
-    if (currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (accountId == null) return;
 
     isLoading = true;
     errorMessage = null;
 
     try {
       currentAddress = await _getReceiveAddressUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
       );
     } catch (e) {
       errorMessage = e.toString();
@@ -63,14 +64,15 @@ abstract class _ReceiveStoreBase with Store {
 
   @action
   Future<void> generateNewAddress() async {
-    if (currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (accountId == null) return;
 
     isLoading = true;
     errorMessage = null;
 
     try {
       currentAddress = await _generateNewAddressUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
       );
     } catch (e) {
       errorMessage = e.toString();

@@ -652,6 +652,94 @@ pub trait Account: AnySync + Send + Sync + 'static {
 
 downcast_sync!(dyn Account);
 
+fn filter_derivation_scan_utxos<T>(
+    entries: Vec<T>,
+    receive_local_index_map: &HashMap<Address, u32>,
+    change_local_index_map: &HashMap<Address, u32>,
+    last_receive_address_index: &mut u32,
+    last_change_address_index: &mut u32,
+) -> (Vec<UtxoEntryReference>, u64)
+where
+    T: Into<UtxoEntryReference>,
+{
+    let mut balance = 0;
+    let mut utxos = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let utxo_ref: UtxoEntryReference = entry.into();
+        let Some(address) = utxo_ref.utxo.address.as_ref() else {
+            log_warn!("Account::derivation_scan() received UTXO without address (outpoint={:?})", utxo_ref.utxo.outpoint);
+            continue;
+        };
+
+        if let Some(address_index) = receive_local_index_map.get(address) {
+            if *last_receive_address_index < *address_index {
+                *last_receive_address_index = *address_index;
+            }
+        } else if let Some(address_index) = change_local_index_map.get(address) {
+            if *last_change_address_index < *address_index {
+                *last_change_address_index = *address_index;
+            }
+        } else {
+            log_warn!("Account::derivation_scan() has received an unknown address: `{address}`");
+            continue;
+        }
+
+        balance += utxo_ref.utxo.amount;
+        utxos.push(utxo_ref);
+    }
+
+    (utxos, balance)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+mod derivation_scan_tests {
+    use super::filter_derivation_scan_utxos;
+    use crate::imports::*;
+    use kaspa_addresses::Version;
+    use kaspa_rpc_core::{RpcTransactionOutpoint, RpcUtxoEntry, RpcUtxosByAddressesEntry};
+
+    #[test]
+    fn filter_derivation_scan_utxos_skips_unknown_addresses_instead_of_panicking() {
+        let receive = Address::new(Prefix::Testnet, Version::PubKey, &[1u8; 32]);
+        let change = Address::new(Prefix::Testnet, Version::PubKey, &[2u8; 32]);
+        let unknown = Address::new(Prefix::Testnet, Version::PubKey, &[3u8; 32]);
+
+        let mut receive_local_index_map = HashMap::new();
+        receive_local_index_map.insert(receive.clone(), 5);
+        let mut change_local_index_map = HashMap::new();
+        change_local_index_map.insert(change.clone(), 7);
+
+        let spk = ScriptPublicKey::from_vec(0u16, vec![]);
+        let mk_entry = |address: Option<Address>, txid_byte: u8, index: u32| RpcUtxosByAddressesEntry {
+            address,
+            outpoint: RpcTransactionOutpoint { transaction_id: TransactionId::from_bytes([txid_byte; 32]), index },
+            utxo_entry: RpcUtxoEntry::new(100, spk.clone(), 0, false),
+        };
+
+        let mut last_receive = 0;
+        let mut last_change = 0;
+
+        let (utxos, balance) = filter_derivation_scan_utxos(
+            vec![
+                mk_entry(Some(receive.clone()), 1, 0),
+                mk_entry(Some(change.clone()), 2, 0),
+                mk_entry(Some(unknown), 3, 0),
+                mk_entry(None, 4, 0),
+            ],
+            &receive_local_index_map,
+            &change_local_index_map,
+            &mut last_receive,
+            &mut last_change,
+        );
+
+        assert_eq!(utxos.len(), 2);
+        assert_eq!(balance, 200);
+        assert_eq!(last_receive, 5);
+        assert_eq!(last_change, 7);
+    }
+}
+
 /// Account trait used by legacy account types (BIP32 account types with the `'972` derivation path).
 #[async_trait]
 pub trait AsLegacyAccount: Account {
@@ -720,10 +808,23 @@ pub trait DerivationCapableAccount: Account {
             let last = (index + window) as u32;
             index = last as usize;
 
-            let (mut keys, addresses) = if sweep {
-                let mut keypairs = derivation.get_range_with_keys(false, first..last, true, &xkey).await?;
+            let (mut keys, addresses, receive_local_index_map, change_local_index_map) = if sweep {
+                let receive_keypairs = derivation.get_range_with_keys(false, first..last, true, &xkey).await?;
                 let change_keypairs = derivation.get_range_with_keys(true, first..last, true, &xkey).await?;
+
+                let mut receive_local_index_map = HashMap::with_capacity(receive_keypairs.len());
+                for (offset, (address, _)) in receive_keypairs.iter().enumerate() {
+                    receive_local_index_map.insert(address.clone(), first + offset as u32);
+                }
+
+                let mut change_local_index_map = HashMap::with_capacity(change_keypairs.len());
+                for (offset, (address, _)) in change_keypairs.iter().enumerate() {
+                    change_local_index_map.insert(address.clone(), first + offset as u32);
+                }
+
+                let mut keypairs = receive_keypairs;
                 keypairs.extend(change_keypairs);
+
                 let mut keys = vec![];
                 let addresses = keypairs
                     .iter()
@@ -733,37 +834,36 @@ pub trait DerivationCapableAccount: Account {
                     })
                     .collect::<Vec<_>>();
                 keys.push(change_address_keypair[0].1.to_bytes());
-                (keys, addresses)
+
+                (keys, addresses, receive_local_index_map, change_local_index_map)
             } else {
-                let mut addresses = receive_address_manager.get_range_with_args(first..last, true)?;
+                let receive_addresses = receive_address_manager.get_range_with_args(first..last, true)?;
                 let change_addresses = change_address_manager.get_range_with_args(first..last, true)?;
+
+                let mut receive_local_index_map = HashMap::with_capacity(receive_addresses.len());
+                for (offset, address) in receive_addresses.iter().enumerate() {
+                    receive_local_index_map.insert(address.clone(), first + offset as u32);
+                }
+
+                let mut change_local_index_map = HashMap::with_capacity(change_addresses.len());
+                for (offset, address) in change_addresses.iter().enumerate() {
+                    change_local_index_map.insert(address.clone(), first + offset as u32);
+                }
+
+                let mut addresses = receive_addresses;
                 addresses.extend(change_addresses);
-                (vec![], addresses)
+
+                (vec![], addresses, receive_local_index_map, change_local_index_map)
             };
 
-            let utxos = rpc.get_utxos_by_addresses(addresses.clone()).await?;
-            let mut balance = 0;
-            let utxos = utxos
-                .iter()
-                .map(|utxo| {
-                    let utxo_ref = UtxoEntryReference::from(utxo);
-                    if let Some(address) = utxo_ref.utxo.address.as_ref() {
-                        if let Some(address_index) = receive_address_manager.inner().address_to_index_map.get(address) {
-                            if last_receive_address_index < *address_index {
-                                last_receive_address_index = *address_index;
-                            }
-                        } else if let Some(address_index) = change_address_manager.inner().address_to_index_map.get(address) {
-                            if last_change_address_index < *address_index {
-                                last_change_address_index = *address_index;
-                            }
-                        } else {
-                            panic!("Account::derivation_scan() has received an unknown address: `{address}`");
-                        }
-                    }
-                    balance += utxo_ref.utxo.amount;
-                    utxo_ref
-                })
-                .collect::<Vec<_>>();
+            let utxos = rpc.get_utxos_by_addresses(addresses).await?;
+            let (utxos, balance) = filter_derivation_scan_utxos(
+                utxos,
+                &receive_local_index_map,
+                &change_local_index_map,
+                &mut last_receive_address_index,
+                &mut last_change_address_index,
+            );
             aggregate_utxo_count += utxos.len();
 
             if balance > 0 {

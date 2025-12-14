@@ -81,6 +81,16 @@ impl Bundle {
     {
         let mut result = "".to_string();
 
+        let format_address = |spk: &ScriptPublicKey| -> String {
+            if spk.version() == kaspa_txscript::STEALTH_SCRIPT_VERSION {
+                "<stealth-output>".to_string()
+            } else {
+                extract_script_pub_key_address(spk, Prefix::from(network_id))
+                    .map(|a| a.to_string())
+                    .unwrap_or_else(|_| "<non-standard>".to_string())
+            }
+        };
+
         for (pskt_index, bundle_inner) in self.0.iter().enumerate() {
             let pskt: PSKT<Signer> = PSKT::<Signer>::from(bundle_inner.to_owned());
 
@@ -91,11 +101,7 @@ impl Bundle {
 
                 if let Some(utxo_entry) = &input.utxo_entry {
                     result.push_str(&format!("  amount: {}\r\n", sompi_formatter(utxo_entry.amount, &NetworkType::from(network_id))));
-                    result.push_str(&format!(
-                        "  address: {}\r\n",
-                        extract_script_pub_key_address(&utxo_entry.script_public_key, Prefix::from(network_id))
-                            .expect("Input address")
-                    ));
+                    result.push_str(&format!("  address: {}\r\n", format_address(&utxo_entry.script_public_key)));
                 }
             }
 
@@ -104,10 +110,7 @@ impl Bundle {
             for (key_inner, output) in pskt.clone().outputs.iter().enumerate() {
                 result.push_str(&format!("Output #{:02}\r\n", key_inner + 1));
                 result.push_str(&format!("  amount: {}\r\n", sompi_formatter(output.amount, &NetworkType::from(network_id))));
-                result.push_str(&format!(
-                    "  address: {}\r\n",
-                    extract_script_pub_key_address(&output.script_public_key, Prefix::from(network_id)).expect("Input address")
-                ));
+                result.push_str(&format!("  address: {}\r\n", format_address(&output.script_public_key)));
             }
         }
         result
@@ -275,10 +278,11 @@ pub fn unlock_utxo_outputs_as_batch_transaction_pskb(
 
     let outputs: Vec<Output> = destination_outputs
         .iter()
-        .filter_map(|(address, amount)| {
-            OutputBuilder::default().amount(*amount).script_public_key(pay_to_address_script(address).ok()?).build().ok()
+        .map(|(address, amount)| -> Result<Output, Error> {
+            let spk = pay_to_address_script(address).map_err(|e| Error::from(e.to_string()))?;
+            Ok(OutputBuilder::default().amount(*amount).script_public_key(spk).build()?)
         })
-        .collect();
+        .collect::<Result<Vec<_>, Error>>()?;
 
     let pskt: PSKT<Constructor> =
         outputs.into_iter().fold(PSKT::<Creator>::default().constructor().input(input), |pskt, output| pskt.output(output));
@@ -341,6 +345,45 @@ mod tests {
 
         let err = unlock_utxos_as_pskb(vec![(utxo_entry, outpoint)], &recipient, vec![0u8], 1).expect_err("must fail");
         assert!(err.to_string().to_lowercase().contains("stealth"));
+    }
+
+    #[test]
+    fn unlock_utxo_outputs_rejects_invalid_destination_address_instead_of_silently_dropping_it() {
+        let start_address = Address::new(Prefix::Testnet, kaspa_addresses::Version::PubKey, &[0u8; 32]);
+        let invalid = Address {
+            prefix: Prefix::Testnet,
+            version: kaspa_addresses::Version::PubKey,
+            payload: kaspa_addresses::PayloadVec::from_slice(&[1u8; 31]),
+        };
+
+        let err =
+            unlock_utxo_outputs_as_batch_transaction_pskb(1000, &start_address, &[0u8], vec![(invalid, 1)]).expect_err("must fail");
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn bundle_display_format_does_not_panic_on_stealth_script_pubkeys() {
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
+
+        let stealth_spk =
+            ScriptPublicKey::new(kaspa_txscript::STEALTH_SCRIPT_VERSION, vec![0u8; kaspa_txscript::STEALTH_OUTPUT_SIZE].into());
+
+        let input = InputBuilder::default()
+            .utxo_entry(UtxoEntry { amount: 1000, script_public_key: stealth_spk, block_daa_score: 0, is_coinbase: false })
+            .previous_outpoint(TransactionOutpoint { transaction_id: TransactionId::from_bytes([1u8; 32]), index: 0 })
+            .sig_op_count(1)
+            .build()
+            .expect("input");
+
+        let output =
+            OutputBuilder::default().amount(1).script_public_key(ScriptPublicKey::from_vec(0u16, vec![])).build().expect("output");
+
+        let pskt =
+            PSKT::<Creator>::default().inputs_modifiable().outputs_modifiable().constructor().input(input).output(output).signer();
+        let bundle = Bundle::from(pskt);
+
+        let text = bundle.display_format(network_id, |sompi, _| sompi.to_string());
+        assert!(text.contains("<stealth-output>"));
     }
 
     // Mock multisig PSKT from example

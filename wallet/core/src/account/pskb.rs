@@ -248,29 +248,26 @@ pub async fn pskb_signer_for_address(
 
 pub fn finalize_pskt_one_or_more_sig_and_redeem_script(pskt: PSKT<Finalizer>) -> Result<PSKT<Finalizer>, Error> {
     let result = pskt.finalize_sync(|inner: &Inner| -> Result<Vec<Vec<u8>>, String> {
-        Ok(inner
+        inner
             .inputs
             .iter()
-            .map(|input| -> Vec<u8> {
-                let signatures: Vec<_> = input
+            .map(|input| -> Result<Vec<u8>, String> {
+                let mut script: Vec<u8> = input
                     .partial_sigs
                     .clone()
                     .into_iter()
                     .flat_map(|(_, signature)| iter::once(OpData65).chain(signature.into_bytes()).chain([input.sighash_type.to_u8()]))
                     .collect();
 
-                signatures
-                    .into_iter()
-                    .chain(
-                        input
-                            .redeem_script
-                            .as_ref()
-                            .map(|redeem_script| ScriptBuilder::new().add_data(redeem_script.as_slice()).unwrap().drain().to_vec())
-                            .unwrap_or_default(),
-                    )
-                    .collect()
+                if let Some(redeem_script) = input.redeem_script.as_ref() {
+                    let mut builder = ScriptBuilder::new();
+                    builder.add_data(redeem_script.as_slice()).map_err(|e| e.to_string())?;
+                    script.extend(builder.drain());
+                }
+
+                Ok(script)
             })
-            .collect())
+            .collect::<Result<Vec<_>, _>>()
     });
 
     match result {
@@ -281,17 +278,19 @@ pub fn finalize_pskt_one_or_more_sig_and_redeem_script(pskt: PSKT<Finalizer>) ->
 
 pub fn finalize_pskt_no_sig_and_redeem_script(pskt: PSKT<Finalizer>) -> Result<PSKT<Finalizer>, Error> {
     let result = pskt.finalize_sync(|inner: &Inner| -> Result<Vec<Vec<u8>>, String> {
-        Ok(inner
+        inner
             .inputs
             .iter()
-            .map(|input| -> Vec<u8> {
-                input
-                    .redeem_script
-                    .as_ref()
-                    .map(|redeem_script| ScriptBuilder::new().add_data(redeem_script.as_slice()).unwrap().drain().to_vec())
-                    .unwrap_or_default()
+            .map(|input| -> Result<Vec<u8>, String> {
+                let Some(redeem_script) = input.redeem_script.as_ref() else {
+                    return Ok(vec![]);
+                };
+
+                let mut builder = ScriptBuilder::new();
+                builder.add_data(redeem_script.as_slice()).map_err(|e| e.to_string())?;
+                Ok(builder.drain())
             })
-            .collect())
+            .collect::<Result<Vec<_>, _>>()
     });
 
     match result {
@@ -323,7 +322,7 @@ pub fn pskt_to_pending_transaction(
                 (
                     UtxoEntryReference {
                         utxo: Arc::new(ClientUTXO {
-                            address: Some(extract_script_pub_key_address(&ue.script_public_key, network_id.into()).unwrap()),
+                            address: extract_script_pub_key_address(&ue.script_public_key, network_id.into()).ok(),
                             amount: ue.amount,
                             outpoint: input.previous_outpoint.into(),
                             script_public_key: ue.script_public_key.clone(),
@@ -419,6 +418,96 @@ pub fn pskt_to_pending_transaction(
     )?;
 
     Ok(pending_tx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaspa_addresses::Version;
+    use kaspa_consensus_core::tx::{TransactionOutpoint, UtxoEntry};
+    use kaspa_stealth::{create_stealth_output, StealthSecretKey};
+    use kaspa_txscript::{pay_to_address_script, pay_to_stealth, MAX_SCRIPT_ELEMENT_SIZE};
+    use rand::{rngs::StdRng, SeedableRng};
+
+    #[test]
+    fn finalize_pskt_redeem_script_too_large_returns_error_instead_of_panicking() {
+        let regular_addr = Address::new(Prefix::Testnet, Version::PubKey, &[1u8; 32]);
+        let spk = pay_to_address_script(&regular_addr).expect("valid address script");
+
+        let utxo_entry = UtxoEntry { amount: 1000, script_public_key: spk, block_daa_score: 0, is_coinbase: false };
+        let outpoint = TransactionOutpoint { transaction_id: TransactionId::from_bytes([9u8; 32]), index: 0 };
+
+        let redeem_script = vec![0u8; MAX_SCRIPT_ELEMENT_SIZE + 1];
+        let input = kaspa_wallet_pskt::input::InputBuilder::default()
+            .utxo_entry(utxo_entry)
+            .previous_outpoint(outpoint)
+            .redeem_script(redeem_script)
+            .sig_op_count(1)
+            .build()
+            .expect("input");
+
+        let output = kaspa_wallet_pskt::output::OutputBuilder::default()
+            .amount(1)
+            .script_public_key(ScriptPublicKey::from_vec(0u16, vec![]))
+            .build()
+            .expect("output");
+
+        let pskt_finalizer = PSKT::<Creator>::default()
+            .inputs_modifiable()
+            .outputs_modifiable()
+            .constructor()
+            .input(input)
+            .output(output)
+            .signer()
+            .finalizer();
+
+        let err = finalize_pskt_no_sig_and_redeem_script(pskt_finalizer).err().expect("must fail for too large redeem script");
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn pskt_to_pending_transaction_does_not_panic_on_stealth_utxo_entry() {
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
+        let change_address = Address::new(Prefix::Testnet, Version::PubKey, &[2u8; 32]);
+
+        let mut rng = StdRng::seed_from_u64(123);
+        let receiver_keys = StealthSecretKey::generate();
+        let stealth_address = receiver_keys.to_address();
+        let ephemeral_output = create_stealth_output(&stealth_address, &mut rng).expect("stealth output");
+        let stealth_spk = pay_to_stealth(&ephemeral_output);
+
+        let utxo_entry = UtxoEntry { amount: 1000, script_public_key: stealth_spk, block_daa_score: 0, is_coinbase: false };
+        let outpoint = TransactionOutpoint { transaction_id: TransactionId::from_bytes([7u8; 32]), index: 0 };
+
+        // Ensure finalizer succeeds by providing a minimal redeem script (non-empty final_script_sig).
+        let input = kaspa_wallet_pskt::input::InputBuilder::default()
+            .utxo_entry(utxo_entry)
+            .previous_outpoint(outpoint)
+            .redeem_script(vec![1u8])
+            .sig_op_count(1)
+            .build()
+            .expect("input");
+
+        let output = kaspa_wallet_pskt::output::OutputBuilder::default()
+            .amount(1)
+            .script_public_key(ScriptPublicKey::from_vec(0u16, vec![]))
+            .build()
+            .expect("output");
+
+        let pskt_finalizer = PSKT::<Creator>::default()
+            .inputs_modifiable()
+            .outputs_modifiable()
+            .constructor()
+            .input(input)
+            .output(output)
+            .signer()
+            .finalizer();
+        let finalized = finalize_pskt_no_sig_and_redeem_script(pskt_finalizer).expect("finalize");
+
+        // Extracting tx will fail (script mismatch for stealth input), but must not panic during utxo_ref construction.
+        let res = pskt_to_pending_transaction(finalized, network_id, change_address, None);
+        assert!(res.is_err());
+    }
 }
 
 // Allow creation of atomic commit reveal operation with two
