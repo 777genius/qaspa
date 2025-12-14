@@ -17,7 +17,7 @@ use kaspa_notify::{
 use kaspa_rpc_core::{
     api::rpc::{DynRpcService, RpcApi},
     notify::{channel::NotificationChannel, connection::ChannelConnection, mode::NotificationMode},
-    Notification, RpcResult,
+    Notification, RpcError, RpcResult,
 };
 use kaspa_rpc_service::service::RpcCoreService;
 use std::{
@@ -183,8 +183,7 @@ impl Server {
             // The only possible case here is a server connected to rpc core.
             // If the proxy is used, the connection has a gRPC client and the listener id
             // is always set to Some(ListenerId::default()) by the connection ctor.
-            let notifier =
-                self.notifier().unwrap_or_else(|| panic!("Incorrect use: `server::Server` does not carry an internal notifier"));
+            let notifier = self.notifier().ok_or_else(|| RpcError::General("wRPC notifier is not available".to_string()))?;
             let listener_id = notifier.register_new_listener(connection.clone(), ListenerLifespan::Dynamic);
             connection.register_notification_listener(listener_id);
             listener_id

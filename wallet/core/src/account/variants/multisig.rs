@@ -192,7 +192,7 @@ impl Account for MultiSig {
     }
 
     fn sig_op_count(&self) -> u8 {
-        u8::try_from(self.xpub_keys.len()).unwrap()
+        self.xpub_keys.len().min(u8::MAX as usize) as u8
     }
 
     fn minimum_signatures(&self) -> u16 {

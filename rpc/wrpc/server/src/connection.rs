@@ -11,7 +11,7 @@ use std::{
     fmt::{Debug, Display},
     sync::{Arc, Mutex},
 };
-use workflow_log::log_trace;
+use workflow_log::{log_error, log_trace};
 use workflow_rpc::{
     server::{prelude::*, result::Result as WrpcResult},
     types::{MsgT, OpsT},
@@ -158,7 +158,13 @@ impl ConnectionT for Connection {
 
     fn into_message(notification: &Self::Notification, encoding: &Self::Encoding) -> Self::Message {
         let op: RpcApiOps = notification.event_type().into();
-        Self::create_serialized_notification_message(encoding.clone().into(), op, Serializable(notification.clone())).unwrap()
+        match Self::create_serialized_notification_message(encoding.clone().into(), op, Serializable(notification.clone())) {
+            Ok(message) => message,
+            Err(err) => {
+                log_error!("Error serializing notification ({}): {err}", notification.event_type());
+                Message::Close(None)
+            }
+        }
     }
 
     async fn send(&self, message: Self::Message) -> core::result::Result<(), Self::Error> {

@@ -348,7 +348,10 @@ impl RpcCoreService {
         let script_public_keys =
             addresses.map(|address| self.pay_to_address_script_checked(address)).collect::<RpcResult<HashSet<_>>>()?;
 
-        Ok(self.utxoindex.clone().unwrap().get_utxos_by_script_public_keys(script_public_keys).await.unwrap_or_default())
+        let Some(utxoindex) = self.utxoindex.clone() else {
+            return Err(RpcError::NoUtxoIndex);
+        };
+        Ok(utxoindex.get_utxos_by_script_public_keys(script_public_keys).await.unwrap_or_default())
     }
 
     async fn get_balance_by_script_public_key<'a>(
@@ -358,7 +361,10 @@ impl RpcCoreService {
         let script_public_keys =
             addresses.map(|address| self.pay_to_address_script_checked(address)).collect::<RpcResult<HashSet<_>>>()?;
 
-        Ok(self.utxoindex.clone().unwrap().get_balance_by_script_public_keys(script_public_keys).await.unwrap_or_default())
+        let Some(utxoindex) = self.utxoindex.clone() else {
+            return Err(RpcError::NoUtxoIndex);
+        };
+        Ok(utxoindex.get_balance_by_script_public_keys(script_public_keys).await.unwrap_or_default())
     }
 
     fn extract_tx_query(&self, filter_transaction_pool: bool, include_orphan_pool: bool) -> RpcResult<TransactionQuery> {
@@ -845,7 +851,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         let target_version = request.script_version;
         let cursor_key = request.cursor.as_ref().and_then(|c| if c.cursor_key.is_empty() { None } else { Some(c.cursor_key.clone()) });
 
-        let utxoindex = self.utxoindex.clone().unwrap();
+        let utxoindex = self.utxoindex.clone().ok_or(RpcError::NoUtxoIndex)?;
         let mut raw_entries = utxoindex
             .get_utxos_by_script_version(target_version, cursor_key, fetch_limit)
             .await
@@ -946,8 +952,8 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         if session.async_is_consensus_in_transitional_ibd_state().await {
             return Err(RpcError::ConsensusInTransitionalIbdState);
         }
-        let circulating_sompi =
-            self.utxoindex.clone().unwrap().get_circulating_supply().await.map_err(|e| RpcError::General(e.to_string()))?;
+        let utxoindex = self.utxoindex.clone().ok_or(RpcError::NoUtxoIndex)?;
+        let circulating_sompi = utxoindex.get_circulating_supply().await.map_err(|e| RpcError::General(e.to_string()))?;
         Ok(GetCoinSupplyResponse::new(MAX_SOMPI, circulating_sompi))
     }
 

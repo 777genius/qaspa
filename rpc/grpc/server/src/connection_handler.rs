@@ -157,14 +157,14 @@ impl ConnectionHandler {
 
             match serve_result {
                 Ok(_) => info!("GRPC Server stopped on: {}", serve_address),
-                Err(err) => panic!("GRPC Server {serve_address} stopped with error: {err:?}"),
+                Err(err) => warn!("GRPC Server {serve_address} stopped with error: {err:?}"),
             }
         });
 
         // Spawn termination task
         tokio::spawn(async move {
             let _ = termination_receiver.await;
-            signal_sender.send(()).expect("send signal");
+            let _ = signal_sender.send(());
             if (timeout(Duration::from_secs(1), server_handle).await).is_err() {
                 warn!("GRPC Server stopped forcefully on: {}", serve_address);
             }

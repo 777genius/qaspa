@@ -4,7 +4,7 @@ use kaspa_consensus_core::{
     BlockHashSet,
 };
 use kaspa_consensusmanager::spawn_blocking;
-use kaspa_database::prelude::StoreResult;
+use kaspa_database::prelude::{StoreError, StoreResult};
 use kaspa_hashes::Hash;
 use kaspa_index_core::indexed_utxos::{BalanceByScriptPublicKey, CompactUtxoEntry};
 use parking_lot::RwLock;
@@ -74,28 +74,38 @@ impl UtxoIndexProxy {
     }
 
     pub async fn get_circulating_supply(self) -> StoreResult<u64> {
-        spawn_blocking(move || self.inner.read().get_circulating_supply()).await.unwrap()
+        spawn_blocking(move || self.inner.read().get_circulating_supply())
+            .await
+            .map_err(|e| StoreError::DataInconsistency(format!("utxoindex task join error: {e}")))?
     }
 
     pub async fn get_utxos_by_script_public_keys(self, script_public_keys: ScriptPublicKeys) -> StoreResult<UtxoSetByScriptPublicKey> {
-        spawn_blocking(move || self.inner.read().get_utxos_by_script_public_keys(script_public_keys)).await.unwrap()
+        spawn_blocking(move || self.inner.read().get_utxos_by_script_public_keys(script_public_keys))
+            .await
+            .map_err(|e| StoreError::DataInconsistency(format!("utxoindex task join error: {e}")))?
     }
 
     pub async fn get_balance_by_script_public_keys(
         self,
         script_public_keys: ScriptPublicKeys,
     ) -> StoreResult<BalanceByScriptPublicKey> {
-        spawn_blocking(move || self.inner.read().get_balance_by_script_public_keys(script_public_keys)).await.unwrap()
+        spawn_blocking(move || self.inner.read().get_balance_by_script_public_keys(script_public_keys))
+            .await
+            .map_err(|e| StoreError::DataInconsistency(format!("utxoindex task join error: {e}")))?
     }
 
     pub async fn update(self, utxo_diff: Arc<UtxoDiff>, tips: Arc<Vec<Hash>>) -> UtxoIndexResult<UtxoChanges> {
-        spawn_blocking(move || self.inner.write().update(utxo_diff, tips)).await.unwrap()
+        spawn_blocking(move || self.inner.write().update(utxo_diff, tips))
+            .await
+            .map_err(|e| StoreError::DataInconsistency(format!("utxoindex task join error: {e}")))?
     }
 
     /// Get all outpoints (for iteration/filtering purposes)
     /// Warning: This can have a big memory footprint on large UTXO sets
     pub async fn get_all_outpoints(self) -> StoreResult<HashSet<TransactionOutpoint>> {
-        spawn_blocking(move || self.inner.read().get_all_outpoints()).await.unwrap()
+        spawn_blocking(move || self.inner.read().get_all_outpoints())
+            .await
+            .map_err(|e| StoreError::DataInconsistency(format!("utxoindex task join error: {e}")))?
     }
 
     pub async fn get_utxos_by_script_version(
@@ -104,6 +114,68 @@ impl UtxoIndexProxy {
         cursor_key: Option<Vec<u8>>,
         limit: usize,
     ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>> {
-        spawn_blocking(move || self.inner.read().get_utxos_by_script_version(version, cursor_key, limit)).await.unwrap()
+        spawn_blocking(move || self.inner.read().get_utxos_by_script_version(version, cursor_key, limit))
+            .await
+            .map_err(|e| StoreError::DataInconsistency(format!("utxoindex task join error: {e}")))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct PanickingUtxoIndexApi;
+
+    impl UtxoIndexApi for PanickingUtxoIndexApi {
+        fn get_circulating_supply(&self) -> StoreResult<u64> {
+            panic!("boom")
+        }
+
+        fn get_utxos_by_script_public_keys(&self, _script_public_keys: ScriptPublicKeys) -> StoreResult<UtxoSetByScriptPublicKey> {
+            unimplemented!("not needed for this test")
+        }
+
+        fn get_balance_by_script_public_keys(&self, _script_public_keys: ScriptPublicKeys) -> StoreResult<BalanceByScriptPublicKey> {
+            unimplemented!("not needed for this test")
+        }
+
+        fn get_all_outpoints(&self) -> StoreResult<HashSet<TransactionOutpoint>> {
+            unimplemented!("not needed for this test")
+        }
+
+        fn get_utxos_by_script_version(
+            &self,
+            _version: ScriptPublicKeyVersion,
+            _cursor_key: Option<Vec<u8>>,
+            _limit: usize,
+        ) -> StoreResult<Vec<(ScriptPublicKey, TransactionOutpoint, CompactUtxoEntry, Vec<u8>)>> {
+            unimplemented!("not needed for this test")
+        }
+
+        fn get_utxo_index_tips(&self) -> StoreResult<Arc<BlockHashSet>> {
+            unimplemented!("not needed for this test")
+        }
+
+        fn is_synced(&self) -> UtxoIndexResult<bool> {
+            unimplemented!("not needed for this test")
+        }
+
+        fn update(&mut self, _utxo_diff: Arc<UtxoDiff>, _tips: Arc<Vec<Hash>>) -> UtxoIndexResult<UtxoChanges> {
+            unimplemented!("not needed for this test")
+        }
+
+        fn resync(&mut self) -> UtxoIndexResult<()> {
+            unimplemented!("not needed for this test")
+        }
+    }
+
+    #[tokio::test]
+    async fn proxy_does_not_panic_if_blocking_task_panics() {
+        let inner = Arc::new(RwLock::new(PanickingUtxoIndexApi));
+        let proxy = UtxoIndexProxy::new(inner);
+
+        let err = proxy.get_circulating_supply().await.err().expect("must return error");
+        assert!(matches!(err, StoreError::DataInconsistency(_)));
     }
 }

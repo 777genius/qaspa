@@ -152,10 +152,10 @@ impl WrpcService {
                     let serve_result = self.server.listen(listener, Some(config)).await;
                     match serve_result {
                         Ok(_) => info!("WRPC Server stopped on: {}", listen_address),
-                        Err(err) => panic!("WRPC Server {listen_address} stopped with error: {err:?}"),
+                        Err(err) => warn!("WRPC Server {listen_address} stopped with error: {err:?}"),
                     }
                 }
-                Err(err) => panic!("WRPC Server bind error on {listen_address}: {err:?}"),
+                Err(err) => warn!("WRPC Server bind error on {listen_address}: {err:?}"),
             }
         });
 

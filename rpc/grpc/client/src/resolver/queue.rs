@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     resolver::{matcher::Matcher, KaspadResponseReceiver, KaspadResponseSender, Resolver},
 };
-use kaspa_core::trace;
+use kaspa_core::{trace, warn};
 use kaspa_grpc_core::{
     ops::KaspadPayloadOps,
     protowire::{KaspadRequest, KaspadResponse},
@@ -57,7 +57,17 @@ impl Resolver for QueueResolver {
     }
 
     fn handle_response(&self, response: KaspadResponse) {
-        let response_op: KaspadPayloadOps = response.payload.as_ref().unwrap().try_into().expect("response is not a notification");
+        let Some(payload) = response.payload.as_ref() else {
+            warn!("[Resolver] handle_response received response with empty payload");
+            return;
+        };
+        let response_op: KaspadPayloadOps = match payload.try_into() {
+            Ok(op) => op,
+            Err(_) => {
+                warn!("[Resolver] handle_response received response with unsupported payload");
+                return;
+            }
+        };
         trace!("[Resolver] handle_response type: {:?}", response_op);
         let mut pending_calls = self.pending_calls.lock().unwrap();
         let mut pending: Option<Pending> = None;
