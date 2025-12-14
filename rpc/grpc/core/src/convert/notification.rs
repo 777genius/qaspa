@@ -34,12 +34,10 @@ from!(item: &kaspa_rpc_core::Notification, Payload, {
         Notification::PruningPointUtxoSetOverride(ref notification) => {
             Payload::PruningPointUtxoSetOverrideNotification(notification.into())
         },
-        Notification::MasterDelegationExpiringSoon(_) => {
-            panic!("MasterDelegationExpiringSoon notifications are not supported over gRPC. Use wRPC instead.")
-        }
-        // StealthUtxosChanged is not supported over gRPC - use wRPC instead
-        Notification::StealthUtxosChanged(_) => {
-            panic!("StealthUtxosChanged notifications are not supported over gRPC. Use wRPC instead.")
+        // These notification types are intentionally not supported over gRPC. Returning an empty
+        // notification payload avoids panicking if a caller attempts to convert them.
+        Notification::MasterDelegationExpiringSoon(_) | Notification::StealthUtxosChanged(_) => {
+            Payload::UtxosChangedNotification(UtxosChangedNotificationMessage::default())
         }
     }
 });

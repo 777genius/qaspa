@@ -358,13 +358,15 @@ impl Inner {
 
     /// Decreases by one the [`RefCount`] of the [`ScriptPublicKey`] at `index`.
     ///
-    /// Panics if the ref count is already 0.
-    ///
     /// When the reference count reaches zero, the index is inserted into the empty entries set.
     fn dec_count(&mut self, index: Index) {
         if let Some((_, count)) = self.script_pub_keys.get_index_mut(index as usize) {
             if *count == 0 {
-                panic!("Address tracker is trying to decrease an address counter that is already at zero");
+                // Defensive: avoid panicking on inconsistent caller state.
+                // This can happen if an Indexer gets out of sync with the tracker (e.g. double-unregister).
+                debug!("AddressTracker dec count #{} requested while already at 0", index);
+                self.empty_entries.insert(index);
+                return;
             }
             *count -= 1;
             trace!("AddressTracker dec count #{} to {}", index, *count);
@@ -791,5 +793,20 @@ mod tests {
         }
         m.insert(CAPACITY as u64 + 1, 0);
         assert_eq!(m.capacity(), ((CAPACITY + 1) * 8 / 7).next_power_of_two() * 7 / 8);
+    }
+
+    #[test]
+    fn dec_count_does_not_panic_when_counter_is_already_zero() {
+        let mut inner = Inner::new(None);
+        let address = Address::new(Prefix::Mainnet, kaspa_addresses::Version::PubKey, &Uint256::from_u64(1).to_le_bytes());
+        let spk = pay_to_address_script(&address).expect("valid address spk");
+        let index = inner.get_or_insert(spk).expect("insert");
+
+        // Newly inserted entries start at refcount=0 and are considered empty.
+        inner.dec_count(index);
+
+        let (_, count) = inner.script_pub_keys.get_index(index as usize).expect("index exists");
+        assert_eq!(*count, 0);
+        assert!(inner.empty_entries.contains(&index));
     }
 }
