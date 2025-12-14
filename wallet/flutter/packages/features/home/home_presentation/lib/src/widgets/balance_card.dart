@@ -28,14 +28,14 @@ class BalanceCard extends StatelessWidget {
           Text(
             'Total Balance',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.white70,
+              color: theme.colorScheme.onPrimary.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
             balance?.formatted ?? '0.00 KAS',
             style: theme.textTheme.headlineLarge?.copyWith(
-              color: Colors.white,
+              color: theme.colorScheme.onPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),

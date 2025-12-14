@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:home_domain/home_domain.dart';
 import 'package:mobx/mobx.dart';
@@ -23,6 +24,7 @@ abstract class _HomeStoreBase with Store {
         _watchBalanceUseCase = watchBalanceUseCase;
 
   StreamSubscription<Balance>? _balanceSubscription;
+  bool _isDisposed = false;
 
   @observable
   Balance? balance;
@@ -47,23 +49,35 @@ abstract class _HomeStoreBase with Store {
 
   @action
   Future<void> loadHomeData({required String accountId}) async {
+    // Snapshot accountId to prevent race condition if loadHomeData called again
+    final accountIdSnapshot = accountId;
     currentAccountId = accountId;
     isLoading = true;
     errorMessage = null;
 
     try {
       // Load balance and transactions independently to avoid losing data on partial failure
-      final balanceFuture = _getBalanceUseCase(accountId: accountId)
+      final balanceFuture = _getBalanceUseCase(accountId: accountIdSnapshot)
           .then<Balance?>((b) => b)
-          .catchError((e) {
+          .catchError((Object e) {
+        developer.log(
+          'Failed to load balance for account: $accountIdSnapshot',
+          error: e,
+          name: 'HomeStore',
+        );
         errorMessage = 'Balance: ${e.toString()}';
         return null;
       });
 
       final transactionsFuture = _getRecentTransactionsUseCase(
-        accountId: accountId,
+        accountId: accountIdSnapshot,
         limit: 10,
-      ).then<List<Transaction>?>((t) => t).catchError((e) {
+      ).then<List<Transaction>?>((t) => t).catchError((Object e) {
+        developer.log(
+          'Failed to load transactions for account: $accountIdSnapshot',
+          error: e,
+          name: 'HomeStore',
+        );
         if (errorMessage == null) {
           errorMessage = 'Transactions: ${e.toString()}';
         }
@@ -71,6 +85,15 @@ abstract class _HomeStoreBase with Store {
       });
 
       final results = await Future.wait([balanceFuture, transactionsFuture]);
+
+      // Check if accountId changed during await (race condition prevention)
+      if (currentAccountId != accountIdSnapshot) {
+        developer.log(
+          'Account changed during load, discarding results',
+          name: 'HomeStore',
+        );
+        return;
+      }
 
       final balanceResult = results[0] as Balance?;
       final transactionsResult = results[1] as List<Transaction>?;
@@ -82,8 +105,13 @@ abstract class _HomeStoreBase with Store {
         recentTransactions = ObservableList.of(transactionsResult);
       }
 
-      _startWatchingBalance(accountId);
+      _startWatchingBalance(accountIdSnapshot);
     } catch (e) {
+      developer.log(
+        'Unexpected error in loadHomeData',
+        error: e,
+        name: 'HomeStore',
+      );
       errorMessage = e.toString();
     } finally {
       isLoading = false;
@@ -92,26 +120,38 @@ abstract class _HomeStoreBase with Store {
 
   @action
   Future<void> refreshBalance() async {
-    if (currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (accountId == null) return;
 
     try {
-      balance = await _getBalanceUseCase(accountId: currentAccountId!);
+      balance = await _getBalanceUseCase(accountId: accountId);
     } catch (e) {
+      developer.log(
+        'Failed to refresh balance',
+        error: e,
+        name: 'HomeStore',
+      );
       errorMessage = e.toString();
     }
   }
 
   @action
   Future<void> refreshTransactions() async {
-    if (currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (accountId == null) return;
 
     try {
       final transactions = await _getRecentTransactionsUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
         limit: 10,
       );
       recentTransactions = ObservableList.of(transactions);
     } catch (e) {
+      developer.log(
+        'Failed to refresh transactions',
+        error: e,
+        name: 'HomeStore',
+      );
       errorMessage = e.toString();
     }
   }
@@ -120,9 +160,11 @@ abstract class _HomeStoreBase with Store {
     _balanceSubscription?.cancel();
     _balanceSubscription = _watchBalanceUseCase(accountId: accountId).listen(
       (newBalance) {
+        if (_isDisposed) return;
         balance = newBalance;
       },
       onError: (e) {
+        if (_isDisposed) return;
         errorMessage = e.toString();
       },
     );
@@ -140,6 +182,7 @@ abstract class _HomeStoreBase with Store {
   }
 
   void dispose() {
+    _isDisposed = true;
     _balanceSubscription?.cancel();
   }
 }

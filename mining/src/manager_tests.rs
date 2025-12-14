@@ -1500,7 +1500,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (_sk, pk) = secp.generate_keypair(&mut rng);
         let address = Address::new(prefix, Version::PubKeyECDSA, &pk.serialize());
-        let script = pay_to_address_script(&address);
+        let script = pay_to_address_script(&address).expect("address script");
         MinerData::new(script, vec![])
     }
 

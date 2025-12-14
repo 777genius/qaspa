@@ -98,8 +98,12 @@ class StealthSendPage extends StatelessWidget {
           content: TextField(
             controller: passwordController,
             obscureText: true,
+            maxLength: 128,
             enabled: !store.isSending,
-            decoration: const InputDecoration(labelText: 'Password'),
+            decoration: const InputDecoration(
+              labelText: 'Password',
+              counterText: '',
+            ),
           ),
           actions: [
             TextButton(

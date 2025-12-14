@@ -1,7 +1,7 @@
 use crate::address::error::{Error, Result};
 use indexmap::{map::Entry, IndexMap};
 use itertools::Itertools;
-use kaspa_addresses::{Address, Prefix};
+use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_core::{debug, trace};
 use kaspa_txscript::{extract_script_pub_key_address, pay_to_address_script};
@@ -431,7 +431,13 @@ impl Tracker {
         for chunk in addresses.chunks(Self::ADDRESS_CHUNK_SIZE) {
             let mut inner = tracker.inner.write();
             for address in chunk {
-                let index = inner.get_or_insert(pay_to_address_script(address)).unwrap();
+                if address.version == Version::Stealth {
+                    continue;
+                }
+                let Ok(spk) = pay_to_address_script(address) else {
+                    continue;
+                };
+                let index = inner.get_or_insert(spk).unwrap();
                 inner.inc_count(index);
             }
         }
@@ -447,7 +453,10 @@ impl Tracker {
     }
 
     pub fn get_address(&self, address: &Address) -> Option<(Index, RefCount)> {
-        self.get(&pay_to_address_script(address))
+        if address.version == Version::Stealth {
+            return None;
+        }
+        pay_to_address_script(address).ok().and_then(|spk| self.get(&spk))
     }
 
     pub fn get_address_at_index(&self, index: Index, prefix: Prefix) -> Option<Address> {
@@ -459,7 +468,10 @@ impl Tracker {
     }
 
     pub fn contains_address<T: Indexer>(&self, indexes: &T, address: &Address) -> bool {
-        self.contains(indexes, &pay_to_address_script(address))
+        if address.version == Version::Stealth {
+            return false;
+        }
+        pay_to_address_script(address).ok().is_some_and(|spk| self.contains(indexes, &spk))
     }
 
     /// Returns an index set containing the indexes of all the addresses both registered in the tracker and in `indexes`.
@@ -468,7 +480,11 @@ impl Tracker {
             addresses
                 .iter()
                 .filter_map(|address| {
-                    self.get(&pay_to_address_script(address)).and_then(|(index, _)| indexes.contains(index).then_some(index))
+                    if address.version == Version::Stealth {
+                        return None;
+                    }
+                    let spk = pay_to_address_script(address).ok()?;
+                    self.get(&spk).and_then(|(index, _)| indexes.contains(index).then_some(index))
                 })
                 .collect(),
         )
@@ -481,7 +497,10 @@ impl Tracker {
     ///
     /// Fails if the maximum capacity gets reached, leaving the tracker unchanged.
     pub fn register<T: Indexer>(&self, indexes: &mut T, mut addresses: Vec<Address>) -> Result<Vec<Address>> {
-        let mut rollback: bool = false;
+        if addresses.iter().any(|a| a.version == Version::Stealth) {
+            return Err(Error::StealthAddressNotSupported);
+        }
+        let mut rollback_error: Option<Error> = None;
         {
             let mut counter: usize = 0;
             let mut inner = self.inner.write();
@@ -490,7 +509,13 @@ impl Tracker {
                 if counter % Self::ADDRESS_CHUNK_SIZE == 0 {
                     RwLockWriteGuard::bump(&mut inner);
                 }
-                let spk = pay_to_address_script(address);
+                let spk = match pay_to_address_script(address) {
+                    Ok(spk) => spk,
+                    Err(err) => {
+                        rollback_error.get_or_insert(Error::InvalidAddress(err.to_string()));
+                        return false;
+                    }
+                };
                 match inner.get_or_insert(spk) {
                     Ok(index) => {
                         if indexes.insert(index) {
@@ -500,19 +525,19 @@ impl Tracker {
                             false
                         }
                     }
-                    Err(Error::MaxCapacityReached) => {
+                    Err(err) => {
                         // Rollback registration
-                        rollback = true;
+                        rollback_error.get_or_insert(err);
                         false
                     }
                 }
             });
         }
-        match rollback {
-            false => Ok(addresses),
-            true => {
+        match rollback_error {
+            None => Ok(addresses),
+            Some(err) => {
                 let _ = self.unregister(indexes, addresses);
-                Err(Error::MaxCapacityReached)
+                Err(err)
             }
         }
     }
@@ -523,6 +548,7 @@ impl Tracker {
     ///
     /// Returns the addresses that where successfully unregistered from the `Indexer`.
     pub fn unregister<T: Indexer>(&self, indexes: &mut T, mut addresses: Vec<Address>) -> Vec<Address> {
+        addresses.retain(|a| a.version != Version::Stealth);
         if indexes.is_empty() {
             vec![]
         } else {
@@ -533,7 +559,9 @@ impl Tracker {
                 if counter % Self::ADDRESS_CHUNK_SIZE == 0 {
                     RwLockWriteGuard::bump(&mut inner);
                 }
-                let spk = pay_to_address_script(address);
+                let Ok(spk) = pay_to_address_script(address) else {
+                    return false;
+                };
                 if let Some((index, _)) = inner.get(&spk) {
                     if indexes.remove(index) {
                         inner.dec_count(index);
@@ -616,6 +644,33 @@ mod tests {
         (start..start + count)
             .map(|i| Address::new(Prefix::Mainnet, kaspa_addresses::Version::PubKey, &Uint256::from_u64(i as u64).to_le_bytes()))
             .collect()
+    }
+
+    #[test]
+    fn register_rejects_stealth_addresses_instead_of_panicking() {
+        let tracker = Tracker::new(None);
+        let mut indexes = Indexes::new(vec![]);
+        let stealth = Address::new(Prefix::StealthMainnet, Version::Stealth, &[7u8; 64]);
+        let err = tracker.register(&mut indexes, vec![stealth]).expect_err("must fail");
+        assert!(matches!(err, Error::StealthAddressNotSupported));
+        assert!(indexes.is_empty());
+    }
+
+    #[test]
+    fn contains_address_is_false_for_stealth_addresses() {
+        let tracker = Tracker::new(None);
+        let indexes = Indexes::new(vec![]);
+        let stealth = Address::new(Prefix::StealthMainnet, Version::Stealth, &[7u8; 64]);
+        assert!(!tracker.contains_address(&indexes, &stealth));
+    }
+
+    #[test]
+    fn unregister_ignores_stealth_addresses() {
+        let tracker = Tracker::new(None);
+        let mut indexes = Indexes::new(vec![]);
+        let stealth = Address::new(Prefix::StealthMainnet, Version::Stealth, &[7u8; 64]);
+        let removed = tracker.unregister(&mut indexes, vec![stealth]);
+        assert!(removed.is_empty());
     }
 
     #[test]

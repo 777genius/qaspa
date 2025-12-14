@@ -193,7 +193,8 @@ fn generate_limited_time_script(owner: &Keypair, threshold: i64, output_spk: Vec
 // Helper function to create P2PK script as a vector
 fn p2pk_as_vec(owner: &Keypair) -> Vec<u8> {
     let p2pk =
-        pay_to_address_script(&Address::new(Prefix::Mainnet, Version::PubKey, owner.x_only_public_key().0.serialize().as_slice()));
+        pay_to_address_script(&Address::new(Prefix::Mainnet, Version::PubKey, owner.x_only_public_key().0.serialize().as_slice()))
+            .expect("valid address");
     let version = p2pk.version.to_be_bytes();
     let script = p2pk.script();
     let mut v = Vec::with_capacity(version.len() + script.len());
@@ -235,7 +236,8 @@ fn threshold_scenario_limited_one_time() -> ScriptBuilderResult<()> {
     let threshold: i64 = 100;
 
     let p2pk =
-        pay_to_address_script(&Address::new(Prefix::Mainnet, Version::PubKey, owner.x_only_public_key().0.serialize().as_slice()));
+        pay_to_address_script(&Address::new(Prefix::Mainnet, Version::PubKey, owner.x_only_public_key().0.serialize().as_slice()))
+            .expect("valid address");
     let p2pk_vec = p2pk_as_vec(&owner);
     let script = generate_limited_time_script(&owner, threshold, p2pk_vec.clone())?;
 
@@ -330,7 +332,8 @@ fn threshold_scenario_limited_one_time() -> ScriptBuilderResult<()> {
             Prefix::Mainnet,
             Version::PubKey,
             wrong_recipient.x_only_public_key().0.serialize().as_slice(),
-        ));
+        ))
+        .expect("valid address");
 
         // Create a new transaction with the wrong output address
         let mut wrong_tx = tx.clone();
@@ -483,7 +486,8 @@ fn threshold_scenario_limited_2_times() -> ScriptBuilderResult<()> {
             Prefix::Mainnet,
             Version::PubKey,
             wrong_recipient.x_only_public_key().0.serialize().as_slice(),
-        ));
+        ))
+        .expect("valid address");
 
         // Create a new transaction with the wrong output address
         let mut wrong_tx = tx.clone();

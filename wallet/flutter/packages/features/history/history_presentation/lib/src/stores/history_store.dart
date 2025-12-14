@@ -15,6 +15,7 @@ abstract class _HistoryStoreBase with Store {
   final GetTransactionDetailsUseCase _getTransactionDetailsUseCase;
 
   StreamSubscription<List<Transaction>>? _transactionSubscription;
+  bool _isDisposed = false;
 
   _HistoryStoreBase({
     required GetTransactionHistoryUseCase getTransactionHistoryUseCase,
@@ -67,11 +68,13 @@ abstract class _HistoryStoreBase with Store {
       accountId: currentAccountId!,
     ).listen(
       (newTransactions) {
+        if (_isDisposed) return;
         transactions
           ..clear()
           ..addAll(newTransactions);
       },
       onError: (error) {
+        if (_isDisposed) return;
         errorMessage = error.toString();
       },
     );
@@ -155,6 +158,7 @@ abstract class _HistoryStoreBase with Store {
   }
 
   void dispose() {
+    _isDisposed = true;
     _transactionSubscription?.cancel();
     _transactionSubscription = null;
   }

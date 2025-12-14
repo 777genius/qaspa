@@ -105,9 +105,18 @@ impl PaymentOutput {
     }
 }
 
-impl From<PaymentOutput> for TransactionOutput {
-    fn from(value: PaymentOutput) -> Self {
-        Self::new_with_inner(TransactionOutputInner { script_public_key: pay_to_address_script(&value.address), value: value.amount })
+impl TryFrom<PaymentOutput> for TransactionOutput {
+    type Error = Error;
+
+    fn try_from(value: PaymentOutput) -> std::result::Result<Self, Self::Error> {
+        if value.address.version == kaspa_addresses::Version::Stealth {
+            return Err(Error::Custom(
+                "Stealth addresses require ephemeral output data and cannot be converted to TransactionOutput directly".to_string(),
+            ));
+        }
+
+        let script_public_key = pay_to_address_script(&value.address).map_err(|e| Error::Custom(e.to_string()))?;
+        Ok(Self::new_with_inner(TransactionOutputInner { script_public_key, value: value.amount }))
     }
 }
 
@@ -179,9 +188,11 @@ impl TryCastFromJs for PaymentOutputs {
     }
 }
 
-impl From<PaymentOutputs> for Vec<TransactionOutput> {
-    fn from(value: PaymentOutputs) -> Self {
-        value.outputs.into_iter().map(TransactionOutput::from).collect()
+impl TryFrom<PaymentOutputs> for Vec<TransactionOutput> {
+    type Error = Error;
+
+    fn try_from(value: PaymentOutputs) -> std::result::Result<Self, Self::Error> {
+        value.outputs.into_iter().map(TransactionOutput::try_from).collect()
     }
 }
 
@@ -208,5 +219,29 @@ impl From<&[(&Address, u64)]> for PaymentOutputs {
     fn from(outputs: &[(&Address, u64)]) -> Self {
         let outputs = outputs.iter().map(|(address, amount)| PaymentOutput::new((*address).clone(), *amount)).collect();
         PaymentOutputs { outputs }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaspa_addresses::{Prefix, Version};
+
+    #[test]
+    fn payment_output_try_into_transaction_output_rejects_stealth_addresses() {
+        let stealth = Address::new(Prefix::StealthTestnet, Version::Stealth, &[7u8; 64]);
+        let output = PaymentOutput::new(stealth, 123);
+
+        let err = TransactionOutput::try_from(output).expect_err("stealth outputs must be rejected");
+        assert!(err.to_string().to_lowercase().contains("stealth"));
+    }
+
+    #[test]
+    fn payment_outputs_try_into_transaction_outputs_rejects_stealth_addresses() {
+        let stealth = Address::new(Prefix::StealthTestnet, Version::Stealth, &[7u8; 64]);
+        let outputs = PaymentOutputs::from([(&stealth, 123u64)].as_slice());
+
+        let err = Vec::<TransactionOutput>::try_from(outputs).expect_err("stealth outputs must be rejected");
+        assert!(err.to_string().to_lowercase().contains("stealth"));
     }
 }

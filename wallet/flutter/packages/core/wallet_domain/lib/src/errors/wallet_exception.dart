@@ -216,10 +216,12 @@ final class InsufficientFundsException extends WalletException {
 
   /// How much more is needed
   Amount? get additionalNeeded {
-    if (available == null || required == null) return null;
-    final totalRequired = fee != null ? required! + fee! : required!;
-    if (totalRequired > available!) {
-      return totalRequired.subtractSafe(available!);
+    final avail = available;
+    final req = required;
+    if (avail == null || req == null) return null;
+    final totalRequired = fee != null ? req + fee! : req;
+    if (totalRequired > avail) {
+      return totalRequired.subtractSafe(avail);
     }
     return null;
   }

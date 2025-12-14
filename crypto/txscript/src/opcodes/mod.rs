@@ -2838,7 +2838,7 @@ mod test {
         let addr_hash = vec![1u8; 32];
 
         let addr = Address::new(Prefix::Testnet, Version::PubKey, &addr_hash);
-        let dummy_script_public_key = pay_to_address_script(&addr);
+        let dummy_script_public_key = pay_to_address_script(&addr).expect("valid address");
         let dummy_tx_out = TransactionOutput::new(SOMPI_PER_KASPA, dummy_script_public_key);
 
         let tx = VerifiableTransactionMock(Transaction::new(
@@ -3037,7 +3037,7 @@ mod test {
         fn create_mock_spk(value: u8) -> ScriptPublicKey {
             let pub_key = vec![value; 32];
             let addr = Address::new(Prefix::Testnet, Version::PubKey, &pub_key);
-            pay_to_address_script(&addr)
+            pay_to_address_script(&addr).expect("valid address")
         }
 
         fn kip_10_tx_mock(inputs: Vec<Kip10Mock>, outputs: Vec<Kip10Mock>) -> (Transaction, Vec<UtxoEntry>) {

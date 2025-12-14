@@ -108,8 +108,12 @@ class SettingsPage extends StatelessWidget {
               TextField(
                 controller: passwordController,
                 obscureText: true,
+                maxLength: 128,
                 enabled: !store.isProcessing,
-                decoration: const InputDecoration(labelText: 'Password'),
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  counterText: '',
+                ),
               ),
             ],
           ),

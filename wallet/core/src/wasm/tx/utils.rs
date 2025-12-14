@@ -22,7 +22,7 @@ fn payment_outputs_to_transaction_outputs(outputs: PaymentOutputs) -> crate::res
                 create_stealth_output(&stealth_addr, &mut rand::thread_rng()).map_err(|e| Error::custom(format!("{e}")))?;
             pay_to_stealth(&ephemeral_output)
         } else {
-            pay_to_address_script(&output.address)
+            pay_to_address_script(&output.address).map_err(|e| Error::custom(e.to_string()))?
         };
         tx_outputs.push(TransactionOutput::new(output.amount, script_public_key));
     }

@@ -70,7 +70,7 @@ impl MinerKeypair {
         let (sk, pk) = secp256k1::generate_keypair(&mut thread_rng());
         let keypair = Keypair::from_secret_key(SECP256K1, &sk);
         let address = Address::new(prefix, Version::PubKey, &pk.x_only_public_key().0.serialize());
-        let spk = pay_to_address_script(&address);
+        let spk = pay_to_address_script(&address).expect("valid address");
         Self { keypair, address, spk }
     }
 

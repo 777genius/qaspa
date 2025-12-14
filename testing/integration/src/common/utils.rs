@@ -146,7 +146,7 @@ pub fn generate_tx(
 ) -> Transaction {
     let total_in = utxos.iter().map(|x| x.1.amount).sum::<u64>();
     assert!(amount <= total_in - required_fee(utxos.len(), num_outputs));
-    let script_public_key = pay_to_address_script(address);
+    let script_public_key = pay_to_address_script(address).expect("valid address");
     let inputs = utxos
         .iter()
         .map(|(op, _)| TransactionInput { previous_outpoint: *op, signature_script: vec![], sequence: 0, sig_op_count: 1 })
@@ -205,7 +205,7 @@ async fn fetch_spendable_utxos_via_blocks(
     coinbase_maturity: u64,
     target_amount: Option<u64>,
 ) -> Vec<(TransactionOutpoint, UtxoEntry)> {
-    let script = pay_to_address_script(&address);
+    let script = pay_to_address_script(&address).expect("valid address");
     let mut cursor: Option<RpcHash> = None;
     let mut seen_hashes = HashSet::new();
     let mut utxo_map: HashMap<TransactionOutpoint, RpcUtxoEntry> = HashMap::new();

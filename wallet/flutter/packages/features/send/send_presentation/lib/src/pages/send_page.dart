@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -24,7 +26,11 @@ class _SendPageState extends State<SendPage> {
         // TODO: Get actual account ID from wallet state
         store.setAccountId('default');
       } catch (e) {
-        debugPrint('SendPage initState error: $e');
+        developer.log(
+          'SendPage initState error',
+          error: e,
+          name: 'SendPage',
+        );
       }
     });
   }
@@ -100,8 +106,12 @@ class _SendPageState extends State<SendPage> {
           content: TextField(
             controller: passwordController,
             obscureText: true,
+            maxLength: 128,
             enabled: !store.isSending,
-            decoration: const InputDecoration(labelText: 'Password'),
+            decoration: const InputDecoration(
+              labelText: 'Password',
+              counterText: '',
+            ),
           ),
           actions: [
             TextButton(

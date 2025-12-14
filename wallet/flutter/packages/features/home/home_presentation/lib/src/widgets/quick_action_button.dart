@@ -1,5 +1,6 @@
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Quick action button widget.
 class QuickActionButton extends StatelessWidget {
@@ -22,7 +23,10 @@ class QuickActionButton extends StatelessWidget {
       button: true,
       label: label,
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
         borderRadius: AppRadii.borderRadiusMd,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),

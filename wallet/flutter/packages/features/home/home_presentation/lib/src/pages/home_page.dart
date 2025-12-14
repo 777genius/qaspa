@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -28,7 +30,11 @@ class _HomePageState extends State<HomePage> {
         final store = ModuleProvider.of(context).get<HomeStore>();
         store.loadHomeData(accountId: 'default');
       } catch (e) {
-        debugPrint('HomePage initState error: $e');
+        developer.log(
+          'HomePage initState error',
+          error: e,
+          name: 'HomePage',
+        );
       }
     });
   }

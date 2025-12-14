@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
@@ -38,7 +39,11 @@ class _ReceivePageState extends State<ReceivePage> {
         // TODO: Get actual account ID from wallet state
         store.setAccountId('default');
       } catch (e) {
-        debugPrint('ReceivePage initState error: $e');
+        developer.log(
+          'ReceivePage initState error',
+          error: e,
+          name: 'ReceivePage',
+        );
       }
     });
   }

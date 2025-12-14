@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../value_objects/address.dart';
@@ -84,8 +86,12 @@ sealed class Account with _$Account {
     if (receiveAddress == null) return null;
     try {
       return Address.fromString(receiveAddress!);
-    } catch (_) {
-      // Return null for invalid addresses instead of throwing
+    } catch (e) {
+      developer.log(
+        'Failed to parse address: $receiveAddress',
+        error: e,
+        name: 'Account',
+      );
       return null;
     }
   }

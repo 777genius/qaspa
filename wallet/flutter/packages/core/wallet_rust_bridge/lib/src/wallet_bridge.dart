@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:meta/meta.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -54,8 +55,10 @@ abstract class WalletBridge {
   static bool get isInitialized => _instance != null;
 
   /// Check if initialization is in progress.
-  static bool get isInitializing =>
-      _initCompleter != null && !_initCompleter!.isCompleted;
+  static bool get isInitializing {
+    final completer = _initCompleter;
+    return completer != null && !completer.isCompleted;
+  }
 
   /// Initialize the wallet bridge.
   /// Thread-safe - multiple concurrent calls will share the same initialization.
@@ -72,8 +75,13 @@ abstract class WalletBridge {
         // Wait for ongoing initialization
         try {
           await existingCompleter.future;
-        } catch (_) {
+        } catch (e) {
           // If previous initialization failed, retry below
+          developer.log(
+            'Bridge previous initialization failed',
+            error: e,
+            name: 'WalletBridge',
+          );
         }
         // Check if we now have an instance
         if (_instance != null) return;

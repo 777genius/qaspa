@@ -530,7 +530,7 @@ fn generate_tx(
     kaspa_addr: &Address,
     payload_size: usize,
 ) -> Transaction {
-    let script_public_key = pay_to_address_script(kaspa_addr);
+    let script_public_key = pay_to_address_script(kaspa_addr).expect("valid address");
     let inputs = utxos
         .iter()
         .map(|(op, _)| TransactionInput { previous_outpoint: *op, signature_script: vec![], sequence: 0, sig_op_count: 1 })

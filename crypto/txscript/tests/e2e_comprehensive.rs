@@ -33,7 +33,7 @@ fn create_and_verify_mldsa_tx(level: MlDsaLevel) -> (Transaction, usize) {
     // Generate keypair for specified level
     let keypair = generate_keypair(level);
     let address = Address::new(Prefix::Testnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
-    let script_pubkey = pay_to_address_script(&address);
+    let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
     // Create transaction
     let tx = Transaction::new(
@@ -217,7 +217,7 @@ fn test_e2e_security_validation() {
 
     let keypair = generate_keypair(MlDsaLevel::Level2);
     let address = Address::new(Prefix::Testnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
-    let script_pubkey = pay_to_address_script(&address);
+    let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
     let tx = Transaction::new(
         0,
@@ -393,7 +393,7 @@ fn test_e2e_production_readiness() {
     println!("\nCheck 2: Signature verification strictness...");
     let keypair = generate_keypair(MlDsaLevel::Level2);
     let address = Address::new(Prefix::Testnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
-    let script_pubkey = pay_to_address_script(&address);
+    let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
     let tx = Transaction::new(
         0,
@@ -453,7 +453,7 @@ fn test_e2e_production_readiness() {
 
     // Check 4: Script sizes are correct
     println!("\nCheck 4: Script sizes...");
-    let script_pubkey = pay_to_address_script(&addr_mainnet);
+    let script_pubkey = pay_to_address_script(&addr_mainnet).expect("valid ML-DSA address");
     assert_eq!(script_pubkey.script().len(), 1316, "Script pubkey should be 1316 bytes (OpPushData2 + 2 + 1312 + OpCheckSigMLDSA)");
     println!("  ✅ Script sizes are correct");
     checks_passed += 1;

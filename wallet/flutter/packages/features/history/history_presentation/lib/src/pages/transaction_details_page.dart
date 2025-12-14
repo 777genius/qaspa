@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,7 +32,11 @@ class _TransactionDetailsPageState extends State<TransactionDetailsPage> {
         final store = ModuleProvider.of(context).get<HistoryStore>();
         store.selectTransaction(TransactionId.fromHex(widget.transactionId));
       } catch (e) {
-        debugPrint('TransactionDetailsPage initState error: $e');
+        developer.log(
+          'TransactionDetailsPage initState error',
+          error: e,
+          name: 'TransactionDetailsPage',
+        );
       }
     });
   }

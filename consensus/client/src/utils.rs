@@ -28,7 +28,7 @@ fn pay_to_address_script_inner(address: &Address) -> Result<ScriptPublicKey> {
         return Err(Error::custom("Stealth addresses require ephemeral key data and cannot be converted using payToAddressScript"));
     }
 
-    Ok(standard::pay_to_address_script(address))
+    standard::pay_to_address_script(address).map_err(|e| Error::custom(e.to_string()))
 }
 
 /// Takes a script and returns an equivalent pay-to-script-hash script.

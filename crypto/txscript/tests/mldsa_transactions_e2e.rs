@@ -274,13 +274,13 @@ impl MLDSAWallet {
         let mut outputs = Vec::new();
 
         // Recipient output
-        let recipient_script = pay_to_address_script(recipient);
+        let recipient_script = pay_to_address_script(recipient).expect("valid recipient address");
         outputs.push(TransactionOutput::new(amount, recipient_script));
 
         // Change output (back to sender)
         let change = total_input - amount - fee;
         if change > 0 {
-            let change_script = pay_to_address_script(&self.address);
+            let change_script = pay_to_address_script(&self.address).expect("valid sender address");
             outputs.push(TransactionOutput::new(change, change_script));
         }
 

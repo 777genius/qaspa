@@ -17,39 +17,47 @@ mod multisig;
 pub use multisig::{multisig_redeem_script, multisig_redeem_script_ecdsa, Error as MultisigCreateError};
 
 /// Creates a new script to pay a transaction output to a 32-byte pubkey.
-fn pay_to_pub_key(address_payload: &[u8]) -> ScriptVec {
+fn pay_to_pub_key(address_payload: &[u8]) -> Result<ScriptVec, TxScriptError> {
     // TODO: use ScriptBuilder when add_op and add_data fns or equivalents are available
-    assert_eq!(address_payload.len(), 32);
-    SmallVec::from_iter(once(OpData32).chain(address_payload.iter().copied()).chain(once(OpCheckSig)))
+    if address_payload.len() != 32 {
+        return Err(TxScriptError::InvalidPublicKeyLen(address_payload.len()));
+    }
+    Ok(SmallVec::from_iter(once(OpData32).chain(address_payload.iter().copied()).chain(once(OpCheckSig))))
 }
 
 /// Creates a new script to pay a transaction output to a 33-byte ECDSA pubkey.
-fn pay_to_pub_key_ecdsa(address_payload: &[u8]) -> ScriptVec {
+fn pay_to_pub_key_ecdsa(address_payload: &[u8]) -> Result<ScriptVec, TxScriptError> {
     // TODO: use ScriptBuilder when add_op and add_data fns or equivalents are available
-    assert_eq!(address_payload.len(), 33);
-    SmallVec::from_iter(once(OpData33).chain(address_payload.iter().copied()).chain(once(OpCheckSigECDSA)))
+    if address_payload.len() != 33 {
+        return Err(TxScriptError::InvalidPublicKeyLen(address_payload.len()));
+    }
+    Ok(SmallVec::from_iter(once(OpData33).chain(address_payload.iter().copied()).chain(once(OpCheckSigECDSA))))
 }
 
 /// Creates a new script to pay a transaction output to a 1312-byte ML-DSA pubkey.
-fn pay_to_pub_key_mldsa(address_payload: &[u8]) -> ScriptVec {
+fn pay_to_pub_key_mldsa(address_payload: &[u8]) -> Result<ScriptVec, TxScriptError> {
     // TODO: use ScriptBuilder when add_op and add_data fns or equivalents are available
-    assert_eq!(address_payload.len(), 1312);
+    if address_payload.len() != 1312 {
+        return Err(TxScriptError::InvalidPublicKeyLen(address_payload.len()));
+    }
     // OpPushData2 + length (1312 = 0x0520 in little-endian) + data + OpCheckSigMLDSA
-    SmallVec::from_iter(
+    Ok(SmallVec::from_iter(
         once(OpPushData2)
             .chain(once(0x20)) // Low byte of 1312
             .chain(once(0x05)) // High byte of 1312
             .chain(address_payload.iter().copied())
             .chain(once(OpCheckSigMLDSA)),
-    )
+    ))
 }
 
 /// Creates a new script to pay a transaction output to a script hash.
 /// It is expected that the input is a valid hash.
-fn pay_to_script_hash(script_hash: &[u8]) -> ScriptVec {
+fn pay_to_script_hash(script_hash: &[u8]) -> Result<ScriptVec, TxScriptError> {
     // TODO: use ScriptBuilder when add_op and add_data fns or equivalents are available
-    assert_eq!(script_hash.len(), 32);
-    SmallVec::from_iter([OpBlake2b, OpData32].iter().copied().chain(script_hash.iter().copied()).chain(once(OpEqual)))
+    if script_hash.len() != 32 {
+        return Err(TxScriptError::InvalidPublicKeyLen(script_hash.len()));
+    }
+    Ok(SmallVec::from_iter([OpBlake2b, OpData32].iter().copied().chain(script_hash.iter().copied()).chain(once(OpEqual))))
 }
 
 /// Creates a new script to pay a transaction output to a stealth address.
@@ -64,17 +72,15 @@ fn pay_to_stealth_output(output: &EphemeralOutput) -> ScriptVec {
 ///
 /// Note: For stealth addresses (Version::Stealth), use `pay_to_stealth` instead,
 /// as stealth outputs require the ephemeral key data, not just the address payload.
-pub fn pay_to_address_script(address: &Address) -> ScriptPublicKey {
+pub fn pay_to_address_script(address: &Address) -> Result<ScriptPublicKey, TxScriptError> {
     let script = match address.version {
-        Version::PubKey => pay_to_pub_key(address.payload.as_slice()),
-        Version::PubKeyECDSA => pay_to_pub_key_ecdsa(address.payload.as_slice()),
-        Version::PubKeyMLDSA => pay_to_pub_key_mldsa(address.payload.as_slice()),
-        Version::ScriptHash => pay_to_script_hash(address.payload.as_slice()),
-        Version::Stealth => {
-            panic!("Use pay_to_stealth() for stealth addresses - they require ephemeral key data")
-        }
+        Version::PubKey => pay_to_pub_key(address.payload.as_slice())?,
+        Version::PubKeyECDSA => pay_to_pub_key_ecdsa(address.payload.as_slice())?,
+        Version::PubKeyMLDSA => pay_to_pub_key_mldsa(address.payload.as_slice())?,
+        Version::ScriptHash => pay_to_script_hash(address.payload.as_slice())?,
+        Version::Stealth => return Err(TxScriptError::PubKeyFormat),
     };
-    ScriptPublicKey::new(ScriptClass::from(address.version).version(), script)
+    Ok(ScriptPublicKey::new(ScriptClass::from(address.version).version(), script))
 }
 
 /// Creates a ScriptPublicKey for a stealth output.
@@ -115,7 +121,10 @@ pub fn extract_stealth_output(spk: &ScriptPublicKey) -> Result<EphemeralOutput, 
 /// Takes a script and returns an equivalent pay-to-script-hash script
 pub fn pay_to_script_hash_script(redeem_script: &[u8]) -> ScriptPublicKey {
     let redeem_script_hash = Params::new().hash_length(32).to_state().update(redeem_script).finalize();
-    let script = pay_to_script_hash(redeem_script_hash.as_bytes());
+    // `redeem_script_hash` is always 32 bytes
+    let script = SmallVec::from_iter(
+        [OpBlake2b, OpData32].iter().copied().chain(redeem_script_hash.as_bytes().iter().copied()).chain(once(OpEqual)),
+    );
     ScriptPublicKey::new(ScriptClass::ScriptHash.version(), script)
 }
 
@@ -288,9 +297,25 @@ mod tests {
             let extracted = extract_script_pub_key_address(&test.script_pub_key, test.prefix);
             assert_eq!(extracted, test.expected_address, "extract address test failed for '{}'", test.name);
             if let Ok(ref address) = extracted {
-                let encoded = pay_to_address_script(address);
+                let encoded = pay_to_address_script(address).unwrap();
                 assert_eq!(encoded, test.script_pub_key, "encode public key script test failed for '{}'", test.name);
             }
         }
+    }
+
+    #[test]
+    fn pay_to_address_script_rejects_stealth_addresses() {
+        let stealth = Address::new(Prefix::StealthTestnet, Version::Stealth, &[7u8; 64]);
+        assert_eq!(pay_to_address_script(&stealth), Err(TxScriptError::PubKeyFormat));
+    }
+
+    #[test]
+    fn pay_to_address_script_rejects_invalid_payload_len_instead_of_panicking() {
+        let invalid = Address {
+            prefix: Prefix::Mainnet,
+            version: Version::PubKey,
+            payload: kaspa_addresses::PayloadVec::from_slice(&[1u8; 31]),
+        };
+        assert_eq!(pay_to_address_script(&invalid), Err(TxScriptError::InvalidPublicKeyLen(31)));
     }
 }

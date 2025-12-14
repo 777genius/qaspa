@@ -338,7 +338,7 @@ impl RpcCoreService {
                 "Stealth addresses require ephemeral output data and cannot be used with this operation".to_string(),
             ));
         }
-        Ok(pay_to_address_script(address))
+        pay_to_address_script(address).map_err(|err| RpcError::General(err.to_string()))
     }
 
     async fn get_utxo_set_by_script_public_key<'a>(

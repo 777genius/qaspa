@@ -240,7 +240,8 @@ impl MiningManager {
                 prefix,
                 kaspa_addresses::Version::PubKey,
                 &[0u8; 32],
-            ));
+            ))
+            .expect("dummy address script");
             let miner_data: MinerData = MinerData::new(script_public_key, vec![]);
 
             let BlockTemplate { block: kaspa_consensus_core::block::MutableBlock { transactions, .. }, calculated_fees, .. } =

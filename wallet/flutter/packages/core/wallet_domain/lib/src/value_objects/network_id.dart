@@ -43,7 +43,10 @@ class NetworkId extends Equatable {
     // Parse custom testnet suffix
     final match = RegExp(r'testnet-(\d+)').firstMatch(lower);
     if (match != null) {
-      return NetworkId._(NetworkType.testnet, int.parse(match.group(1)!));
+      final suffixStr = match.group(1);
+      if (suffixStr != null) {
+        return NetworkId._(NetworkType.testnet, int.parse(suffixStr));
+      }
     }
 
     throw ArgumentError('Invalid network ID: $value');

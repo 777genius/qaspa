@@ -50,30 +50,42 @@ class _ExportMnemonicPageState extends State<ExportMnemonicPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Card(
-                  color: Colors.orange.shade50,
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    child: Row(
-                      children: [
-                        Icon(Icons.warning, color: Colors.orange.shade700),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Text(
-                            'Never share your recovery phrase with anyone. Store it securely.',
-                            style: TextStyle(color: Colors.orange.shade900),
-                          ),
+                Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Card(
+                      color: theme.colorScheme.tertiaryContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.warning,
+                              color: theme.colorScheme.onTertiaryContainer,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                'Never share your recovery phrase with anyone. Store it securely.',
+                                style: TextStyle(
+                                  color: theme.colorScheme.onTertiaryContainer,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.xl),
                 TextField(
                   controller: _passwordController,
                   obscureText: !_passwordVisible,
+                  maxLength: 128,
                   decoration: InputDecoration(
                     labelText: 'Enter Password',
+                    counterText: '',
                     suffixIcon: IconButton(
                       icon: Icon(
                         _passwordVisible
@@ -168,10 +180,12 @@ class _MnemonicDisplayState extends State<_MnemonicDisplay> {
   void _clearClipboardNow() {
     _clipboardClearTimer?.cancel();
     Clipboard.setData(const ClipboardData(text: ''));
-    setState(() => _copied = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Clipboard cleared')),
-    );
+    if (mounted) {
+      setState(() => _copied = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Clipboard cleared')),
+      );
+    }
   }
 
   @override
@@ -183,23 +197,33 @@ class _MnemonicDisplayState extends State<_MnemonicDisplay> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Card(
-            color: Colors.red.shade50,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Row(
-                children: [
-                  Icon(Icons.security, color: Colors.red.shade700),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Text(
-                      'Write down these words in order and store them safely.',
-                      style: TextStyle(color: Colors.red.shade900),
-                    ),
+          Builder(
+            builder: (context) {
+              final theme = Theme.of(context);
+              return Card(
+                color: theme.colorScheme.errorContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.security,
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          'Write down these words in order and store them safely.',
+                          style: TextStyle(
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
           Expanded(

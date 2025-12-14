@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:mobx/mobx.dart';
 import 'package:send_domain/send_domain.dart';
@@ -24,6 +25,7 @@ abstract class _SendStoreBase with Store {
 
   Timer? _debounceTimer;
   static const _debounceDuration = Duration(milliseconds: 300);
+  bool _isDisposed = false;
 
   @observable
   String recipientAddress = '';
@@ -64,8 +66,19 @@ abstract class _SendStoreBase with Store {
 
   @computed
   BigInt get amountInSompi {
-    final parsed = double.tryParse(amount) ?? 0;
-    return BigInt.from(parsed * 100000000); // 1 KAS = 100000000 sompi
+    if (amount.isEmpty) return BigInt.zero;
+    try {
+      // Use Amount.fromKas for proper decimal parsing without precision loss
+      // double can't represent values > 9M KAS accurately
+      return Amount.fromKas(amount).sompiValue;
+    } catch (e) {
+      developer.log(
+        'Failed to parse amount: $amount',
+        error: e,
+        name: 'SendStore',
+      );
+      return BigInt.zero;
+    }
   }
 
   @action
@@ -84,7 +97,11 @@ abstract class _SendStoreBase with Store {
 
   void _scheduleEstimateFee() {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(_debounceDuration, _estimateFee);
+    _debounceTimer = Timer(_debounceDuration, () {
+      if (!_isDisposed) {
+        _estimateFee();
+      }
+    });
   }
 
   @action
@@ -93,7 +110,8 @@ abstract class _SendStoreBase with Store {
   }
 
   Future<void> _estimateFee() async {
-    if (!isAddressValid || !isAmountValid || currentAccountId == null) {
+    final accountId = currentAccountId;
+    if (!isAddressValid || !isAmountValid || accountId == null) {
       estimatedFee = null;
       return;
     }
@@ -101,12 +119,17 @@ abstract class _SendStoreBase with Store {
     isLoading = true;
     try {
       estimatedFee = await _estimateTransactionUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
         destination: Address.fromString(recipientAddress),
         amount: Amount.fromSompi(amountInSompi),
       );
     } catch (e) {
       estimatedFee = null;
+      developer.log(
+        'Failed to estimate fee',
+        error: e,
+        name: 'SendStore',
+      );
     } finally {
       isLoading = false;
     }
@@ -114,14 +137,15 @@ abstract class _SendStoreBase with Store {
 
   @action
   Future<void> sendTransaction({required String password}) async {
-    if (!canSend || currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (!canSend || accountId == null) return;
 
     isSending = true;
     errorMessage = null;
 
     try {
       sentTransactionId = await _sendTransactionUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
         destination: Address.fromString(recipientAddress),
         amount: Amount.fromSompi(amountInSompi),
         password: password,
@@ -150,6 +174,7 @@ abstract class _SendStoreBase with Store {
   }
 
   void dispose() {
+    _isDisposed = true;
     _debounceTimer?.cancel();
     _debounceTimer = null;
     reset();

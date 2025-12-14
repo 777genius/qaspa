@@ -72,6 +72,7 @@ class _ImportMnemonicPageState extends State<ImportMnemonicPage> {
                 onPressed: store.canProceedFromImport
                     ? () async {
                         await store.validateImportedMnemonic();
+                        if (!mounted) return;
                         if (store.errorMessage == null) {
                           widget.onContinue();
                         }

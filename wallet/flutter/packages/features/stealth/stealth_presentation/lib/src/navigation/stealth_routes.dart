@@ -1,3 +1,4 @@
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:modularity_flutter/modularity_flutter.dart';
@@ -29,10 +30,10 @@ abstract final class StealthRoutes {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                    const SizedBox(height: 16),
+                    Icon(Icons.error_outline, size: 64, color: AppColors.error),
+                    const SizedBox(height: AppSpacing.md),
                     Text('Failed to load stealth: $error'),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.md),
                     ElevatedButton(onPressed: retry, child: const Text('Retry')),
                   ],
                 ),

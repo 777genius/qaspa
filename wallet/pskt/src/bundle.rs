@@ -179,6 +179,10 @@ pub fn unlock_utxos_as_pskb(
     script_sig: Vec<u8>,
     priority_fee_sompi_per_transaction: u64,
 ) -> Result<Bundle, Error> {
+    if recipient.version == Version::Stealth {
+        return Err(Error::from("Stealth addresses require ephemeral output data and are not supported by unlock_utxos_as_pskb"));
+    }
+
     // Fee per transaction.
     // Check if each UTXO's amounts can cover priority fee.
     utxo_references
@@ -191,7 +195,7 @@ pub fn unlock_utxos_as_pskb(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let recipient_spk = pay_to_address_script(recipient);
+    let recipient_spk = pay_to_address_script(recipient).map_err(|e| Error::from(e.to_string()))?;
     let (successes, errors): (Vec<_>, Vec<_>) = utxo_references
         .into_iter()
         .map(|(utxo_entry, outpoint)| {
@@ -262,7 +266,7 @@ pub fn unlock_utxo_outputs_as_batch_transaction_pskb(
         ));
     }
 
-    let origin_spk = pay_to_address_script(start_address);
+    let origin_spk = pay_to_address_script(start_address).map_err(|e| Error::from(e.to_string()))?;
 
     let utxo_entry = UtxoEntry { amount, script_public_key: origin_spk, block_daa_score: UNACCEPTED_DAA_SCORE, is_coinbase: false };
 
@@ -272,7 +276,7 @@ pub fn unlock_utxo_outputs_as_batch_transaction_pskb(
     let outputs: Vec<Output> = destination_outputs
         .iter()
         .filter_map(|(address, amount)| {
-            OutputBuilder::default().amount(*amount).script_public_key(pay_to_address_script(address)).build().ok()
+            OutputBuilder::default().amount(*amount).script_public_key(pay_to_address_script(address).ok()?).build().ok()
         })
         .collect();
 
@@ -316,6 +320,26 @@ mod tests {
         let stealth_dest = Address::new(Prefix::StealthTestnet, kaspa_addresses::Version::Stealth, &[9u8; 64]);
         let err =
             unlock_utxo_outputs_as_batch_transaction_pskb(1000, &regular, &[0u8], vec![(stealth_dest, 1)]).expect_err("must fail");
+        assert!(err.to_string().to_lowercase().contains("stealth"));
+    }
+
+    #[test]
+    fn unlock_utxos_rejects_stealth_recipient() {
+        let recipient = Address::new(Prefix::StealthTestnet, kaspa_addresses::Version::Stealth, &[7u8; 64]);
+        let regular = Address::new(Prefix::Testnet, kaspa_addresses::Version::PubKey, &[0u8; 32]);
+
+        let utxo_entry = UtxoEntry {
+            amount: 2000,
+            script_public_key: pay_to_address_script(&regular).expect("regular address spk"),
+            block_daa_score: UNACCEPTED_DAA_SCORE,
+            is_coinbase: false,
+        };
+        let outpoint = TransactionOutpoint {
+            transaction_id: TransactionId::from_str("63020db736215f8b1105a9281f7bcbb6473d965ecc45bb2fb5da59bd35e6ff84").unwrap(),
+            index: 0,
+        };
+
+        let err = unlock_utxos_as_pskb(vec![(utxo_entry, outpoint)], &recipient, vec![0u8], 1).expect_err("must fail");
         assert!(err.to_string().to_lowercase().contains("stealth"));
     }
 

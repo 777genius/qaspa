@@ -96,7 +96,8 @@ class MockWalletBridge implements WalletBridge {
 
   @override
   Future<bool> isWalletOpen() async {
-    return _currentWallet != null && _currentWallet!.isOpen;
+    final wallet = _currentWallet;
+    return wallet != null && wallet.isOpen;
   }
 
   @override
@@ -121,8 +122,9 @@ class MockWalletBridge implements WalletBridge {
 
   @override
   Future<void> closeWallet() async {
-    if (_currentWallet != null) {
-      _wallets[_currentWallet!.id] = _currentWallet!.copyWith(isOpen: false);
+    final wallet = _currentWallet;
+    if (wallet != null) {
+      _wallets[wallet.id] = wallet.copyWith(isOpen: false);
       _currentWallet = null;
     }
   }
@@ -415,13 +417,17 @@ class MockWalletBridge implements WalletBridge {
   @override
   Future<void> connect() async {
     _isConnected = true;
-    _eventsController.add(ConnectionEvent(isConnected: true));
+    if (!_eventsController.isClosed) {
+      _eventsController.add(ConnectionEvent(isConnected: true));
+    }
   }
 
   @override
   Future<void> disconnect() async {
     _isConnected = false;
-    _eventsController.add(ConnectionEvent(isConnected: false));
+    if (!_eventsController.isClosed) {
+      _eventsController.add(ConnectionEvent(isConnected: false));
+    }
   }
 
   @override
@@ -483,29 +489,43 @@ class MockWalletBridge implements WalletBridge {
   /// Set balance for testing.
   void setBalance(String accountId, Balance balance) {
     _balances[accountId] = balance;
-    _balanceControllers[accountId]?.add(balance);
-    _eventsController.add(BalanceUpdateEvent(
-      accountId: accountId,
-      balance: balance,
-    ));
+    final controller = _balanceControllers[accountId];
+    if (controller != null && !controller.isClosed) {
+      controller.add(balance);
+    }
+    if (!_eventsController.isClosed) {
+      _eventsController.add(BalanceUpdateEvent(
+        accountId: accountId,
+        balance: balance,
+      ));
+    }
   }
 
   /// Add transaction for testing.
   void addTransaction(String accountId, Transaction tx) {
     _transactions[accountId] ??= [];
     _transactions[accountId]!.add(tx);
-    _transactionControllers[accountId]?.add(tx);
-    _eventsController.add(TransactionEvent(
-      accountId: accountId,
-      transaction: tx,
-    ));
+    final controller = _transactionControllers[accountId];
+    if (controller != null && !controller.isClosed) {
+      controller.add(tx);
+    }
+    if (!_eventsController.isClosed) {
+      _eventsController.add(TransactionEvent(
+        accountId: accountId,
+        transaction: tx,
+      ));
+    }
   }
 
   /// Set sync state for testing.
   void setSyncState(SyncState state) {
     _syncState = state;
-    _syncStateController.add(state);
-    _eventsController.add(SyncStateEvent(state: state));
+    if (!_syncStateController.isClosed) {
+      _syncStateController.add(state);
+    }
+    if (!_eventsController.isClosed) {
+      _eventsController.add(SyncStateEvent(state: state));
+    }
   }
 
   /// Dispose resources.

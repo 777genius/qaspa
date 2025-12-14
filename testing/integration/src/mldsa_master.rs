@@ -581,12 +581,12 @@ async fn test_mldsa_master_delegation_flow() {
     // Дополнительная проверка: оффлайн VM верификация MLDSA spend без отправки в mempool
     let mldsa_pair = kaspa_mldsa::generate_keypair(MlDsaLevel::Level2);
     let mldsa_address = Address::new(Prefix::Simnet, Version::PubKeyMLDSA, mldsa_pair.public_key.as_bytes());
-    let mldsa_spk = pay_to_address_script(&mldsa_address);
+    let mldsa_spk = pay_to_address_script(&mldsa_address).expect("valid address");
     assert!(matches!(ScriptClass::from_script(&mldsa_spk), ScriptClass::PubKeyMLDSA), "funding output must classify as PubKeyMLDSA");
 
     let prev_outpoint = TransactionOutpoint::new(Hash::from_bytes([2u8; 32]), 0);
     let utxo_entry = UtxoEntry::new(1_000_000_000u64, mldsa_spk.clone(), 0, false);
-    let miner_spk = pay_to_address_script(&env.miner.address());
+    let miner_spk = pay_to_address_script(&env.miner.address()).expect("valid address");
     let spend_tx = Transaction::new(
         0,
         vec![TransactionInput::new(prev_outpoint, vec![], 0, 1)],

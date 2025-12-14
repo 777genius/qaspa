@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -26,7 +28,11 @@ class _StealthPageState extends State<StealthPage> {
         // TODO: Get actual account ID from wallet state
         store.setAccountId('default');
       } catch (e) {
-        debugPrint('StealthPage initState error: $e');
+        developer.log(
+          'StealthPage initState error',
+          error: e,
+          name: 'StealthPage',
+        );
       }
     });
   }

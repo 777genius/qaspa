@@ -36,7 +36,7 @@ fn test_mldsa_transaction_end_to_end() {
     println!("✓ Created ML-DSA address: {}", address);
 
     // Step 3: Create script public key (output script)
-    let script_pubkey = pay_to_address_script(&address);
+    let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
     println!("✓ Created script public key ({} bytes)", script_pubkey.script().len());
     assert_eq!(script_pubkey.script().len(), 1316); // OpPushData2 + 2 + 1312 + OpCheckSigMLDSA
@@ -123,7 +123,7 @@ fn test_mldsa_signature_invalid() {
     // Test that invalid signatures are rejected
     let keypair = generate_keypair(MlDsaLevel::Level2);
     let address = Address::new(Prefix::Mainnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
-    let script_pubkey = pay_to_address_script(&address);
+    let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
     let previous_outpoint = TransactionOutpoint { transaction_id: Hash::from_bytes([1u8; 32]), index: 0 };
 
@@ -192,7 +192,7 @@ fn test_mldsa_wrong_public_key() {
 
     // Address created with keypair1 - so script_pubkey has keypair1's public key
     let address = Address::new(Prefix::Mainnet, Version::PubKeyMLDSA, keypair1.public_key.as_bytes());
-    let script_pubkey = pay_to_address_script(&address);
+    let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
     let previous_outpoint = TransactionOutpoint { transaction_id: Hash::from_bytes([1u8; 32]), index: 0 };
 

@@ -419,7 +419,7 @@ mod tests {
         let addr_hash = vec![1u8; 32];
 
         let addr = Address::new(Prefix::Testnet, Version::PubKey, &addr_hash);
-        let dummy_script_public_key = kaspa_txscript::pay_to_address_script(&addr);
+        let dummy_script_public_key = kaspa_txscript::pay_to_address_script(&addr).expect("dummy address spk");
         let dummy_tx_out = TransactionOutput::new(SOMPI_PER_KASPA, dummy_script_public_key);
 
         struct Test {
@@ -610,7 +610,7 @@ mod tests {
         let dummy_tx_input = TransactionInput::new(dummy_prev_out, dummy_sig_script, MAX_TX_IN_SEQUENCE_NUM, 1);
         let addr_hash = vec![1u8; 32];
         let addr = Address::new(Prefix::Testnet, Version::PubKey, &addr_hash);
-        let dummy_script_public_key = pay_to_address_script(&addr);
+        let dummy_script_public_key = pay_to_address_script(&addr).expect("dummy address spk");
         let dummy_tx_out = TransactionOutput::new(SOMPI_PER_KASPA, dummy_script_public_key);
 
         let mut mtx = MutableTransaction::from_tx(Transaction::new(

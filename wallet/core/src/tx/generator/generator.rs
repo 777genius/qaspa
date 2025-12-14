@@ -429,7 +429,7 @@ impl Generator {
                             .map_err(|e| Error::Custom(format!("Failed to create stealth output: {}", e)))?;
                         pay_to_stealth(&ephemeral_output)
                     } else {
-                        pay_to_address_script(&output.address)
+                        pay_to_address_script(&output.address).map_err(|e| Error::Custom(e.to_string()))?
                     };
                     tx_outputs.push(TransactionOutput::new(output.amount, script));
                 }
@@ -467,8 +467,10 @@ impl Generator {
             let dummy_script = ScriptPublicKey::new(STEALTH_SCRIPT_VERSION, ScriptVec::from_slice(&[0u8; 66]));
             mass_calculator.calc_compute_mass_for_client_transaction_output(&TransactionOutput::new(0, dummy_script))
         } else {
-            mass_calculator
-                .calc_compute_mass_for_client_transaction_output(&TransactionOutput::new(0, pay_to_address_script(&change_address)))
+            mass_calculator.calc_compute_mass_for_client_transaction_output(&TransactionOutput::new(
+                0,
+                pay_to_address_script(&change_address).map_err(|e| Error::Custom(e.to_string()))?,
+            ))
         };
         let signature_mass_per_input = mass_calculator.calc_compute_mass_for_signature(minimum_signatures);
         let final_transaction_outputs_compute_mass =
@@ -1162,8 +1164,10 @@ impl Generator {
 
                         (change_output_index, Some(pending))
                     } else {
-                        final_outputs
-                            .push(TransactionOutput::new(change_output_value, pay_to_address_script(&self.inner.change_address)));
+                        final_outputs.push(TransactionOutput::new(
+                            change_output_value,
+                            pay_to_address_script(&self.inner.change_address).map_err(|e| Error::Custom(e.to_string()))?,
+                        ));
                         (change_output_index, None)
                     }
                 } else {
@@ -1259,7 +1263,7 @@ impl Generator {
                     return Err(Error::StealthChangeBatchNotSupported);
                 }
 
-                let script_public_key = pay_to_address_script(&self.inner.change_address);
+                let script_public_key = pay_to_address_script(&self.inner.change_address).map_err(|e| Error::Custom(e.to_string()))?;
                 let output = TransactionOutput::new(output_value, script_public_key.clone());
 
                 let tx = Transaction::new(0, inputs, vec![output], 0, SUBNETWORK_ID_NATIVE, 0, vec![]);

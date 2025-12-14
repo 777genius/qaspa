@@ -72,10 +72,11 @@ class WalletRepositoryImpl implements WalletRepository {
     required String password,
   }) async {
     return _walletLock.synchronized(() async {
-      if (_currentWallet != null) {
+      final currentWallet = _currentWallet;
+      if (currentWallet != null) {
         throw WalletAlreadyOpenException(
           walletId: walletId,
-          message: 'Cannot open wallet "$walletId" - wallet "${_currentWallet!.id}" is already open',
+          message: 'Cannot open wallet "$walletId" - wallet "${currentWallet.id}" is already open',
         );
       }
       final wallet =
@@ -138,8 +139,9 @@ class WalletRepositoryImpl implements WalletRepository {
   }) async {
     return _walletLock.synchronized(() async {
       // Don't validate if a wallet is already open
-      if (_currentWallet != null) {
-        throw WalletAlreadyOpenException(walletId: _currentWallet!.id);
+      final currentWallet = _currentWallet;
+      if (currentWallet != null) {
+        throw WalletAlreadyOpenException(walletId: currentWallet.id);
       }
 
       try {

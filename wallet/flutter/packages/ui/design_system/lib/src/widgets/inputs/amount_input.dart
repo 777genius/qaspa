@@ -50,8 +50,9 @@ class _AmountInputState extends State<AmountInput> {
   }
 
   void _onMaxPressed() {
-    if (widget.maxAmount != null) {
-      _controller.text = widget.maxAmount!.toStringAsFixed(8);
+    final maxAmount = widget.maxAmount;
+    if (maxAmount != null) {
+      _controller.text = maxAmount.toStringAsFixed(8);
       _onChanged(_controller.text);
     }
     widget.onMaxPressed?.call();
@@ -61,8 +62,9 @@ class _AmountInputState extends State<AmountInput> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentValue = _controller.text.isEmpty ? '0' : _controller.text;
-    final availableText = widget.maxAmount != null
-        ? 'Available: ${widget.maxAmount!.toStringAsFixed(2)} KAS'
+    final maxAmount = widget.maxAmount;
+    final availableText = maxAmount != null
+        ? 'Available: ${maxAmount.toStringAsFixed(2)} KAS'
         : null;
 
     return Semantics(

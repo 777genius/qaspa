@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -67,7 +69,7 @@ class HistoryPage extends StatelessWidget {
               itemBuilder: (context, index) {
                 if (index >= store.transactions.length) {
                   if (!store.isLoadingMore) {
-                    store.loadMore();
+                    unawaited(store.loadMore());
                   }
                   return const Center(
                     child: Padding(

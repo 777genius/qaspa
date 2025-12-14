@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:mobx/mobx.dart';
 import 'package:stealth_domain/stealth_domain.dart';
 import 'package:wallet_domain/wallet_domain.dart';
@@ -79,7 +81,12 @@ abstract class _StealthStoreBase with Store {
     // double can't represent values > 9M KAS accurately
     try {
       return Amount.fromKas(sendAmount).sompiValue;
-    } catch (_) {
+    } catch (e) {
+      developer.log(
+        'Failed to parse amount: $sendAmount',
+        error: e,
+        name: 'StealthStore',
+      );
       return BigInt.zero;
     }
   }
@@ -92,23 +99,34 @@ abstract class _StealthStoreBase with Store {
 
   @action
   Future<void> loadStealthData() async {
-    if (currentAccountId == null) return;
+    final accountId = currentAccountId;
+    if (accountId == null) return;
 
     isLoading = true;
     errorMessage = null;
 
     try {
       // Load address and balance independently to avoid losing data on partial failure
-      final addressFuture = _getStealthAddressUseCase(accountId: currentAccountId!)
+      final addressFuture = _getStealthAddressUseCase(accountId: accountId)
           .then<Address?>((a) => a)
-          .catchError((e) {
+          .catchError((Object e) {
+        developer.log(
+          'Failed to load stealth address',
+          error: e,
+          name: 'StealthStore',
+        );
         errorMessage = 'Address: ${e.toString()}';
         return null;
       });
 
-      final balanceFuture = _getStealthBalanceUseCase(accountId: currentAccountId!)
+      final balanceFuture = _getStealthBalanceUseCase(accountId: accountId)
           .then<Balance?>((b) => b)
-          .catchError((e) {
+          .catchError((Object e) {
+        developer.log(
+          'Failed to load stealth balance',
+          error: e,
+          name: 'StealthStore',
+        );
         if (errorMessage == null) {
           errorMessage = 'Balance: ${e.toString()}';
         }
@@ -116,6 +134,15 @@ abstract class _StealthStoreBase with Store {
       });
 
       final results = await Future.wait([addressFuture, balanceFuture]);
+
+      // Check if accountId changed during await (race condition prevention)
+      if (currentAccountId != accountId) {
+        developer.log(
+          'Account changed during loadStealthData, discarding results',
+          name: 'StealthStore',
+        );
+        return;
+      }
 
       final addressResult = results[0] as Address?;
       final balanceResult = results[1] as Balance?;
@@ -128,8 +155,13 @@ abstract class _StealthStoreBase with Store {
       }
 
       // Load transactions
-      await _loadTransactions();
+      await _loadTransactionsForAccount(accountId);
     } catch (e) {
+      developer.log(
+        'Unexpected error in loadStealthData',
+        error: e,
+        name: 'StealthStore',
+      );
       errorMessage = e.toString();
     } finally {
       isLoading = false;
@@ -138,7 +170,8 @@ abstract class _StealthStoreBase with Store {
 
   @action
   Future<void> scanForPayments() async {
-    if (currentAccountId == null || isScanning) return;
+    final accountId = currentAccountId;
+    if (accountId == null || isScanning) return;
 
     isScanning = true;
     scanProgress = 0;
@@ -146,33 +179,51 @@ abstract class _StealthStoreBase with Store {
     errorMessage = null;
 
     try {
-      await _scanStealthPaymentsUseCase(accountId: currentAccountId!);
+      await _scanStealthPaymentsUseCase(accountId: accountId);
+
+      // Check if accountId changed during scan
+      if (currentAccountId != accountId) {
+        developer.log(
+          'Account changed during scan, discarding results',
+          name: 'StealthStore',
+        );
+        return;
+      }
 
       // Reload balance and transactions after scan
-      stealthBalance = await _getStealthBalanceUseCase(
-        accountId: currentAccountId!,
-      );
+      stealthBalance = await _getStealthBalanceUseCase(accountId: accountId);
 
       // Load transactions after successful scan
-      await _loadTransactions();
+      await _loadTransactionsForAccount(accountId);
     } catch (e) {
+      developer.log(
+        'Failed to scan for payments',
+        error: e,
+        name: 'StealthStore',
+      );
       errorMessage = e.toString();
     } finally {
       isScanning = false;
     }
   }
 
-  @action
-  Future<void> _loadTransactions() async {
-    if (currentAccountId == null) return;
-
+  Future<void> _loadTransactionsForAccount(String accountId) async {
     try {
       final transactions = await _getStealthTransactionsUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
         limit: 20,
       );
+
+      // Check if accountId is still current before updating state
+      if (currentAccountId != accountId) return;
+
       stealthTransactions = ObservableList.of(transactions);
     } catch (e) {
+      developer.log(
+        'Failed to load stealth transactions',
+        error: e,
+        name: 'StealthStore',
+      );
       // Don't overwrite existing error message if one exists
       if (errorMessage == null) {
         errorMessage = 'Failed to load transactions: ${e.toString()}';
@@ -194,14 +245,15 @@ abstract class _StealthStoreBase with Store {
 
   @action
   Future<TransactionId?> sendStealthPayment({required String password}) async {
-    if (!canSend || currentAccountId == null) return null;
+    final accountId = currentAccountId;
+    if (!canSend || accountId == null) return null;
 
     isSending = true;
     errorMessage = null;
 
     try {
       final transactionId = await _sendStealthPaymentUseCase(
-        accountId: currentAccountId!,
+        accountId: accountId,
         destination: Address.fromString(recipientStealthAddress),
         amount: Amount.fromSompi(sendAmountInSompi),
         password: password,
@@ -210,12 +262,18 @@ abstract class _StealthStoreBase with Store {
       recipientStealthAddress = '';
       sendAmount = '';
 
-      stealthBalance = await _getStealthBalanceUseCase(
-        accountId: currentAccountId!,
-      );
+      // Only update balance if still on same account
+      if (currentAccountId == accountId) {
+        stealthBalance = await _getStealthBalanceUseCase(accountId: accountId);
+      }
 
       return transactionId;
     } catch (e) {
+      developer.log(
+        'Failed to send stealth payment',
+        error: e,
+        name: 'StealthStore',
+      );
       errorMessage = e.toString();
       return null;
     } finally {

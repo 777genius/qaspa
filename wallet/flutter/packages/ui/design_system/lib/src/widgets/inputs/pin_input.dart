@@ -40,9 +40,11 @@ class _PinInputState extends State<PinInput> {
     _focusNodes = List.generate(widget.length, (_) => FocusNode());
     _keyboardListenerNodes = List.generate(widget.length, (_) => FocusNode());
 
-    if (widget.autofocus) {
+    if (widget.autofocus && _focusNodes.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _focusNodes.first.requestFocus();
+        if (_focusNodes.isNotEmpty) {
+          _focusNodes.first.requestFocus();
+        }
       });
     }
   }
