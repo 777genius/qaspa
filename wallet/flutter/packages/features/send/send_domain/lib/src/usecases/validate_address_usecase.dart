@@ -1,4 +1,7 @@
+import 'package:injectable/injectable.dart';
+
 /// Use case for validating Kaspa addresses.
+@injectable
 class ValidateAddressUseCase {
   /// Valid Bech32 characters (excluding 1, b, i, o for readability).
   static const _bech32Charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
