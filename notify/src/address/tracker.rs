@@ -297,9 +297,7 @@ impl Inner {
     }
 
     fn get_index_address(&self, index: Index, prefix: Prefix) -> Option<Address> {
-        self.script_pub_keys
-            .get_index(index as usize)
-            .map(|(spk, _)| extract_script_pub_key_address(spk, prefix).expect("is retro-convertible"))
+        self.script_pub_keys.get_index(index as usize).and_then(|(spk, _)| extract_script_pub_key_address(spk, prefix).ok())
     }
 
     fn get_or_insert(&mut self, spk: ScriptPublicKey) -> Result<Index> {
@@ -311,7 +309,9 @@ impl Inner {
                     trace!(
                         "AddressTracker insert #{} {}",
                         index,
-                        extract_script_pub_key_address(entry.key(), Prefix::Mainnet).unwrap()
+                        extract_script_pub_key_address(entry.key(), Prefix::Mainnet)
+                            .map(|a| a.to_string())
+                            .unwrap_or_else(|_| "<non-standard>".to_string())
                     );
                     let _ = *entry.insert(0);
 

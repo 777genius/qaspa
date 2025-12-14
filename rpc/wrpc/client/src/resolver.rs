@@ -68,7 +68,7 @@ struct Inner {
 impl Inner {
     pub fn new(urls: Option<Vec<Arc<String>>>, tls: bool) -> Self {
         if urls.as_ref().is_some_and(|urls| urls.is_empty()) {
-            panic!("Resolver: Empty URL list supplied to the constructor.");
+            log_warn!("Resolver: Empty URL list supplied to the constructor");
         }
 
         let mut public = false;

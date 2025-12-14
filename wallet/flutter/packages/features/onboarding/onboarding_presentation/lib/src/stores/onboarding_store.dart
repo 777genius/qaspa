@@ -224,7 +224,8 @@ abstract class _OnboardingStoreBase with Store {
       isMnemonicRevealed = false;
       isBackupConfirmed = false;
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Failed to generate mnemonic', error: e, name: 'OnboardingStore');
+      errorMessage = 'Failed to generate recovery phrase. Please try again';
     } finally {
       isLoading = false;
     }

@@ -500,21 +500,20 @@ impl Interface for LocalStore {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn flush_returns_error_when_not_in_batch_mode() -> Result<()> {
-        let store = LocalStore::try_new(true)?;
-        let wallet_secret = Secret::from("test");
-        let err = store.flush(&wallet_secret).await.expect_err("must fail when not in batch mode");
-        assert!(err.to_string().contains("batch"));
-        Ok(())
-    }
+    #[test]
+    fn invalid_calls_return_errors_instead_of_panicking() -> Result<()> {
+        async_std::task::block_on(async {
+            let store = LocalStore::try_new(true)?;
+            let wallet_secret = Secret::from("test");
 
-    #[tokio::test]
-    async fn close_returns_error_when_wallet_is_not_open() -> Result<()> {
-        let store = LocalStore::try_new(true)?;
-        let err = store.close().await.expect_err("must fail when wallet is not open");
-        assert!(matches!(err, Error::WalletNotOpen));
-        Ok(())
+            let err = store.flush(&wallet_secret).await.expect_err("must fail when not in batch mode");
+            assert!(err.to_string().contains("batch"));
+
+            let err = store.close().await.expect_err("must fail when wallet is not open");
+            assert!(matches!(err, Error::WalletNotOpen));
+
+            Ok(())
+        })
     }
 }
 
