@@ -96,6 +96,7 @@ abstract class _SendStoreBase with Store {
   }
 
   void _scheduleEstimateFee() {
+    if (_isDisposed) return;
     _debounceTimer?.cancel();
     _debounceTimer = Timer(_debounceDuration, () {
       if (!_isDisposed) {

@@ -121,171 +121,181 @@ impl PSKT {
 
     #[wasm_bindgen(getter, js_name = "role")]
     pub fn role_getter(&self) -> String {
-        self.state().as_ref().unwrap().display().to_string()
+        self.state().as_ref().map(|s| s.display().to_string()).unwrap_or_else(|| "Invalid".to_string())
     }
 
     #[wasm_bindgen(getter, js_name = "payload")]
     pub fn payload_getter(&self) -> JsValue {
         let state = self.state();
-        workflow_wasm::serde::to_value(state.as_ref().unwrap()).unwrap()
+        state.as_ref().and_then(|s| workflow_wasm::serde::to_value(s).ok()).unwrap_or(JsValue::UNDEFINED)
     }
 
     pub fn serialize(&self) -> String {
         let state = self.state();
-        serde_json::to_string(state.as_ref().unwrap()).unwrap()
+        state.as_ref().and_then(|s| serde_json::to_string(s).ok()).unwrap_or_default()
     }
 
     fn state(&self) -> MutexGuard<'_, Option<State>> {
         self.state.lock().unwrap()
     }
 
-    fn take(&self) -> State {
-        self.state.lock().unwrap().take().unwrap()
+    fn with_state<R>(&self, f: impl FnOnce(&State) -> Result<R>) -> Result<R> {
+        let guard = self.state();
+        let state = guard.as_ref().ok_or(Error::NotInitialized)?;
+        f(state)
     }
 
-    fn replace(&self, state: State) -> Result<PSKT> {
-        self.state.lock().unwrap().replace(state);
-        Ok(self.clone())
+    fn update_state(&self, f: impl FnOnce(State) -> Result<State>) -> Result<PSKT> {
+        let mut guard = self.state.lock().unwrap();
+        let current = guard.take().ok_or(Error::NotInitialized)?;
+        let backup = current.clone();
+        match f(current) {
+            Ok(next) => {
+                *guard = Some(next);
+                Ok(self.clone())
+            }
+            Err(err) => {
+                *guard = Some(backup);
+                Err(err)
+            }
+        }
     }
 
     /// Change role to `CREATOR`
     /// #[wasm_bindgen(js_name = toCreator)]
     pub fn creator(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::NoOp(inner) => match inner {
-                None => State::Creator(Native::default()),
-                Some(_) => Err(Error::CreateNotAllowed)?,
-            },
-            state => Err(Error::state(state))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| {
+            let next = match state {
+                State::NoOp(inner) => match inner {
+                    None => State::Creator(Native::default()),
+                    Some(_) => return Err(Error::CreateNotAllowed),
+                },
+                other => return Err(Error::state(other)),
+            };
+            Ok(next)
+        })
     }
 
     /// Change role to `CONSTRUCTOR`
     #[wasm_bindgen(js_name = toConstructor)]
     pub fn constructor(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::NoOp(inner) => State::Constructor(inner.ok_or(Error::NotInitialized)?.into()),
-            State::Creator(pskt) => State::Constructor(pskt.constructor()),
-            state => Err(Error::state(state))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| {
+            let next = match state {
+                State::NoOp(inner) => State::Constructor(inner.ok_or(Error::NotInitialized)?.into()),
+                State::Creator(pskt) => State::Constructor(pskt.constructor()),
+                other => return Err(Error::state(other)),
+            };
+            Ok(next)
+        })
     }
 
     /// Change role to `UPDATER`
     #[wasm_bindgen(js_name = toUpdater)]
     pub fn updater(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::NoOp(inner) => State::Updater(inner.ok_or(Error::NotInitialized)?.into()),
-            State::Constructor(constructor) => State::Updater(constructor.updater()),
-            state => Err(Error::state(state))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| {
+            let next = match state {
+                State::NoOp(inner) => State::Updater(inner.ok_or(Error::NotInitialized)?.into()),
+                State::Constructor(constructor) => State::Updater(constructor.updater()),
+                other => return Err(Error::state(other)),
+            };
+            Ok(next)
+        })
     }
 
     /// Change role to `SIGNER`
     #[wasm_bindgen(js_name = toSigner)]
     pub fn signer(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::NoOp(inner) => State::Signer(inner.ok_or(Error::NotInitialized)?.into()),
-            State::Constructor(pskt) => State::Signer(pskt.signer()),
-            State::Updater(pskt) => State::Signer(pskt.signer()),
-            State::Combiner(pskt) => State::Signer(pskt.signer()),
-            state => Err(Error::state(state))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| {
+            let next = match state {
+                State::NoOp(inner) => State::Signer(inner.ok_or(Error::NotInitialized)?.into()),
+                State::Constructor(pskt) => State::Signer(pskt.signer()),
+                State::Updater(pskt) => State::Signer(pskt.signer()),
+                State::Combiner(pskt) => State::Signer(pskt.signer()),
+                other => return Err(Error::state(other)),
+            };
+            Ok(next)
+        })
     }
 
     /// Change role to `COMBINER`
     #[wasm_bindgen(js_name = toCombiner)]
     pub fn combiner(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::NoOp(inner) => State::Combiner(inner.ok_or(Error::NotInitialized)?.into()),
-            State::Constructor(pskt) => State::Combiner(pskt.combiner()),
-            State::Updater(pskt) => State::Combiner(pskt.combiner()),
-            State::Signer(pskt) => State::Combiner(pskt.combiner()),
-            state => Err(Error::state(state))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| {
+            let next = match state {
+                State::NoOp(inner) => State::Combiner(inner.ok_or(Error::NotInitialized)?.into()),
+                State::Constructor(pskt) => State::Combiner(pskt.combiner()),
+                State::Updater(pskt) => State::Combiner(pskt.combiner()),
+                State::Signer(pskt) => State::Combiner(pskt.combiner()),
+                other => return Err(Error::state(other)),
+            };
+            Ok(next)
+        })
     }
 
     /// Change role to `FINALIZER`
     #[wasm_bindgen(js_name = toFinalizer)]
     pub fn finalizer(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::NoOp(inner) => State::Finalizer(inner.ok_or(Error::NotInitialized)?.into()),
-            State::Combiner(pskt) => State::Finalizer(pskt.finalizer()),
-            state => Err(Error::state(state))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| {
+            let next = match state {
+                State::NoOp(inner) => State::Finalizer(inner.ok_or(Error::NotInitialized)?.into()),
+                State::Combiner(pskt) => State::Finalizer(pskt.finalizer()),
+                other => return Err(Error::state(other)),
+            };
+            Ok(next)
+        })
     }
 
     /// Change role to `EXTRACTOR`
     #[wasm_bindgen(js_name = toExtractor)]
     pub fn extractor(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::NoOp(inner) => State::Extractor(inner.ok_or(Error::NotInitialized)?.into()),
-            State::Finalizer(pskt) => State::Extractor(pskt.extractor()?),
-            state => Err(Error::state(state))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| {
+            let next = match state {
+                State::NoOp(inner) => State::Extractor(inner.ok_or(Error::NotInitialized)?.into()),
+                State::Finalizer(pskt) => State::Extractor(pskt.extractor()?),
+                other => return Err(Error::state(other)),
+            };
+            Ok(next)
+        })
     }
 
     #[wasm_bindgen(js_name = fallbackLockTime)]
     pub fn fallback_lock_time(&self, lock_time: u64) -> Result<PSKT> {
-        let state = match self.take() {
-            State::Creator(pskt) => State::Creator(pskt.fallback_lock_time(lock_time)),
-            _ => Err(Error::expected_state("Creator"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Creator(pskt) => Ok(State::Creator(pskt.fallback_lock_time(lock_time))),
+            _ => Err(Error::expected_state("Creator")),
+        })
     }
 
     #[wasm_bindgen(js_name = inputsModifiable)]
     pub fn inputs_modifiable(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::Creator(pskt) => State::Creator(pskt.inputs_modifiable()),
-            _ => Err(Error::expected_state("Creator"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Creator(pskt) => Ok(State::Creator(pskt.inputs_modifiable())),
+            _ => Err(Error::expected_state("Creator")),
+        })
     }
 
     #[wasm_bindgen(js_name = outputsModifiable)]
     pub fn outputs_modifiable(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::Creator(pskt) => State::Creator(pskt.outputs_modifiable()),
-            _ => Err(Error::expected_state("Creator"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Creator(pskt) => Ok(State::Creator(pskt.outputs_modifiable())),
+            _ => Err(Error::expected_state("Creator")),
+        })
     }
 
     #[wasm_bindgen(js_name = noMoreInputs)]
     pub fn no_more_inputs(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::Constructor(pskt) => State::Constructor(pskt.no_more_inputs()),
-            _ => Err(Error::expected_state("Constructor"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Constructor(pskt) => Ok(State::Constructor(pskt.no_more_inputs())),
+            _ => Err(Error::expected_state("Constructor")),
+        })
     }
 
     #[wasm_bindgen(js_name = noMoreOutputs)]
     pub fn no_more_outputs(&self) -> Result<PSKT> {
-        let state = match self.take() {
-            State::Constructor(pskt) => State::Constructor(pskt.no_more_outputs()),
-            _ => Err(Error::expected_state("Constructor"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Constructor(pskt) => Ok(State::Constructor(pskt.no_more_outputs())),
+            _ => Err(Error::expected_state("Constructor")),
+        })
     }
 
     #[wasm_bindgen(js_name = inputAndRedeemScript)]
@@ -295,56 +305,47 @@ impl PSKT {
         let input = TransactionInput::try_owned_from(input)?;
         let mut input: Input = input.try_into()?;
         let redeem_script = js_sys::Reflect::get(&obj, &"redeemScript".into())
-            .expect("Missing redeemscript field")
+            .map_err(|_| Error::custom("redeemScript is missing"))?
             .as_string()
-            .expect("redeemscript must be a string");
+            .ok_or_else(|| Error::custom("redeemScript must be a string"))?;
         input.redeem_script =
             Some(hex::decode(redeem_script).map_err(|e| Error::custom(format!("Redeem script is not a hex string: {}", e)))?);
-        let state = match self.take() {
-            State::Constructor(pskt) => State::Constructor(pskt.input(input)),
-            _ => Err(Error::expected_state("Constructor"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Constructor(pskt) => Ok(State::Constructor(pskt.input(input))),
+            _ => Err(Error::expected_state("Constructor")),
+        })
     }
 
     pub fn input(&self, input: &TransactionInputT) -> Result<PSKT> {
         let input = TransactionInput::try_owned_from(input)?;
-        let state = match self.take() {
-            State::Constructor(pskt) => State::Constructor(pskt.input(input.try_into()?)),
-            _ => Err(Error::expected_state("Constructor"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Constructor(pskt) => Ok(State::Constructor(pskt.input(input.try_into()?))),
+            _ => Err(Error::expected_state("Constructor")),
+        })
     }
 
     pub fn output(&self, output: &TransactionOutputT) -> Result<PSKT> {
         let output = TransactionOutput::try_owned_from(output)?;
-        let state = match self.take() {
-            State::Constructor(pskt) => State::Constructor(pskt.output(output.try_into()?)),
-            _ => Err(Error::expected_state("Constructor"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Constructor(pskt) => Ok(State::Constructor(pskt.output(output.try_into()?))),
+            _ => Err(Error::expected_state("Constructor")),
+        })
     }
 
     #[wasm_bindgen(js_name = setSequence)]
     pub fn set_sequence(&self, n: u64, input_index: usize) -> Result<PSKT> {
-        let state = match self.take() {
-            State::Updater(pskt) => State::Updater(pskt.set_sequence(n, input_index)?),
-            _ => Err(Error::expected_state("Updater"))?,
-        };
-
-        self.replace(state)
+        self.update_state(|state| match state {
+            State::Updater(pskt) => Ok(State::Updater(pskt.set_sequence(n, input_index)?)),
+            _ => Err(Error::expected_state("Updater")),
+        })
     }
 
     #[wasm_bindgen(js_name = calculateId)]
     pub fn calculate_id(&self) -> Result<TransactionId> {
-        let state = self.state();
-        match state.as_ref().unwrap() {
+        self.with_state(|state| match state {
             State::Signer(pskt) => Ok(pskt.calculate_id()),
-            _ => Err(Error::expected_state("Signer"))?,
-        }
+            _ => Err(Error::expected_state("Signer")),
+        })
     }
 
     #[wasm_bindgen(js_name = calculateMass)]
@@ -357,12 +358,13 @@ impl PSKT {
 
         let network_id = NetworkType::from_str(&network_id).map_err(|e| Error::custom(format!("Invalid networkId: {}", e)))?;
 
-        let cloned_pskt = self.clone();
+        let state_snapshot = self.with_state(|state| Ok(state.clone()))?;
+        let cloned_pskt = PSKT::from(state_snapshot);
 
         let extractor = {
             let finalizer = cloned_pskt.finalizer()?;
 
-            let finalizer_state = finalizer.state().clone().unwrap();
+            let finalizer_state = finalizer.with_state(|s| Ok(s.clone()))?;
 
             match finalizer_state {
                 State::Finalizer(pskt) => {
@@ -376,12 +378,44 @@ impl PSKT {
                         .map_err(|e| Error::custom(format!("Failed to finalize PSKT: {e}")))?;
                     pskt.extractor()?
                 }
-                _ => panic!("Finalizer state is not valid"),
+                _ => return Err(Error::expected_state("Finalizer")),
             }
         };
         let tx = extractor
             .extract_tx_unchecked(&network_id.into())
             .map_err(|e| Error::custom(format!("Failed to extract transaction: {e}")))?;
         Ok(tx.tx.mass())
+    }
+}
+
+#[cfg(test)]
+mod wasm_pskt_tests {
+    use super::*;
+
+    #[test]
+    fn state_is_restored_when_transition_returns_error() {
+        let pskt = PSKT::from(State::NoOp(Some(Inner::default())));
+        assert_eq!(pskt.role_getter(), "Init");
+
+        let err = pskt.creator().err().expect("must fail for payload-initialized PSKT");
+        assert!(matches!(err, Error::CreateNotAllowed));
+
+        // Must not be corrupted after the error.
+        assert_eq!(pskt.role_getter(), "Init");
+    }
+
+    #[test]
+    fn state_is_restored_when_expected_state_mismatch() {
+        let pskt = PSKT::from(State::Creator(Native::<Creator>::default()));
+        assert_eq!(pskt.role_getter(), "Creator");
+
+        assert!(pskt.no_more_inputs().is_err());
+        assert_eq!(pskt.role_getter(), "Creator");
+    }
+
+    #[test]
+    fn role_getter_does_not_panic_when_state_is_missing() {
+        let pskt = PSKT { state: Arc::new(Mutex::new(None)) };
+        assert_eq!(pskt.role_getter(), "Invalid");
     }
 }

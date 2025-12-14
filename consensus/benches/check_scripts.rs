@@ -37,7 +37,7 @@ fn mock_tx_with_payload(inputs_count: usize, non_uniq_signatures: usize, payload
         let address = Address::new(Prefix::Mainnet, Version::PubKey, &kp.x_only_public_key().0.serialize());
         utxos.push(UtxoEntry {
             amount: thread_rng().gen::<u32>() as u64,
-            script_public_key: pay_to_address_script(&address),
+            script_public_key: pay_to_address_script(&address).unwrap(),
             block_daa_score: 333,
             is_coinbase: false,
         });
@@ -50,7 +50,7 @@ fn mock_tx_with_payload(inputs_count: usize, non_uniq_signatures: usize, payload
         let address = Address::new(Prefix::Mainnet, Version::PubKey, &kp.x_only_public_key().0.serialize());
         utxos.push(UtxoEntry {
             amount: thread_rng().gen::<u32>() as u64,
-            script_public_key: pay_to_address_script(&address),
+            script_public_key: pay_to_address_script(&address).unwrap(),
             block_daa_score: 444,
             is_coinbase: false,
         });

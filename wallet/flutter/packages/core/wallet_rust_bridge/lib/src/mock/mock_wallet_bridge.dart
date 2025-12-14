@@ -16,6 +16,7 @@ class MockWalletBridge implements WalletBridge {
   final _syncStateController = StreamController<SyncState>.broadcast();
 
   bool _isConnected = false;
+  bool _isDisposed = false;
   SyncState _syncState = const SyncState.notSynced();
   Wallet? _currentWallet;
 
@@ -495,6 +496,7 @@ class MockWalletBridge implements WalletBridge {
 
   /// Set balance for testing.
   void setBalance(String accountId, Balance balance) {
+    if (_isDisposed) return;
     _balances[accountId] = balance;
     final controller = _balanceControllers[accountId];
     if (controller != null && !controller.isClosed) {
@@ -510,6 +512,7 @@ class MockWalletBridge implements WalletBridge {
 
   /// Add transaction for testing.
   void addTransaction(String accountId, Transaction tx) {
+    if (_isDisposed) return;
     _transactions[accountId] ??= [];
     _transactions[accountId]!.add(tx);
     final controller = _transactionControllers[accountId];
@@ -526,6 +529,7 @@ class MockWalletBridge implements WalletBridge {
 
   /// Set sync state for testing.
   void setSyncState(SyncState state) {
+    if (_isDisposed) return;
     _syncState = state;
     if (!_syncStateController.isClosed) {
       _syncStateController.add(state);
@@ -538,14 +542,27 @@ class MockWalletBridge implements WalletBridge {
   /// Dispose resources.
   @override
   Future<void> dispose() async {
-    await _eventsController.close();
-    await _syncStateController.close();
+    if (_isDisposed) return;
+    _isDisposed = true;
+
+    if (!_eventsController.isClosed) {
+      await _eventsController.close();
+    }
+    if (!_syncStateController.isClosed) {
+      await _syncStateController.close();
+    }
     for (final controller in _balanceControllers.values) {
-      await controller.close();
+      if (!controller.isClosed) {
+        await controller.close();
+      }
     }
     for (final controller in _transactionControllers.values) {
-      await controller.close();
+      if (!controller.isClosed) {
+        await controller.close();
+      }
     }
+    _balanceControllers.clear();
+    _transactionControllers.clear();
   }
 
   static const _testWords = [

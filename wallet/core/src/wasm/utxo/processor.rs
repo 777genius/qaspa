@@ -236,11 +236,9 @@ impl UtxoProcessor {
     pub async fn start_notification_task(&self, multiplexer: &Multiplexer<Box<Events>>) -> Result<()> {
         let inner = self.inner.clone();
 
-        if inner.task_running.load(Ordering::SeqCst) {
+        if inner.task_running.swap(true, Ordering::SeqCst) {
             log_error!("You are calling `UtxoProcessor.start()` twice without calling `UtxoProcessor.stop()`!");
-            panic!("UtxoProcessor background task is already running");
-        } else {
-            inner.task_running.store(true, Ordering::SeqCst);
+            return Err(Error::custom("UtxoProcessor background task is already running"));
         }
 
         let ctl_receiver = inner.task_ctl.request.receiver.clone();

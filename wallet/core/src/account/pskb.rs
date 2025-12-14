@@ -420,96 +420,6 @@ pub fn pskt_to_pending_transaction(
     Ok(pending_tx)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use kaspa_addresses::Version;
-    use kaspa_consensus_core::tx::{TransactionOutpoint, UtxoEntry};
-    use kaspa_stealth::{create_stealth_output, StealthSecretKey};
-    use kaspa_txscript::{pay_to_address_script, pay_to_stealth, MAX_SCRIPT_ELEMENT_SIZE};
-    use rand::{rngs::StdRng, SeedableRng};
-
-    #[test]
-    fn finalize_pskt_redeem_script_too_large_returns_error_instead_of_panicking() {
-        let regular_addr = Address::new(Prefix::Testnet, Version::PubKey, &[1u8; 32]);
-        let spk = pay_to_address_script(&regular_addr).expect("valid address script");
-
-        let utxo_entry = UtxoEntry { amount: 1000, script_public_key: spk, block_daa_score: 0, is_coinbase: false };
-        let outpoint = TransactionOutpoint { transaction_id: TransactionId::from_bytes([9u8; 32]), index: 0 };
-
-        let redeem_script = vec![0u8; MAX_SCRIPT_ELEMENT_SIZE + 1];
-        let input = kaspa_wallet_pskt::input::InputBuilder::default()
-            .utxo_entry(utxo_entry)
-            .previous_outpoint(outpoint)
-            .redeem_script(redeem_script)
-            .sig_op_count(1)
-            .build()
-            .expect("input");
-
-        let output = kaspa_wallet_pskt::output::OutputBuilder::default()
-            .amount(1)
-            .script_public_key(ScriptPublicKey::from_vec(0u16, vec![]))
-            .build()
-            .expect("output");
-
-        let pskt_finalizer = PSKT::<Creator>::default()
-            .inputs_modifiable()
-            .outputs_modifiable()
-            .constructor()
-            .input(input)
-            .output(output)
-            .signer()
-            .finalizer();
-
-        let err = finalize_pskt_no_sig_and_redeem_script(pskt_finalizer).err().expect("must fail for too large redeem script");
-        assert!(!err.to_string().is_empty());
-    }
-
-    #[test]
-    fn pskt_to_pending_transaction_does_not_panic_on_stealth_utxo_entry() {
-        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
-        let change_address = Address::new(Prefix::Testnet, Version::PubKey, &[2u8; 32]);
-
-        let mut rng = StdRng::seed_from_u64(123);
-        let receiver_keys = StealthSecretKey::generate();
-        let stealth_address = receiver_keys.to_address();
-        let ephemeral_output = create_stealth_output(&stealth_address, &mut rng).expect("stealth output");
-        let stealth_spk = pay_to_stealth(&ephemeral_output);
-
-        let utxo_entry = UtxoEntry { amount: 1000, script_public_key: stealth_spk, block_daa_score: 0, is_coinbase: false };
-        let outpoint = TransactionOutpoint { transaction_id: TransactionId::from_bytes([7u8; 32]), index: 0 };
-
-        // Ensure finalizer succeeds by providing a minimal redeem script (non-empty final_script_sig).
-        let input = kaspa_wallet_pskt::input::InputBuilder::default()
-            .utxo_entry(utxo_entry)
-            .previous_outpoint(outpoint)
-            .redeem_script(vec![1u8])
-            .sig_op_count(1)
-            .build()
-            .expect("input");
-
-        let output = kaspa_wallet_pskt::output::OutputBuilder::default()
-            .amount(1)
-            .script_public_key(ScriptPublicKey::from_vec(0u16, vec![]))
-            .build()
-            .expect("output");
-
-        let pskt_finalizer = PSKT::<Creator>::default()
-            .inputs_modifiable()
-            .outputs_modifiable()
-            .constructor()
-            .input(input)
-            .output(output)
-            .signer()
-            .finalizer();
-        let finalized = finalize_pskt_no_sig_and_redeem_script(pskt_finalizer).expect("finalize");
-
-        // Extracting tx will fail (script mismatch for stealth input), but must not panic during utxo_ref construction.
-        let res = pskt_to_pending_transaction(finalized, network_id, change_address, None);
-        assert!(res.is_err());
-    }
-}
-
 // Allow creation of atomic commit reveal operation with two
 // different parameters sets.
 pub enum CommitRevealBatchKind {
@@ -659,4 +569,94 @@ pub async fn commit_reveal_batch_bundle(
     }
 
     Err(Error::NoQualifiedRevealSignerFound)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaspa_addresses::Version;
+    use kaspa_consensus_core::tx::{TransactionOutpoint, UtxoEntry};
+    use kaspa_stealth::{create_stealth_output, StealthSecretKey};
+    use kaspa_txscript::{pay_to_address_script, pay_to_stealth, MAX_SCRIPT_ELEMENT_SIZE};
+    use rand::{rngs::StdRng, SeedableRng};
+
+    #[test]
+    fn finalize_pskt_redeem_script_too_large_returns_error_instead_of_panicking() {
+        let regular_addr = Address::new(Prefix::Testnet, Version::PubKey, &[1u8; 32]);
+        let spk = pay_to_address_script(&regular_addr).expect("valid address script");
+
+        let utxo_entry = UtxoEntry { amount: 1000, script_public_key: spk, block_daa_score: 0, is_coinbase: false };
+        let outpoint = TransactionOutpoint { transaction_id: TransactionId::from_bytes([9u8; 32]), index: 0 };
+
+        let redeem_script = vec![0u8; MAX_SCRIPT_ELEMENT_SIZE + 1];
+        let input = kaspa_wallet_pskt::input::InputBuilder::default()
+            .utxo_entry(utxo_entry)
+            .previous_outpoint(outpoint)
+            .redeem_script(redeem_script)
+            .sig_op_count(1)
+            .build()
+            .expect("input");
+
+        let output = kaspa_wallet_pskt::output::OutputBuilder::default()
+            .amount(1)
+            .script_public_key(ScriptPublicKey::from_vec(0u16, vec![]))
+            .build()
+            .expect("output");
+
+        let pskt_finalizer = PSKT::<Creator>::default()
+            .inputs_modifiable()
+            .outputs_modifiable()
+            .constructor()
+            .input(input)
+            .output(output)
+            .signer()
+            .finalizer();
+
+        let err = finalize_pskt_no_sig_and_redeem_script(pskt_finalizer).err().expect("must fail for too large redeem script");
+        assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn pskt_to_pending_transaction_does_not_panic_on_stealth_utxo_entry() {
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
+        let change_address = Address::new(Prefix::Testnet, Version::PubKey, &[2u8; 32]);
+
+        let mut rng = StdRng::seed_from_u64(123);
+        let receiver_keys = StealthSecretKey::generate();
+        let stealth_address = receiver_keys.to_address();
+        let ephemeral_output = create_stealth_output(&stealth_address, &mut rng).expect("stealth output");
+        let stealth_spk = pay_to_stealth(&ephemeral_output);
+
+        let utxo_entry = UtxoEntry { amount: 1000, script_public_key: stealth_spk, block_daa_score: 0, is_coinbase: false };
+        let outpoint = TransactionOutpoint { transaction_id: TransactionId::from_bytes([7u8; 32]), index: 0 };
+
+        // Ensure finalizer succeeds by providing a minimal redeem script (non-empty final_script_sig).
+        let input = kaspa_wallet_pskt::input::InputBuilder::default()
+            .utxo_entry(utxo_entry)
+            .previous_outpoint(outpoint)
+            .redeem_script(vec![1u8])
+            .sig_op_count(1)
+            .build()
+            .expect("input");
+
+        let output = kaspa_wallet_pskt::output::OutputBuilder::default()
+            .amount(1)
+            .script_public_key(ScriptPublicKey::from_vec(0u16, vec![]))
+            .build()
+            .expect("output");
+
+        let pskt_finalizer = PSKT::<Creator>::default()
+            .inputs_modifiable()
+            .outputs_modifiable()
+            .constructor()
+            .input(input)
+            .output(output)
+            .signer()
+            .finalizer();
+        let finalized = finalize_pskt_no_sig_and_redeem_script(pskt_finalizer).expect("finalize");
+
+        // Extracting tx will fail (script mismatch for stealth input), but must not panic during utxo_ref construction.
+        let res = pskt_to_pending_transaction(finalized, network_id, change_address, None);
+        assert!(res.is_err());
+    }
 }

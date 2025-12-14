@@ -78,7 +78,16 @@ class TransactionRepositoryImpl implements TransactionRepository {
     _accountSubscriptions[accountId] =
         _rust.watchTransactions(accountId: capturedAccountId).listen(
       (tx) async {
-        await _local.saveTransactionForAccount(capturedAccountId, tx);
+        try {
+          await _local.saveTransactionForAccount(capturedAccountId, tx);
+        } catch (e, stack) {
+          // Async exceptions in stream callbacks don't reach onError
+          _log.warning(
+            'Failed to save transaction for $capturedAccountId',
+            e,
+            stack,
+          );
+        }
       },
       onError: (Object error, StackTrace stack) {
         // Log sync error and clean up subscription

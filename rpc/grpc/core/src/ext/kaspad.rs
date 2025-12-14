@@ -5,12 +5,14 @@ use crate::protowire::{
     kaspad_request, kaspad_response, KaspadRequest, KaspadResponse, NotifyBlockAddedRequestMessage,
     NotifyFinalityConflictRequestMessage, NotifyNewBlockTemplateRequestMessage, NotifyPruningPointUtxoSetOverrideRequestMessage,
     NotifySinkBlueScoreChangedRequestMessage, NotifyUtxosChangedRequestMessage, NotifyVirtualChainChangedRequestMessage,
-    NotifyVirtualDaaScoreChangedRequestMessage,
+    NotifyVirtualDaaScoreChangedRequestMessage, PingRequestMessage,
 };
 
 impl KaspadRequest {
     pub fn from_notification_type(scope: &Scope, command: Command) -> Self {
-        KaspadRequest { id: 0, payload: Some(kaspad_request::Payload::from_notification_type(scope, command)) }
+        // Non-fallible helper: in case of unsupported scopes (e.g. MasterDelegationExpiringSoon),
+        // return a request without a payload instead of panicking.
+        Self::try_from_notification_type(scope, command).unwrap_or(KaspadRequest { id: 0, payload: None })
     }
 
     pub fn try_from_notification_type(scope: &Scope, command: Command) -> Result<Self, RpcError> {
@@ -24,8 +26,10 @@ impl KaspadRequest {
 
 impl kaspad_request::Payload {
     pub fn from_notification_type(scope: &Scope, command: Command) -> Self {
+        // Non-fallible helper: in case of unsupported scopes, return a benign request payload instead of panicking.
+        // Callers that need strict behavior should use `try_from_notification_type`.
         Self::try_from_notification_type(scope, command)
-            .unwrap_or_else(|_| panic!("MasterDelegationExpiringSoon notification is not supported over gRPC. Use wRPC instead."))
+            .unwrap_or_else(|_| kaspad_request::Payload::PingRequest(PingRequestMessage::default()))
     }
 
     pub fn try_from_notification_type(scope: &Scope, command: Command) -> Result<Self, RpcError> {
@@ -125,5 +129,28 @@ impl kaspad_response::Payload {
             Payload::NewBlockTemplateNotification(_) => true,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_notification_type_is_non_panicking_for_unsupported_scopes() {
+        let scope = Scope::MasterDelegationExpiringSoon(kaspa_notify::scope::MasterDelegationExpiringSoonScope::default());
+
+        assert!(matches!(
+            kaspad_request::Payload::try_from_notification_type(&scope, Command::Start),
+            Err(RpcError::UnsupportedFeature)
+        ));
+
+        // Must not panic even though the scope is unsupported by gRPC.
+        let payload = kaspad_request::Payload::from_notification_type(&scope, Command::Start);
+        assert!(matches!(payload, kaspad_request::Payload::PingRequest(_)));
+
+        // Request helper must not panic either.
+        let request = KaspadRequest::from_notification_type(&scope, Command::Start);
+        assert!(request.payload.is_none());
     }
 }

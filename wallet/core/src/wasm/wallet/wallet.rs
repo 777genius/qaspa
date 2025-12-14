@@ -491,10 +491,8 @@ impl Wallet {
     pub async fn start_notification_task(&self, multiplexer: &Multiplexer<Box<Events>>) -> Result<()> {
         let inner = self.inner.clone();
 
-        if inner.task_running.load(Ordering::SeqCst) {
-            panic!("ReflectorClient task is already running");
-        } else {
-            inner.task_running.store(true, Ordering::SeqCst);
+        if inner.task_running.swap(true, Ordering::SeqCst) {
+            return Err(Error::Custom("Wallet notification task is already running".to_string()));
         }
 
         let ctl_receiver = inner.task_ctl.request.receiver.clone();
@@ -526,6 +524,7 @@ impl Wallet {
             }
 
             channel.close();
+            inner.task_running.store(false, Ordering::SeqCst);
             ctl_sender.send(()).await.ok();
         });
 
@@ -535,7 +534,6 @@ impl Wallet {
     pub async fn stop_notification_task(&self) -> Result<()> {
         let inner = &self.inner;
         if inner.task_running.load(Ordering::SeqCst) {
-            inner.task_running.store(false, Ordering::SeqCst);
             inner.task_ctl.signal(()).await.map_err(|err| JsValue::from_str(&err.to_string()))?;
         }
         Ok(())

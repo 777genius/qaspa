@@ -298,10 +298,9 @@ impl ConsensusConverter {
     }
 
     fn get_transaction_verbose_data_with_verbosity(
-        &self,
         transaction: &Transaction,
-        block_hash: Hash,
-        block_time: u64,
+        block_hash: Option<Hash>,
+        block_time: Option<u64>,
         compute_mass: u64,
         verbosity: &RpcTransactionVerboseDataVerbosity,
     ) -> RpcResult<RpcOptionalTransactionVerboseData> {
@@ -313,8 +312,16 @@ impl ConsensusConverter {
             },
             hash: if verbosity.include_hash.unwrap_or(false) { Some(hash(transaction)) } else { Default::default() },
             compute_mass: if verbosity.include_compute_mass.unwrap_or(false) { Some(compute_mass) } else { Default::default() },
-            block_hash: if verbosity.include_block_hash.unwrap_or(false) { Some(block_hash) } else { Default::default() },
-            block_time: if verbosity.include_block_time.unwrap_or(false) { Some(block_time) } else { Default::default() },
+            block_hash: if verbosity.include_block_hash.unwrap_or(false) {
+                Some(block_hash.ok_or_else(|| RpcError::ConsensusConverterNotFound("block_hash".to_string()))?)
+            } else {
+                Default::default()
+            },
+            block_time: if verbosity.include_block_time.unwrap_or(false) {
+                Some(block_time.ok_or_else(|| RpcError::ConsensusConverterNotFound("block_time".to_string()))?)
+            } else {
+                Default::default()
+            },
         })
     }
 
@@ -395,6 +402,7 @@ impl ConsensusConverter {
         block_time: u64,
         verbosity: &RpcTransactionVerbosity,
     ) -> RpcResult<RpcOptionalTransaction> {
+        let block_time = block_hash.map(|_| block_time);
         Ok(RpcOptionalTransaction {
             version: if verbosity.include_version.unwrap_or(false) { Some(transaction.version) } else { Default::default() },
             inputs: if let Some(ref input_verbosity) = verbosity.input_verbosity {
@@ -425,9 +433,9 @@ impl ConsensusConverter {
             payload: if verbosity.include_payload.unwrap_or(false) { Some(transaction.payload.clone()) } else { Default::default() },
             mass: if verbosity.include_mass.unwrap_or(false) { Some(transaction.mass()) } else { Default::default() },
             verbose_data: if let Some(verbose_data_verbosity) = verbosity.verbose_data_verbosity.as_ref() {
-                Some(self.get_transaction_verbose_data_with_verbosity(
+                Some(Self::get_transaction_verbose_data_with_verbosity(
                     transaction,
-                    block_hash.unwrap(),
+                    block_hash,
                     block_time,
                     consensus.calculate_transaction_non_contextual_masses(transaction).compute_mass,
                     verbose_data_verbosity,
@@ -446,6 +454,7 @@ impl ConsensusConverter {
         block_time: u64,
         verbosity: &RpcTransactionVerbosity,
     ) -> RpcResult<RpcOptionalTransaction> {
+        let block_time = block_hash.map(|_| block_time);
         Ok(RpcOptionalTransaction {
             version: if verbosity.include_version.unwrap_or(false) { Some(transaction.tx.version) } else { Default::default() },
             inputs: if let Some(input_verbosity) = verbosity.input_verbosity.as_ref() {
@@ -475,18 +484,16 @@ impl ConsensusConverter {
             payload: Some(transaction.tx.payload.clone()),
             mass: Some(transaction.tx.mass()),
             verbose_data: if let Some(verbose_data_verbosity) = verbosity.verbose_data_verbosity.as_ref() {
-                Some(
-                    self.get_transaction_verbose_data_with_verbosity(
-                        &transaction.tx,
-                        block_hash.unwrap(),
-                        block_time,
-                        transaction
-                            .calculated_non_contextual_masses
-                            .unwrap_or(consensus.calculate_transaction_non_contextual_masses(transaction.tx.as_ref()))
-                            .compute_mass,
-                        verbose_data_verbosity,
-                    )?,
-                )
+                Some(Self::get_transaction_verbose_data_with_verbosity(
+                    &transaction.tx,
+                    block_hash,
+                    block_time,
+                    transaction
+                        .calculated_non_contextual_masses
+                        .unwrap_or(consensus.calculate_transaction_non_contextual_masses(transaction.tx.as_ref()))
+                        .compute_mass,
+                    verbose_data_verbosity,
+                )?)
             } else {
                 Default::default()
             },
@@ -713,5 +720,75 @@ impl Converter for ConsensusConverter {
 impl Debug for ConsensusConverter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConsensusConverter").field("consensus_manager", &"").field("config", &self.config).finish()
+    }
+}
+
+#[cfg(test)]
+mod tx_verbose_data_tests {
+    use super::ConsensusConverter;
+    use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
+    use kaspa_consensus_core::tx::Transaction;
+    use kaspa_hashes::Hash;
+    use kaspa_rpc_core::{RpcError, RpcTransactionVerboseDataVerbosity};
+
+    #[test]
+    fn tx_verbose_data_requires_block_hash_only_when_requested() {
+        let tx = Transaction::new(0, vec![], vec![], 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
+
+        let verbosity = RpcTransactionVerboseDataVerbosity {
+            include_transaction_id: Some(true),
+            include_hash: Some(false),
+            include_compute_mass: Some(false),
+            include_block_hash: Some(true),
+            include_block_time: Some(false),
+        };
+
+        let err = ConsensusConverter::get_transaction_verbose_data_with_verbosity(&tx, None, None, 123, &verbosity).unwrap_err();
+        assert!(matches!(err, RpcError::ConsensusConverterNotFound(_)));
+
+        let ok = ConsensusConverter::get_transaction_verbose_data_with_verbosity(
+            &tx,
+            None,
+            None,
+            123,
+            &RpcTransactionVerboseDataVerbosity::new(Some(true), Some(false), Some(false), Some(false), Some(false)),
+        )
+        .expect("must succeed without block hash/time when not requested");
+        assert!(ok.block_hash.is_none());
+        assert!(ok.block_time.is_none());
+
+        let hash = Hash::from_u64_word(7);
+        let ok2 =
+            ConsensusConverter::get_transaction_verbose_data_with_verbosity(&tx, Some(hash), Some(999), 123, &verbosity).expect("ok");
+        assert_eq!(ok2.block_hash, Some(hash));
+        assert!(ok2.block_time.is_none());
+    }
+
+    #[test]
+    fn tx_verbose_data_requires_block_time_only_when_requested() {
+        let tx = Transaction::new(0, vec![], vec![], 0, SUBNETWORK_ID_NATIVE, 0, vec![]);
+
+        let verbosity = RpcTransactionVerboseDataVerbosity {
+            include_transaction_id: Some(false),
+            include_hash: Some(false),
+            include_compute_mass: Some(false),
+            include_block_hash: Some(false),
+            include_block_time: Some(true),
+        };
+
+        let err =
+            ConsensusConverter::get_transaction_verbose_data_with_verbosity(&tx, Some(Hash::from_u64_word(1)), None, 0, &verbosity)
+                .unwrap_err();
+        assert!(matches!(err, RpcError::ConsensusConverterNotFound(_)));
+
+        let ok = ConsensusConverter::get_transaction_verbose_data_with_verbosity(
+            &tx,
+            Some(Hash::from_u64_word(1)),
+            Some(12345),
+            0,
+            &verbosity,
+        )
+        .expect("ok");
+        assert_eq!(ok.block_time, Some(12345));
     }
 }

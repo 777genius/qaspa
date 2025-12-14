@@ -230,11 +230,11 @@ impl PendingTransaction {
 
     /// Submit the transaction on the supplied rpc
     pub async fn try_submit(&self, rpc: &Arc<DynRpcApi>) -> Result<RpcTransactionId> {
-        // sanity check to prevent multiple invocations (for API use)
-        self.inner.is_submitted.load(Ordering::SeqCst).then(|| {
-            panic!("PendingTransaction::try_submit() called multiple times");
-        });
-        self.inner.is_submitted.store(true, Ordering::SeqCst);
+        // Sanity check to prevent multiple invocations (for API use).
+        // This is intentionally one-shot even if the first attempt fails, to prevent accidental double-submits.
+        if self.inner.is_submitted.swap(true, Ordering::SeqCst) {
+            return Err(Error::Custom("PendingTransaction::try_submit() called multiple times".to_string()));
+        }
 
         let rpc_transaction: RpcTransaction = self.rpc_transaction();
 
@@ -551,4 +551,35 @@ impl PendingTransaction {
         // *self.inner.signable_tx.lock().unwrap() = mutable_tx;
     }
     */
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::RpcCoreMock;
+    use crate::tx::generator::test::{change_address, make_generator, output_address};
+    use crate::tx::{Fees, PaymentOutput};
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn try_submit_twice_returns_error_instead_of_panicking() -> Result<()> {
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
+        let payment_output = PaymentOutput::new(output_address(network_id.into()), crate::utils::kaspa_to_sompi(1.0));
+        let generator =
+            make_generator(network_id, &[10.0], &[], None, Fees::SenderPays(0), change_address, payment_output.into()).unwrap();
+
+        let pending =
+            generator.generate_transaction().unwrap().expect("generator should produce a pending transaction in this scenario");
+
+        let rpc_api_mock = Arc::new(RpcCoreMock::new());
+        let rpc: Arc<DynRpcApi> = rpc_api_mock;
+
+        // First call can fail (mock RPC) but must not panic.
+        let _ = pending.try_submit(&rpc).await;
+
+        // Second call must return a regular error (not panic).
+        let err = pending.try_submit(&rpc).await.expect_err("second submit must be rejected");
+        assert!(err.to_string().to_lowercase().contains("multiple"));
+        Ok(())
+    }
 }

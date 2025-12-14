@@ -568,7 +568,12 @@ impl UtxoProcessor {
     pub async fn handle_utxo_changed(&self, utxos: UtxosChangedNotification) -> Result<()> {
         use kaspa_txscript::STEALTH_SCRIPT_VERSION;
 
-        let current_daa_score = self.current_daa_score().expect("DAA score expected when handling UTXO Changed notifications");
+        let Some(current_daa_score) = self.current_daa_score() else {
+            // Defensive: notifications can race with disconnect/shutdown and arrive after `is_connected` is cleared.
+            // In that case we don't have a reliable DAA score to classify maturity, so we ignore the notification.
+            log_warn!("Ignoring UTXO Changed notification while disconnected");
+            return Ok(());
+        };
 
         #[allow(clippy::mutable_key_type)]
         let mut updated_contexts: HashSet<UtxoContext> = HashSet::default();
@@ -746,7 +751,10 @@ impl UtxoProcessor {
     /// Handles StealthUtxosChanged notifications specifically for stealth UTXOs.
     /// This is called when we receive notifications filtered by script version.
     pub async fn handle_stealth_utxo_changed(&self, notification: StealthUtxosChangedNotification) -> Result<()> {
-        let current_daa_score = self.current_daa_score().expect("DAA score expected when handling stealth UTXO notifications");
+        let Some(current_daa_score) = self.current_daa_score() else {
+            log_warn!("Ignoring StealthUtxosChanged notification while disconnected");
+            return Ok(());
+        };
 
         #[allow(clippy::mutable_key_type)]
         let mut updated_contexts: HashSet<UtxoContext> = HashSet::default();
