@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:mobx/mobx.dart';
 import 'package:receive_domain/receive_domain.dart';
@@ -56,7 +57,12 @@ abstract class _ReceiveStoreBase with Store {
         accountId: accountId,
       );
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log(
+        'Failed to load address',
+        error: e,
+        name: 'ReceiveStore',
+      );
+      errorMessage = 'Failed to load address';
     } finally {
       isLoading = false;
     }
@@ -75,7 +81,12 @@ abstract class _ReceiveStoreBase with Store {
         accountId: accountId,
       );
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log(
+        'Failed to generate new address',
+        error: e,
+        name: 'ReceiveStore',
+      );
+      errorMessage = 'Failed to generate address';
     } finally {
       isLoading = false;
     }

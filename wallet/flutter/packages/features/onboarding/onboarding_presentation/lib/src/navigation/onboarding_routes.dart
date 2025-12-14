@@ -71,7 +71,7 @@ abstract final class OnboardingRoutes {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      error.toString(),
+                      'Please try again later',
                       style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),

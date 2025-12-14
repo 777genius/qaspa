@@ -175,7 +175,7 @@ impl Args {
     #[cfg(feature = "devnet-prealloc")]
     pub fn generate_prealloc_utxos(&self, num_prealloc_utxos: u64) -> kaspa_consensus_core::utxo::utxo_collection::UtxoCollection {
         let addr = Address::try_from(&self.prealloc_address.as_ref().unwrap()[..]).unwrap();
-        let spk = pay_to_address_script(&addr);
+        let spk = pay_to_address_script(&addr).unwrap();
         (1..=num_prealloc_utxos)
             .map(|i| {
                 (

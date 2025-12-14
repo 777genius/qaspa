@@ -288,13 +288,13 @@ abstract class _OnboardingStoreBase with Store {
   /// Set password
   @action
   void setPassword(String value) {
-    password = value;
+    password = value.trim();
   }
 
   /// Set confirm password
   @action
   void setConfirmPassword(String value) {
-    confirmPassword = value;
+    confirmPassword = value.trim();
   }
 
   /// Set wallet name

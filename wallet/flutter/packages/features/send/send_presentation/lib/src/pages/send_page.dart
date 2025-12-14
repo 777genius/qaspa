@@ -51,11 +51,13 @@ class _SendPageState extends State<SendPage> {
                 decoration: InputDecoration(
                   labelText: 'Recipient Address',
                   hintText: 'kaspa:...',
+                  counterText: '',
                   errorText: store.recipientAddress.isNotEmpty && !store.isAddressValid
                       ? 'Invalid Kaspa address'
                       : null,
                 ),
-                onChanged: store.setRecipientAddress,
+                maxLength: 80,
+                onChanged: (value) => store.setRecipientAddress(value.trim()),
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
@@ -68,7 +70,7 @@ class _SendPageState extends State<SendPage> {
                       : null,
                 ),
                 keyboardType: TextInputType.number,
-                onChanged: store.setAmount,
+                onChanged: (value) => store.setAmount(value.trim()),
               ),
               const SizedBox(height: AppSpacing.lg),
               if (store.estimatedFee != null)
@@ -124,7 +126,7 @@ class _SendPageState extends State<SendPage> {
               onPressed: store.isSending
                   ? null
                   : () async {
-                      if (passwordController.text.isEmpty) return;
+                      if (passwordController.text.trim().isEmpty) return;
 
                       try {
                         // Pass password directly to avoid keeping reference

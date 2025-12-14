@@ -657,17 +657,17 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         let mempool_entries = grouped_txs
             .owners
             .iter()
-            .map(|(script_public_key, owner_transactions)| {
+            .map(|(script_public_key, owner_transactions)| -> RpcResult<_> {
                 let address = extract_script_pub_key_address(script_public_key, self.config.prefix())
-                    .expect("script public key is convertible into an address");
-                self.consensus_converter.get_mempool_entries_by_address(
+                    .map_err(|e| RpcError::General(format!("Failed to convert script public key into an address: {e}")))?;
+                Ok(self.consensus_converter.get_mempool_entries_by_address(
                     &session,
                     address,
                     owner_transactions,
                     &grouped_txs.transactions,
-                )
+                ))
             })
-            .collect();
+            .collect::<RpcResult<Vec<_>>>()?;
         Ok(GetMempoolEntriesByAddressesResponse::new(mempool_entries))
     }
 

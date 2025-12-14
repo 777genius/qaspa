@@ -431,27 +431,23 @@ impl UtxoContext {
         let transactions = HashMap::group_from(utxos.into_iter().map(|utxo| (utxo.transaction_id(), utxo)));
 
         for (txid, utxos) in transactions.into_iter() {
-            let revived = {
+            let mut moved = Vec::new();
+            {
                 let mut context = self.context();
-                let mut revived = Vec::with_capacity(utxos.len());
-
                 for utxo_entry in utxos.iter() {
-                    if context.stasis.remove(utxo_entry.id_as_ref()).is_none() {
+                    if context.stasis.remove(utxo_entry.id_as_ref()).is_some() {
+                        context.pending.insert(utxo_entry.id(), utxo_entry.clone());
+                        moved.push(utxo_entry.clone());
+                    } else {
                         log_error!("Error: non-stasis utxo revival (id={:?})", utxo_entry.id_as_ref());
-                        continue;
                     }
-                    context.pending.insert(utxo_entry.id(), utxo_entry.clone());
-                    revived.push(utxo_entry.clone());
                 }
-                revived
-            };
-
-            if revived.is_empty() {
-                continue;
             }
 
-            let record = TransactionRecord::new_incoming(self, txid, &revived);
-            self.processor().notify(Events::Pending { record }).await?;
+            if moved.is_not_empty() {
+                let record = TransactionRecord::new_incoming(self, txid, &moved);
+                self.processor().notify(Events::Pending { record }).await?;
+            }
         }
 
         Ok(())

@@ -65,7 +65,7 @@ abstract class _HomeStoreBase with Store {
           error: e,
           name: 'HomeStore',
         );
-        errorMessage = 'Balance: ${e.toString()}';
+        errorMessage = 'Failed to load balance';
         return null;
       });
 
@@ -79,7 +79,7 @@ abstract class _HomeStoreBase with Store {
           name: 'HomeStore',
         );
         if (errorMessage == null) {
-          errorMessage = 'Transactions: ${e.toString()}';
+          errorMessage = 'Failed to load transactions';
         }
         return null;
       });
@@ -112,7 +112,7 @@ abstract class _HomeStoreBase with Store {
         error: e,
         name: 'HomeStore',
       );
-      errorMessage = e.toString();
+      errorMessage = 'Failed to load data. Please try again';
     } finally {
       isLoading = false;
     }
@@ -131,7 +131,7 @@ abstract class _HomeStoreBase with Store {
         error: e,
         name: 'HomeStore',
       );
-      errorMessage = e.toString();
+      errorMessage = 'Failed to refresh balance';
     }
   }
 
@@ -152,7 +152,7 @@ abstract class _HomeStoreBase with Store {
         error: e,
         name: 'HomeStore',
       );
-      errorMessage = e.toString();
+      errorMessage = 'Failed to refresh transactions';
     }
   }
 
@@ -165,7 +165,12 @@ abstract class _HomeStoreBase with Store {
       },
       onError: (e) {
         if (_isDisposed) return;
-        errorMessage = e.toString();
+        developer.log(
+          'Balance watch error',
+          error: e,
+          name: 'HomeStore',
+        );
+        errorMessage = 'Connection error';
       },
     );
   }

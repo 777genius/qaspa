@@ -115,7 +115,7 @@ abstract class _StealthStoreBase with Store {
           error: e,
           name: 'StealthStore',
         );
-        errorMessage = 'Address: ${e.toString()}';
+        errorMessage = 'Failed to load stealth address';
         return null;
       });
 
@@ -128,7 +128,7 @@ abstract class _StealthStoreBase with Store {
           name: 'StealthStore',
         );
         if (errorMessage == null) {
-          errorMessage = 'Balance: ${e.toString()}';
+          errorMessage = 'Failed to load stealth balance';
         }
         return null;
       });
@@ -162,7 +162,7 @@ abstract class _StealthStoreBase with Store {
         error: e,
         name: 'StealthStore',
       );
-      errorMessage = e.toString();
+      errorMessage = 'Failed to load data. Please try again';
     } finally {
       isLoading = false;
     }
@@ -191,7 +191,15 @@ abstract class _StealthStoreBase with Store {
       }
 
       // Reload balance and transactions after scan
-      stealthBalance = await _getStealthBalanceUseCase(accountId: accountId);
+      try {
+        stealthBalance = await _getStealthBalanceUseCase(accountId: accountId);
+      } catch (e) {
+        developer.log(
+          'Failed to refresh balance after scan',
+          error: e,
+          name: 'StealthStore',
+        );
+      }
 
       // Load transactions after successful scan
       await _loadTransactionsForAccount(accountId);
@@ -201,7 +209,7 @@ abstract class _StealthStoreBase with Store {
         error: e,
         name: 'StealthStore',
       );
-      errorMessage = e.toString();
+      errorMessage = 'Failed to scan for payments';
     } finally {
       isScanning = false;
     }
@@ -226,7 +234,7 @@ abstract class _StealthStoreBase with Store {
       );
       // Don't overwrite existing error message if one exists
       if (errorMessage == null) {
-        errorMessage = 'Failed to load transactions: ${e.toString()}';
+        errorMessage = 'Failed to load transactions';
       }
     }
   }
@@ -264,7 +272,15 @@ abstract class _StealthStoreBase with Store {
 
       // Only update balance if still on same account
       if (currentAccountId == accountId) {
-        stealthBalance = await _getStealthBalanceUseCase(accountId: accountId);
+        try {
+          stealthBalance = await _getStealthBalanceUseCase(accountId: accountId);
+        } catch (e) {
+          developer.log(
+            'Failed to refresh balance after send',
+            error: e,
+            name: 'StealthStore',
+          );
+        }
       }
 
       return transactionId;
@@ -274,11 +290,28 @@ abstract class _StealthStoreBase with Store {
         error: e,
         name: 'StealthStore',
       );
-      errorMessage = e.toString();
+      errorMessage = _getSendErrorMessage(e);
       return null;
     } finally {
       isSending = false;
     }
+  }
+
+  String _getSendErrorMessage(Object error) {
+    // Map known exceptions to user-friendly messages
+    if (error is InsufficientFundsException) {
+      return 'Insufficient funds for this transaction';
+    } else if (error is InvalidPasswordException) {
+      return 'Invalid password';
+    } else if (error is InvalidAddressException) {
+      return 'Invalid recipient address';
+    } else if (error is InvalidAmountException) {
+      return 'Invalid amount';
+    } else if (error is NotConnectedException || error is RpcException) {
+      return 'Network error. Please check your connection';
+    }
+    // Generic fallback - never expose raw error details
+    return 'Transaction failed. Please try again';
   }
 
   @action

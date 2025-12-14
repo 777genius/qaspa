@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:injectable/injectable.dart';
 import 'package:modularity_injectable/modularity_injectable.dart';
 import 'package:synchronized/synchronized.dart';
@@ -153,8 +155,14 @@ class WalletRepositoryImpl implements WalletRepository {
         // Always close wallet, even if an error occurred after opening
         try {
           await _rust.closeWallet();
-        } catch (_) {
-          // Ignore close errors - wallet may not have been opened
+        } catch (e, stack) {
+          // Log close errors for debugging, but don't fail validation
+          developer.log(
+            'Failed to close wallet during validation',
+            error: e,
+            stackTrace: stack,
+            name: 'WalletRepository',
+          );
         }
       }
     });

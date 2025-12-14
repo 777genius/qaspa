@@ -270,7 +270,7 @@ impl LocalStoreInner {
 impl Drop for LocalStoreInner {
     fn drop(&mut self) {
         if self.is_modified() {
-            panic!("LocalStoreInner::drop called while modified flag is true");
+            log_error!("LocalStoreInner::drop called while modified flag is true");
         }
     }
 }
@@ -397,7 +397,7 @@ impl Interface for LocalStore {
     async fn open(&self, wallet_secret: &Secret, args: OpenArgs) -> Result<()> {
         if let Some(inner) = self.inner.lock().unwrap().as_ref() {
             if inner.is_modified() {
-                panic!("LocalStore::open called while modified flag is true!");
+                return Err(Error::Custom("LocalStore::open called while modified flag is true".to_string()));
             }
         }
 
@@ -448,7 +448,7 @@ impl Interface for LocalStore {
 
     async fn flush(&self, wallet_secret: &Secret) -> Result<()> {
         if !self.batch.load(Ordering::SeqCst) {
-            panic!("flush() called while not in batch mode");
+            return Err(Error::Custom("flush() called while not in batch mode".to_string()));
         }
 
         self.batch.store(false, Ordering::SeqCst);
@@ -465,14 +465,14 @@ impl Interface for LocalStore {
 
     async fn close(&self) -> Result<()> {
         if self.inner()?.is_modified() {
-            panic!("LocalStore::close called while modified flag is true");
+            return Err(Error::Custom("LocalStore::close called while modified flag is true".to_string()));
         }
 
         if !self.is_open() {
-            panic!("LocalStore::close called while wallet is not open");
+            return Err(Error::WalletNotOpen);
         }
 
-        let inner = self.inner.lock().unwrap().take().unwrap();
+        let inner = self.inner.lock().unwrap().take().ok_or(Error::WalletNotOpen)?;
         inner.close().await?;
 
         Ok(())
@@ -493,6 +493,28 @@ impl Interface for LocalStore {
 
     async fn wallet_import(&self, wallet_secret: &Secret, serialized_wallet_storage: &[u8]) -> Result<WalletDescriptor> {
         self.wallet_import_impl(wallet_secret, serialized_wallet_storage).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn flush_returns_error_when_not_in_batch_mode() -> Result<()> {
+        let store = LocalStore::try_new(true)?;
+        let wallet_secret = Secret::from("test");
+        let err = store.flush(&wallet_secret).await.expect_err("must fail when not in batch mode");
+        assert!(err.to_string().contains("batch"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn close_returns_error_when_wallet_is_not_open() -> Result<()> {
+        let store = LocalStore::try_new(true)?;
+        let err = store.close().await.expect_err("must fail when wallet is not open");
+        assert!(matches!(err, Error::WalletNotOpen));
+        Ok(())
     }
 }
 

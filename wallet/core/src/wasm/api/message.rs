@@ -74,9 +74,20 @@ fn js_value_to_optional_u64(value: JsValue, field: &str) -> Result<Option<u64>> 
     Err(Error::InvalidArgument(format!("{field} must be a number")))
 }
 
+fn u64_to_u8_checked(value: u64, field: &str) -> Result<u8> {
+    u8::try_from(value).map_err(|_| Error::InvalidArgument(format!("{field} must be <= {}", u8::MAX)))
+}
+
+fn js_value_to_optional_u8(value: JsValue, field: &str) -> Result<Option<u8>> {
+    match js_value_to_optional_u64(value, field)? {
+        None => Ok(None),
+        Some(v) => Ok(Some(u64_to_u8_checked(v, field)?)),
+    }
+}
+
 #[cfg(test)]
 mod js_number_parsing_tests {
-    use super::f64_to_u64_safe_integer;
+    use super::{f64_to_u64_safe_integer, u64_to_u8_checked};
 
     #[test]
     fn f64_to_u64_safe_integer_accepts_valid_integers() {
@@ -98,6 +109,12 @@ mod js_number_parsing_tests {
     #[test]
     fn f64_to_u64_safe_integer_rejects_above_max_safe_integer() {
         assert!(f64_to_u64_safe_integer(9_007_199_254_740_992.0, "x").is_err());
+    }
+
+    #[test]
+    fn u64_to_u8_checked_rejects_out_of_range() {
+        assert!(u64_to_u8_checked(256, "x").is_err());
+        assert_eq!(u64_to_u8_checked(255, "x").unwrap(), 255);
     }
 }
 
@@ -935,16 +952,39 @@ try_from! ( args: IMasterDelegationHeader, DelegationRecordHeaderV1, {
         hex_decode(scan_hex.as_bytes(), &mut out).map_err(|e|Error::custom(format!("scanPubkey: {e}")))?;
         out
     };
+    let version = args
+        .try_get_value("version")?
+        .map(|v| js_value_to_optional_u8(v, "version"))
+        .transpose()?
+        .flatten()
+        .unwrap_or(1);
+    let level = args
+        .try_get_value("level")?
+        .map(|v| js_value_to_optional_u8(v, "level"))
+        .transpose()?
+        .flatten()
+        .unwrap_or(2);
+
+    let valid_from_daa = js_value_to_optional_u64(args.get_value("validFromDaa")?, "validFromDaa")?
+        .ok_or_else(|| Error::InvalidArgument("validFromDaa is required".to_string()))?;
+    let nonce = js_value_to_optional_u64(args.get_value("nonce")?, "nonce")?
+        .ok_or_else(|| Error::InvalidArgument("nonce is required".to_string()))?;
+    let valid_until_daa = args
+        .try_get_value("validUntilDaa")?
+        .map(|v| js_value_to_optional_u64(v, "validUntilDaa"))
+        .transpose()?
+        .flatten();
+
     Ok(DelegationRecordHeaderV1 {
-        version: args.get_u8("version").unwrap_or(1),
-        level: args.get_u8("level").unwrap_or(2),
+        version,
+        level,
         anchor,
         account_id: args.get_account_id("accountId")?,
         spend_pubkey,
         scan_pubkey,
-        valid_from_daa: args.get_u64("validFromDaa")?,
-        valid_until_daa: args.try_get_value("validUntilDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
-        nonce: args.get_u64("nonce")?,
+        valid_from_daa,
+        valid_until_daa,
+        nonce,
         status: serde_wasm_bindgen::from_value(args.get_value("status")?).map_err(|e|Error::custom(format!("status: {e}")))?,
     })
 });
@@ -986,9 +1026,21 @@ declare! {
 try_from! ( args: IMasterDelegationTarget, MasterDelegationTarget, {
     Ok(MasterDelegationTarget {
         account_id: args.get_account_id("accountId")?,
-        valid_from_daa: args.try_get_value("validFromDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
-        valid_until_daa: args.try_get_value("validUntilDaa")?.and_then(|v| v.as_f64()).map(|v| v as u64),
-        nonce_hint: args.try_get_value("nonceHint")?.and_then(|v| v.as_f64()).map(|v| v as u64),
+        valid_from_daa: args
+            .try_get_value("validFromDaa")?
+            .map(|v| js_value_to_optional_u64(v, "validFromDaa"))
+            .transpose()?
+            .flatten(),
+        valid_until_daa: args
+            .try_get_value("validUntilDaa")?
+            .map(|v| js_value_to_optional_u64(v, "validUntilDaa"))
+            .transpose()?
+            .flatten(),
+        nonce_hint: args
+            .try_get_value("nonceHint")?
+            .map(|v| js_value_to_optional_u64(v, "nonceHint"))
+            .transpose()?
+            .flatten(),
         status: args
             .try_get_value("status")?
             .and_then(|v| serde_wasm_bindgen::from_value(v).ok()),
@@ -1034,11 +1086,19 @@ declare! {
 try_from! ( args: IMasterDelegationBuildRequest, MasterDelegationBuildRequest, {
     let wallet_secret = args.get_secret("walletSecret")?;
     let master_anchor = args.try_get_string("masterAnchor")?;
-    let master_level = args.try_get_value("masterLevel")?.and_then(|v| v.as_f64()).map(|v| v as u8);
+    let master_level = args
+        .try_get_value("masterLevel")?
+        .map(|v| js_value_to_optional_u8(v, "masterLevel"))
+        .transpose()?
+        .flatten();
     let network_id = args.try_get::<NetworkId>("networkId")?;
     let targets: Vec<MasterDelegationTarget> =
         serde_wasm_bindgen::from_value(args.get_value("targets")?).map_err(|e|Error::custom(format!("targets: {e}")))?;
-    let created_at_unixtime = args.try_get_value("createdAtUnixtime")?.and_then(|v| v.as_f64()).map(|v| v as u64);
+    let created_at_unixtime = args
+        .try_get_value("createdAtUnixtime")?
+        .map(|v| js_value_to_optional_u64(v, "createdAtUnixtime"))
+        .transpose()?
+        .flatten();
     Ok(MasterDelegationBuildRequest { wallet_secret, master_anchor, master_level, network_id, targets, created_at_unixtime })
 });
 
@@ -1089,14 +1149,21 @@ try_from! ( args: IMasterDelegationRequest, MasterDelegationRequestBodyV1, {
     hex_decode(anchor_hex.as_bytes(), &mut anchor).map_err(|e|Error::custom(format!("masterAnchor: {e}")))?;
     let mut request_id = [0u8; 32];
     hex_decode(request_id_hex.as_bytes(), &mut request_id).map_err(|e|Error::custom(format!("requestId: {e}")))?;
+    let version = js_value_to_optional_u8(args.get_value("version")?, "version")?
+        .ok_or_else(|| Error::InvalidArgument("version is required".to_string()))?;
+    let master_level = js_value_to_optional_u8(args.get_value("masterLevel")?, "masterLevel")?
+        .ok_or_else(|| Error::InvalidArgument("masterLevel is required".to_string()))?;
+    let created_at_unixtime = js_value_to_optional_u64(args.get_value("createdAtUnixtime")?, "createdAtUnixtime")?
+        .ok_or_else(|| Error::InvalidArgument("createdAtUnixtime is required".to_string()))?;
+
     Ok(MasterDelegationRequestBodyV1 {
-        version: args.get_u8("version")?,
+        version,
         master_anchor: anchor,
-        master_level: args.get_u8("masterLevel")?,
+        master_level,
         network_id: args.get_network_id("networkId")?,
         delegations: serde_wasm_bindgen::from_value(args.get_value("delegations")?)
             .map_err(|e|Error::custom(format!("delegations: {e}")))?,
-        created_at_unixtime: args.get_u64("createdAtUnixtime")?,
+        created_at_unixtime,
         request_id,
     })
 });
@@ -1137,10 +1204,15 @@ try_from! ( args: IMasterDelegationResponse, MasterDelegationResponseBodyV1, {
     hex_decode(anchor_hex.as_bytes(), &mut anchor).map_err(|e|Error::custom(format!("masterAnchor: {e}")))?;
     let mut request_id = [0u8; 32];
     hex_decode(request_hex.as_bytes(), &mut request_id).map_err(|e|Error::custom(format!("requestId: {e}")))?;
+    let version = js_value_to_optional_u8(args.get_value("version")?, "version")?
+        .ok_or_else(|| Error::InvalidArgument("version is required".to_string()))?;
+    let master_level = js_value_to_optional_u8(args.get_value("masterLevel")?, "masterLevel")?
+        .ok_or_else(|| Error::InvalidArgument("masterLevel is required".to_string()))?;
+
     Ok(MasterDelegationResponseBodyV1 {
-        version: args.get_u8("version")?,
+        version,
         master_anchor: anchor,
-        master_level: args.get_u8("masterLevel")?,
+        master_level,
         request_id,
         delegations: serde_wasm_bindgen::from_value(args.get_value("delegations")?).map_err(|e|Error::custom(format!("delegations: {e}")))?,
     })

@@ -109,9 +109,11 @@ class _ExportMnemonicPageState extends State<ExportMnemonicPage> {
                 FilledButton(
                   onPressed: store.isProcessing
                       ? null
-                      : () => store.exportMnemonic(
-                            password: _passwordController.text,
-                          ),
+                      : () {
+                          final password = _passwordController.text.trim();
+                          if (password.isEmpty) return;
+                          store.exportMnemonic(password: password);
+                        },
                   child: store.isProcessing
                       ? const CircularProgressIndicator()
                       : const Text('Show Recovery Phrase'),

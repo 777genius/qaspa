@@ -173,7 +173,7 @@ impl UtxoProcessor {
     #[wasm_bindgen(js_name = "setCoinbaseTransactionMaturityDAA")]
     pub fn set_coinbase_transaction_maturity_period_daa_js(network_id: &NetworkIdT, value: u64) -> Result<()> {
         let network_id = NetworkId::try_cast_from(network_id)?.into_owned();
-        crate::utxo::set_coinbase_transaction_maturity_period_daa(&network_id, value);
+        crate::utxo::set_coinbase_transaction_maturity_period_daa(&network_id, value)?;
         Ok(())
     }
 
@@ -190,7 +190,7 @@ impl UtxoProcessor {
     #[wasm_bindgen(js_name = "setUserTransactionMaturityDAA")]
     pub fn set_user_transaction_maturity_period_daa_js(network_id: &NetworkIdT, value: u64) -> Result<()> {
         let network_id = NetworkId::try_cast_from(network_id)?.into_owned();
-        crate::utxo::set_user_transaction_maturity_period_daa(&network_id, value);
+        crate::utxo::set_user_transaction_maturity_period_daa(&network_id, value)?;
         Ok(())
     }
 }

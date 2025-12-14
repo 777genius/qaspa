@@ -320,14 +320,21 @@ impl TryFrom<IGeneratorSettingsObject> for GeneratorSettings {
         let priority_utxo_entries = args.try_get_value("priorityEntries")?.map(|v| v.try_into_utxo_entry_references()).transpose()?;
 
         let sig_op_count = args.get_value("sigOpCount")?;
-        let sig_op_count =
-            if !sig_op_count.is_undefined() { sig_op_count.as_f64().expect("sigOpCount should be a number") as u8 } else { 1 };
+        let sig_op_count = if sig_op_count.is_undefined() {
+            1
+        } else {
+            let v = js_value_to_optional_u64(sig_op_count, "sigOpCount")?
+                .ok_or_else(|| Error::InvalidArgument("sigOpCount is required".into()))?;
+            u8::try_from(v).map_err(|_| Error::InvalidArgument(format!("sigOpCount must be <= {}", u8::MAX)))?
+        };
 
         let minimum_signatures = args.get_value("minimumSignatures")?;
-        let minimum_signatures = if !minimum_signatures.is_undefined() {
-            minimum_signatures.as_f64().expect("minimumSignatures should be a number") as u16
-        } else {
+        let minimum_signatures = if minimum_signatures.is_undefined() {
             1
+        } else {
+            let v = js_value_to_optional_u64(minimum_signatures, "minimumSignatures")?
+                .ok_or_else(|| Error::InvalidArgument("minimumSignatures is required".into()))?;
+            u16::try_from(v).map_err(|_| Error::InvalidArgument(format!("minimumSignatures must be <= {}", u16::MAX)))?
         };
 
         let payload = args.get_vec_u8("payload").ok();
@@ -351,22 +358,42 @@ impl TryFrom<IGeneratorSettingsObject> for GeneratorSettings {
     }
 }
 
+const JS_MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0; // 2^53 - 1
+
+fn f64_to_u64_safe_integer(num: f64, field: &str) -> Result<u64> {
+    if !num.is_finite() {
+        return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
+    }
+    if num < 0.0 {
+        return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
+    }
+    if num.fract() != 0.0 {
+        return Err(Error::InvalidArgument(format!("{field} must be an integer")));
+    }
+    if num > JS_MAX_SAFE_INTEGER {
+        return Err(Error::InvalidArgument(format!("{field} exceeds JS MAX_SAFE_INTEGER")));
+    }
+
+    Ok(num as u64)
+}
+
 fn js_value_to_optional_u64(value: JsValue, field: &str) -> Result<Option<u64>> {
     if value.is_null() || value.is_undefined() {
         return Ok(None);
     }
 
-    if let Some(num) = value.as_f64() {
-        if !num.is_finite() {
-            return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
-        }
-        if num < 0.0 {
-            return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
-        }
-        return Ok(Some(num as u64));
+    if value.is_bigint() {
+        let big_int: js_sys::BigInt = value.unchecked_into();
+        let v: u64 =
+            big_int.try_into().map_err(|v| Error::InvalidArgument(format!("{field}: unable to convert BigInt value {v:?}")))?;
+        return Ok(Some(v));
     }
 
-    Err(Error::InvalidArgument(format!("{field} must be a number")))
+    if let Some(num) = value.as_f64() {
+        return Ok(Some(f64_to_u64_safe_integer(num, field)?));
+    }
+
+    Err(Error::InvalidArgument(format!("{field} must be a number or bigint")))
 }
 
 fn build_fee_randomization(min: Option<u64>, max: Option<u64>) -> Result<Option<RandomFeeSettings>> {

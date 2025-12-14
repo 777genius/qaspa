@@ -64,7 +64,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return 'Please enter current password';
                     }
                     return null;
@@ -89,10 +89,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return 'Please enter new password';
                     }
-                    if (value.length < 8) {
+                    if (value.trim().length < 8) {
                       return 'Password must be at least 8 characters';
                     }
                     return null;
@@ -117,7 +117,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     ),
                   ),
                   validator: (value) {
-                    if (value != _newPasswordController.text) {
+                    if (value?.trim() != _newPasswordController.text.trim()) {
                       return 'Passwords do not match';
                     }
                     return null;

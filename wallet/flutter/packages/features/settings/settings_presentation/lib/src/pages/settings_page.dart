@@ -129,7 +129,7 @@ class SettingsPage extends StatelessWidget {
               onPressed: store.isProcessing
                   ? null
                   : () async {
-                      final password = passwordController.text;
+                      final password = passwordController.text.trim();
                       if (password.isEmpty) return;
 
                       try {

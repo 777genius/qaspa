@@ -645,8 +645,13 @@ impl RpcClient {
         let ctl_receiver = self.inner.notification_ctl.request.receiver.clone();
         let ctl_sender = self.inner.notification_ctl.response.sender.clone();
         let notification_receiver = self.inner.notification_channel.receiver.clone();
-        let ctl_multiplexer_channel =
-            self.inner.client.rpc_client().ctl_multiplexer().as_ref().expect("WASM32 RpcClient ctl_multiplexer is None").channel();
+        let ctl_multiplexer_channel = match self.inner.client.rpc_client().ctl_multiplexer().as_ref() {
+            Some(mux) => mux.channel(),
+            None => {
+                self.inner.notification_task.store(false, Ordering::SeqCst);
+                return Err(Error::custom("WASM32 RpcClient ctl_multiplexer is None"));
+            }
+        };
         let this = self.clone();
 
         spawn(async move {
@@ -700,14 +705,17 @@ impl RpcClient {
                                         let added = js_sys::Array::from_iter(added.iter().map(UtxoEntryReference::from).map(JsValue::from));
                                         let removed = js_sys::Array::from_iter(removed.iter().map(UtxoEntryReference::from).map(JsValue::from));
                                         let notification = Object::new();
-                                        notification.set("added", &added).unwrap();
-                                        notification.set("removed", &removed).unwrap();
+                                        notification.set("added", &added).ok();
+                                        notification.set("removed", &removed).ok();
 
                                         for handler in handlers.into_iter() {
                                             let event = Object::new();
-                                            let event_type_value = to_value(&event_type).unwrap();
-                                            event.set("type", &event_type_value).expect("setting event type");
-                                            event.set("data", &notification).expect("setting event data");
+                                            let Ok(event_type_value) = to_value(&event_type) else {
+                                                log_error!("Error serializing notification event type: {:?}", event_type);
+                                                continue;
+                                            };
+                                            event.set("type", &event_type_value).ok();
+                                            event.set("data", &notification).ok();
                                             if let Err(err) = handler.call(&event.into()) {
                                                 log_error!("Error while executing RPC notification callback: {:?}",err);
                                             }
@@ -718,11 +726,18 @@ impl RpcClient {
                                     let event_type = notification.event_type();
                                     let notification_event = NotificationEvent::Notification(event_type);
                                     if let Some(handlers) = this.inner.notification_callbacks(notification_event) {
+                                        let Ok(event_type_value) = to_value(&event_type) else {
+                                            log_error!("Error serializing notification event type: {:?}", event_type);
+                                            continue;
+                                        };
+                                        let Ok(notification_value) = notification.to_value() else {
+                                            log_error!("Error serializing notification payload: {:?}", notification);
+                                            continue;
+                                        };
                                         for handler in handlers.into_iter() {
                                             let event = Object::new();
-                                            let event_type_value = to_value(&event_type).unwrap();
-                                            event.set("type", &event_type_value).expect("setting event type");
-                                            event.set("data", &notification.to_value().unwrap()).expect("setting event data");
+                                            event.set("type", &event_type_value).ok();
+                                            event.set("data", &notification_value).ok();
                                             if let Err(err) = handler.call(&event.into()) {
                                                 log_error!("Error while executing RPC notification callback: {:?}",err);
                                             }

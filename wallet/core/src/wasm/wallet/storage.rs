@@ -157,11 +157,11 @@ impl Interface for Proxy {
 
     async fn close(&self) -> Result<()> {
         if self.inner()?.is_modified() {
-            panic!("Proxy::close called while modified flag is true");
+            return Err(Error::Custom("Proxy::close called while modified flag is true".to_string()));
         }
 
         if !self.is_open().await? {
-            panic!("Proxy::close called while wallet is not open");
+            return Err(Error::Custom("Proxy::close called while wallet is not open".to_string()));
         }
 
         self.inner.lock().unwrap().take();

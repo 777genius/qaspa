@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:mobx/mobx.dart';
 import 'package:history_domain/history_domain.dart';
@@ -76,7 +77,8 @@ abstract class _HistoryStoreBase with Store {
       },
       onError: (error) {
         if (_isDisposed) return;
-        errorMessage = error.toString();
+        developer.log('Transaction stream error', error: error, name: 'HistoryStore');
+        errorMessage = 'Failed to sync transactions';
       },
     );
   }
@@ -102,7 +104,8 @@ abstract class _HistoryStoreBase with Store {
       hasMoreData = result.length >= _pageSize;
       _currentOffset = result.length;
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Failed to load transactions', error: e, name: 'HistoryStore');
+      errorMessage = 'Failed to load transactions';
     } finally {
       isLoading = false;
     }
@@ -125,7 +128,8 @@ abstract class _HistoryStoreBase with Store {
       hasMoreData = result.length >= _pageSize;
       _currentOffset += result.length;
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Failed to load more transactions', error: e, name: 'HistoryStore');
+      errorMessage = 'Failed to load more transactions';
     } finally {
       isLoadingMore = false;
     }
@@ -138,7 +142,8 @@ abstract class _HistoryStoreBase with Store {
         transactionId: transactionId,
       );
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Failed to load transaction details', error: e, name: 'HistoryStore');
+      errorMessage = 'Failed to load transaction details';
     }
   }
 

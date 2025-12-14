@@ -68,7 +68,8 @@ abstract class _SettingsStoreBase with Store {
       wallet = await _getWalletInfoUseCase();
       currentWalletId = wallet?.id;
     } catch (e) {
-      errorMessage = e.toString();
+      developer.log('Failed to load wallet info', error: e, name: 'SettingsStore');
+      errorMessage = 'Failed to load wallet info';
     } finally {
       isLoading = false;
     }

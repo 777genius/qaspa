@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::result::Result;
 use crate::tx::{mass, MAXIMUM_STANDARD_TRANSACTION_MASS};
 use js_sys::Array;
@@ -8,6 +9,25 @@ use kaspa_consensus_core::network::{NetworkId, NetworkIdT};
 use kaspa_wasm_core::types::NumberArray;
 use wasm_bindgen::prelude::*;
 use workflow_wasm::convert::*;
+
+const JS_MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0; // 2^53 - 1
+
+fn f64_to_u64_safe_integer(num: f64, field: &str) -> Result<u64> {
+    if !num.is_finite() {
+        return Err(Error::InvalidArgument(format!("{field} must be a finite number")));
+    }
+    if num < 0.0 {
+        return Err(Error::InvalidArgument(format!("{field} must be non-negative")));
+    }
+    if num.fract() != 0.0 {
+        return Err(Error::InvalidArgument(format!("{field} must be an integer")));
+    }
+    if num > JS_MAX_SAFE_INTEGER {
+        return Err(Error::InvalidArgument(format!("{field} exceeds JS MAX_SAFE_INTEGER")));
+    }
+
+    Ok(num as u64)
+}
 
 /// `maximumStandardTransactionMass()` returns the maximum transaction
 /// size allowed by the network.
@@ -112,10 +132,25 @@ pub fn calculate_storage_mass(network_id: NetworkIdT, input_values: &NumberArray
     let network_id = NetworkId::try_owned_from(network_id)?;
     let consensus_params = Params::from(network_id);
 
-    let input_values =
-        Array::from(input_values).to_vec().iter().map(|v| UtxoCell::new(1, v.as_f64().unwrap() as u64)).collect::<Vec<UtxoCell>>();
-    let output_values =
-        Array::from(output_values).to_vec().iter().map(|v| UtxoCell::new(1, v.as_f64().unwrap() as u64)).collect::<Vec<UtxoCell>>();
+    let input_values = Array::from(input_values)
+        .to_vec()
+        .iter()
+        .enumerate()
+        .map(|(idx, v)| -> Result<UtxoCell> {
+            let num = v.as_f64().ok_or_else(|| Error::InvalidArgument(format!("inputValues[{idx}] must be a number")))?;
+            Ok(UtxoCell::new(1, f64_to_u64_safe_integer(num, &format!("inputValues[{idx}]"))?))
+        })
+        .collect::<Result<Vec<UtxoCell>>>()?;
+
+    let output_values = Array::from(output_values)
+        .to_vec()
+        .iter()
+        .enumerate()
+        .map(|(idx, v)| -> Result<UtxoCell> {
+            let num = v.as_f64().ok_or_else(|| Error::InvalidArgument(format!("outputValues[{idx}] must be a number")))?;
+            Ok(UtxoCell::new(1, f64_to_u64_safe_integer(num, &format!("outputValues[{idx}]"))?))
+        })
+        .collect::<Result<Vec<UtxoCell>>>()?;
 
     let storage_mass =
         calc_storage_mass(false, input_values.into_iter(), output_values.into_iter(), consensus_params.storage_mass_parameter);

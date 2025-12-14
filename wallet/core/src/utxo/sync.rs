@@ -76,8 +76,14 @@ impl SyncMonitor {
         Ok(())
     }
 
-    pub fn rpc_api(&self) -> Arc<DynRpcApi> {
-        self.inner.rpc.lock().unwrap().as_ref().expect("SyncMonitor RPC not initialized").rpc_api().clone()
+    pub fn rpc_api(&self) -> Result<Arc<DynRpcApi>> {
+        self.inner
+            .rpc
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|rpc| rpc.rpc_api().clone())
+            .ok_or_else(|| Error::Custom("SyncMonitor RPC not initialized".to_string()))
     }
 
     pub async fn bind_rpc(&self, rpc: Option<Rpc>) -> Result<()> {
@@ -107,16 +113,15 @@ impl SyncMonitor {
     }
 
     async fn get_sync_status(&self) -> Result<bool> {
-        Ok(self.rpc_api().get_sync_status().await?)
+        Ok(self.rpc_api()?.get_sync_status().await?)
     }
 
     pub async fn start_task(&self) -> Result<()> {
-        if self.is_running() {
-            panic!("SyncProc::start_task() called while already running");
+        if self.inner.running.swap(true, Ordering::SeqCst) {
+            return Ok(());
         }
 
         let this = self.clone();
-        this.inner.running.store(true, Ordering::SeqCst);
         let task_ctl_receiver = self.inner.task_ctl.request.receiver.clone();
         let task_ctl_sender = self.inner.task_ctl.response.sender.clone();
         let events = self.multiplexer().channel();
@@ -164,13 +169,15 @@ impl SyncMonitor {
 
             log_trace!("sync monitor task is shutting down...");
             this.inner.running.store(false, Ordering::SeqCst);
-            task_ctl_sender.send(()).await.unwrap();
+            task_ctl_sender.send(()).await.ok();
         });
         Ok(())
     }
 
     pub async fn stop_task(&self) -> Result<()> {
-        self.inner.task_ctl.signal(()).await.expect("SyncProc::stop_task() `signal` error");
+        if let Err(err) = self.inner.task_ctl.signal(()).await {
+            log_warn!("SyncProc::stop_task() `signal` error: {err}");
+        }
         Ok(())
     }
 

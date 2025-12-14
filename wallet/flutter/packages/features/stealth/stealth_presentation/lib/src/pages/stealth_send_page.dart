@@ -49,8 +49,10 @@ class StealthSendPage extends StatelessWidget {
                 decoration: const InputDecoration(
                   labelText: 'Recipient Stealth Address',
                   hintText: 'qs:... / qstest:...',
+                  counterText: '',
                 ),
-                onChanged: store.setRecipientStealthAddress,
+                maxLength: 120,
+                onChanged: (value) => store.setRecipientStealthAddress(value.trim()),
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
@@ -61,7 +63,7 @@ class StealthSendPage extends StatelessWidget {
                   helperText: 'Available: ${store.stealthBalanceInKas.toStringAsFixed(8)} KAS',
                 ),
                 keyboardType: TextInputType.number,
-                onChanged: store.setSendAmount,
+                onChanged: (value) => store.setSendAmount(value.trim()),
               ),
               if (store.errorMessage != null) ...[
                 const SizedBox(height: AppSpacing.md),
@@ -116,7 +118,7 @@ class StealthSendPage extends StatelessWidget {
               onPressed: store.isSending
                   ? null
                   : () async {
-                      if (passwordController.text.isEmpty) return;
+                      if (passwordController.text.trim().isEmpty) return;
 
                       Object? result;
                       try {
