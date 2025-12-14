@@ -333,6 +333,19 @@ impl EphemeralKeyStore {
         let valid_until = self.valid_until_daa.get(outpoint).and_then(|v| *v.value());
         let status = self.statuses.get(outpoint).map(|s| s.clone()).unwrap_or_default();
 
+        // Если у выхода нет `valid_until_daa`, то он не будет очищен по окну валидности.
+        // При этом после spend/reorg ключ больше не нужен (кроме reorg-окна), поэтому
+        // ставим best-effort TTL, чтобы не расти бесконечно.
+        //
+        // Важно: НЕ используем `created_daa_score` как TTL для живых UTXO — иначе можно
+        // потерять ключи для старых, но всё ещё не потраченных выходов.
+        let ttl_daa = current_daa_score.saturating_add(STALE_ENTRY_MAX_AGE_DAA);
+        let planned_expiry = match valid_until {
+            Some(limit) => Some(limit.min(ttl_daa)),
+            None => Some(ttl_daa),
+        };
+        self.valid_until_daa.insert(*outpoint, planned_expiry);
+
         let new_status = match (valid_until, status.clone()) {
             (Some(limit), _) if current_daa_score > limit => EphemeralKeyStatus::Expired,
             // Already expired/orphaned – leave as-is to avoid oscillation on reorg
@@ -357,10 +370,11 @@ impl EphemeralKeyStore {
             let expired_by_window = valid_until.map(|limit| current_daa_score > limit).unwrap_or(false);
             let explicitly_expired = matches!(status, EphemeralKeyStatus::Expired);
             let created = self.created_daa_scores.get(&outpoint).map(|v| *v.value()).unwrap_or(0);
-            let stale_without_window =
-                valid_until.is_none() && created > 0 && current_daa_score.saturating_sub(created) > STALE_ENTRY_MAX_AGE_DAA;
 
-            if expired_by_window || explicitly_expired || stale_without_window {
+            // `created` оставляем для обратной совместимости/диагностики, но не используем как TTL для живых UTXO.
+            let _ = created;
+
+            if expired_by_window || explicitly_expired {
                 to_remove.push(outpoint);
             }
         }
@@ -876,9 +890,26 @@ mod tests {
         let key_data2 = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
         store.store_with_metadata(outpoint2, key_data2, 10, None, None, None).await.unwrap();
         store.mark_removed(&outpoint2, 15).await.unwrap();
-        // without valid_until keep prior status (Pending) and eventually cleaned by TTL
+        // without valid_until keep prior status (Pending) and schedule cleanup by TTL
         assert!(matches!(store.status(&outpoint2).unwrap(), EphemeralKeyStatus::Pending { .. }));
-        store.cleanup_expired(10 + STALE_ENTRY_MAX_AGE_DAA + 1);
+        store.cleanup_expired(15 + STALE_ENTRY_MAX_AGE_DAA + 1);
         assert!(!store.contains(&outpoint2));
+    }
+
+    #[tokio::test]
+    async fn cleanup_does_not_remove_active_entries_without_window() {
+        let account_id = test_account_id("00000008");
+        let store = EphemeralKeyStore::new(account_id);
+
+        let outpoint = TransactionOutpoint::new(Hash::from_bytes([3u8; 32]), 0);
+        let key_data = EphemeralKeyData::new([1u8; 32], [2u8; 32], [3u8; 33]);
+
+        // Entry has no `valid_until_daa` and is not marked removed; it represents a live UTXO.
+        store.store_with_metadata(outpoint, key_data, 10, None, None, None).await.unwrap();
+        assert!(store.contains(&outpoint));
+
+        // Even after a long time, live entries without window must not be deleted automatically.
+        store.cleanup_expired(10 + STALE_ENTRY_MAX_AGE_DAA + 1);
+        assert!(store.contains(&outpoint));
     }
 }

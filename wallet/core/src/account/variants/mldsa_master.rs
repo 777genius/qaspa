@@ -5,7 +5,7 @@ use crate::serializer::StorageHeader;
 use crate::storage::account::{AccountSettings, AccountStorable, AccountStorage};
 use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use kaspa_addresses::{Address, Version};
-use kaspa_mldsa::{sign as mldsa_sign, MasterSeed, MlDsaLevel, Signature as MlDsaSignature, MASTER_SIGN_DOMAIN_DELEGATION};
+use kaspa_mldsa::{try_sign as mldsa_try_sign, MasterSeed, MlDsaLevel, Signature as MlDsaSignature, MASTER_SIGN_DOMAIN_DELEGATION};
 use kaspa_utils::hex::ToHex;
 use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use std::borrow::Cow;
@@ -270,7 +270,8 @@ impl MldsaMasterAccount {
         message.extend_from_slice(self.anchor.as_bytes());
         message.extend_from_slice(payload);
 
-        let signature = mldsa_sign(&message, &keypair.inner().secret_key);
+        let signature =
+            mldsa_try_sign(&message, &keypair.inner().secret_key).map_err(|e| Error::Custom(format!("MLDSA signing failed: {e}")))?;
         MasterMetrics::global().inc_sign_ops();
         log_trace!("MLDSA master sign: master_anchor={} domain={:?}", format_master_anchor_short(&self.anchor), domain);
         Ok(signature)
@@ -282,7 +283,8 @@ impl MldsaMasterAccount {
     pub async fn sign_delegation_hash(&self, payload: &[u8]) -> Result<MlDsaSignature> {
         let guard = self.unlocked_keypair.read().await;
         let keypair = guard.as_ref().ok_or(Error::AccountLocked)?;
-        let signature = mldsa_sign(payload, &keypair.inner().secret_key);
+        let signature =
+            mldsa_try_sign(payload, &keypair.inner().secret_key).map_err(|e| Error::Custom(format!("MLDSA signing failed: {e}")))?;
         MasterMetrics::global().inc_sign_ops();
         Ok(signature)
     }

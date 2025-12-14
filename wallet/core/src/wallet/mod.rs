@@ -1810,6 +1810,9 @@ impl Wallet {
         let level = master.level();
 
         let current_daa_opt = self.current_daa_score();
+        if current_daa_opt.is_none() && window_daa > 0 {
+            return Err(Error::Custom("window_daa requires current DAA score (connect wallet to a node first)".to_string()));
+        }
         let current_daa = current_daa_opt.unwrap_or(0);
         let valid_from = current_daa.saturating_sub(window_daa);
         let valid_until = match (current_daa_opt, valid_for_daa) {

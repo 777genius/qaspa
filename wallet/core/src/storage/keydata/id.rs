@@ -28,6 +28,11 @@ impl ToHex for KeyDataId {
 impl FromHex for KeyDataId {
     type Error = Error;
     fn from_hex(hex_str: &str) -> Result<Self, Self::Error> {
+        // KeyDataId is always 8 bytes = 16 hex chars.
+        // Do not panic on malformed user input (e.g. from JS/WASM).
+        if hex_str.len() != 16 {
+            return Err(Error::InvalidKeyDataId(format!("invalid key data id length: expected 16 hex chars, got {}", hex_str.len())));
+        }
         let mut data = vec![0u8; hex_str.len() / 2];
         hex_decode(hex_str.as_bytes(), &mut data)?;
         Ok(Self::new_from_slice(&data))
@@ -75,6 +80,9 @@ impl<'de> Deserialize<'de> for KeyDataId {
         D: Deserializer<'de>,
     {
         let s = <std::string::String as Deserialize>::deserialize(deserializer)?;
+        if s.len() != 16 {
+            return Err(serde::de::Error::custom(format!("invalid key data id length: expected 16 hex chars, got {}", s.len())));
+        }
         let mut data = vec![0u8; s.len() / 2];
         hex_decode(s.as_bytes(), &mut data).map_err(serde::de::Error::custom)?;
         Ok(Self::new_from_slice(&data))
@@ -89,3 +97,17 @@ impl Zeroize for KeyDataId {
 
 pub type PrvKeyDataId = KeyDataId;
 pub type PrvKeyDataMap = HashMap<PrvKeyDataId, PrvKeyData>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_data_id_from_hex_rejects_wrong_length_instead_of_panicking() {
+        assert!(KeyDataId::from_hex("").is_err());
+        assert!(KeyDataId::from_hex("00").is_err());
+        assert!(KeyDataId::from_hex("001122").is_err());
+        assert!(KeyDataId::from_hex("001122334455667").is_err()); // odd len
+        assert!(KeyDataId::from_hex("001122334455667788").is_err()); // too long
+    }
+}
