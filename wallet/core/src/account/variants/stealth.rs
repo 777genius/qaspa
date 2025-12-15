@@ -1498,6 +1498,7 @@ impl Account for StealthAccount {
 
         let mut stream = generator.stream();
         let mut ids = vec![];
+        let rpc = self.wallet().try_rpc_api().ok_or(Error::NotConnected)?;
         while let Some(transaction) = stream.try_next().await? {
             // Sign regular inputs first
             transaction.try_sign()?;
@@ -1508,7 +1509,7 @@ impl Account for StealthAccount {
             }
 
             // Submit transaction
-            let tx_id = transaction.try_submit(&self.wallet().rpc_api()).await?;
+            let tx_id = transaction.try_submit(&rpc).await?;
 
             // Finalize stealth change output if present
             if let Some(pending_change) = transaction.take_stealth_change() {
@@ -1559,12 +1560,13 @@ impl Account for StealthAccount {
 
         let mut stream = generator.stream();
         let mut ids = vec![];
+        let rpc = self.wallet().try_rpc_api().ok_or(Error::NotConnected)?;
         while let Some(transaction) = stream.try_next().await? {
             transaction.try_sign()?;
             if transaction.has_stealth_inputs() {
                 transaction.try_sign_stealth(&stealth_signer).await?;
             }
-            let tx_id = transaction.try_submit(&self.wallet().rpc_api()).await?;
+            let tx_id = transaction.try_submit(&rpc).await?;
             if let Some(pending_change) = transaction.take_stealth_change() {
                 self.finalize_stealth_change(tx_id, &pending_change, &wallet_secret).await?;
             }
@@ -1589,7 +1591,7 @@ impl Account for StealthAccount {
         }
 
         // Try to use the get_utxos_by_script_version RPC for full historical scan
-        let rpc = self.wallet().rpc_api();
+        let rpc = self.wallet().try_rpc_api().ok_or(Error::NotConnected)?;
 
         // Get current DAA score for maturity calculation
         let mut current_daa_score = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
@@ -1864,12 +1866,13 @@ impl StealthAccount {
 
         let mut stream = generator.stream();
         let mut ids = vec![];
+        let rpc = self.wallet().try_rpc_api().ok_or(Error::NotConnected)?;
         while let Some(transaction) = stream.try_next().await? {
             transaction.try_sign()?;
             if transaction.has_stealth_inputs() {
                 transaction.try_sign_stealth(&stealth_signer).await?;
             }
-            let tx_id = transaction.try_submit(&self.wallet().rpc_api()).await?;
+            let tx_id = transaction.try_submit(&rpc).await?;
             if let Some(pending_change) = transaction.take_stealth_change() {
                 self.finalize_stealth_change(tx_id, &pending_change, &wallet_secret).await?;
             }
@@ -1918,12 +1921,13 @@ impl StealthAccount {
 
         let mut stream = generator.stream();
         let mut ids = vec![];
+        let rpc = self.wallet().try_rpc_api().ok_or(Error::NotConnected)?;
         while let Some(transaction) = stream.try_next().await? {
             transaction.try_sign()?;
             if transaction.has_stealth_inputs() {
                 transaction.try_sign_stealth(&stealth_signer).await?;
             }
-            let tx_id = transaction.try_submit(&self.wallet().rpc_api()).await?;
+            let tx_id = transaction.try_submit(&rpc).await?;
             if let Some(pending_change) = transaction.take_stealth_change() {
                 self.finalize_stealth_change(tx_id, &pending_change, &wallet_secret).await?;
             }

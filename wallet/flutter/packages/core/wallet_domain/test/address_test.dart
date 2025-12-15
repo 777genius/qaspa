@@ -113,6 +113,16 @@ void main() {
     expect(addr.type, AddressType.stealth);
   });
 
+  test('rejects stealth prefix with non-stealth version', () {
+    final bad = _encodeAddress('qs', 0, List<int>.filled(32, 0));
+    expect(() => Address.fromString(bad), throwsA(isA<InvalidAddressException>()));
+  });
+
+  test('rejects stealth version with non-stealth prefix', () {
+    final bad = _encodeAddress('kaspa', 16, List<int>.filled(64, 7));
+    expect(() => Address.fromString(bad), throwsA(isA<InvalidAddressException>()));
+  });
+
   test('parses MLDSA (version=2) address and detects type', () {
     final mldsa = _encodeAddress('kaspa', 2, List<int>.filled(1312, 0));
     final addr = Address.fromString(mldsa);

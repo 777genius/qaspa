@@ -273,6 +273,9 @@ impl std::fmt::Debug for Address {
 
 impl Address {
     pub fn new(prefix: Prefix, version: Version, payload: &[u8]) -> Self {
+        // Stealth prefixes must only be used with Stealth addresses (and vice versa).
+        // This prevents ambiguous / misleading address strings such as `qs:` with a legacy version byte.
+        assert!(prefix.is_stealth() == (version == Version::Stealth), "invalid stealth prefix/version combination");
         // MLDSA публичные ключи должны иметь строго корректную длину независимо от сети,
         // иначе последующие операции со скриптом приведут к панике.
         if version == Version::PubKeyMLDSA || !prefix.is_test() {
@@ -354,6 +357,9 @@ impl BorshDeserialize for Address {
         let prefix: Prefix = borsh::BorshDeserialize::deserialize_reader(reader)?;
         let version: Version = borsh::BorshDeserialize::deserialize_reader(reader)?;
         let payload: Vec<u8> = borsh::BorshDeserialize::deserialize_reader(reader)?;
+        if prefix.is_stealth() != (version == Version::Stealth) {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid stealth prefix/version combination"));
+        }
         if (version == Version::PubKeyMLDSA || !prefix.is_test()) && payload.len() != version.public_key_len() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -693,6 +699,16 @@ mod tests {
         let address: Result<Address, AddressError> = address_str.try_into();
         assert_eq!(Err(AddressError::BadChecksum), address);
         // cspell:enable
+    }
+
+    #[test]
+    fn borsh_decode_rejects_stealth_prefix_version_mismatch() {
+        // Construct an invalid address instance (bypassing Address::new invariants) and ensure
+        // Borsh decoding fails with an error instead of panicking.
+        let bad = Address { prefix: Prefix::Mainnet, version: Version::Stealth, payload: PayloadVec::from_slice(&[0u8; 64]) };
+        let encoded = borsh::to_vec(&bad).expect("serialize");
+        let decoded = borsh::from_slice::<Address>(&encoded);
+        assert!(decoded.is_err(), "borsh decode must reject invalid stealth prefix/version combination");
     }
 
     #[cfg(target_arch = "wasm32")]

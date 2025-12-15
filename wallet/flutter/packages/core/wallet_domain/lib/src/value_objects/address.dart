@@ -325,6 +325,18 @@ class Address extends Equatable {
       );
     }
 
+    final isStealthPrefix = prefix == 'qs' || prefix == 'qstest';
+    final isStealthVersion = version == 16;
+    if (isStealthPrefix != isStealthVersion) {
+      throw InvalidAddressException(
+        message: 'Invalid stealth address prefix/version combination',
+        address: address,
+        reason: isStealthPrefix
+            ? 'Stealth prefix requires Stealth version'
+            : 'Stealth version requires qs/qstest prefix',
+      );
+    }
+
     return switch (version) {
       0 => AddressType.p2pk,
       1 => AddressType.p2pkEcdsa,

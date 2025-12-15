@@ -407,7 +407,16 @@ declare! {
 try_from! ( args: IRetainContextRequest, RetainContextRequest, {
     let name = args.get_string("name")?;
     let data = args.try_get_string("data")?;
-    let data = data.map(|data|Vec::<u8>::from_hex(data.as_str())).transpose()?;
+    // Prevent OOM/DoS from untrusted JS input (hex-decoding allocates Vec of size ~len/2).
+    const MAX_RETAINED_CONTEXT_BYTES: usize = 1024 * 1024; // 1 MiB
+    let data = data
+        .map(|data| {
+            if data.len() > MAX_RETAINED_CONTEXT_BYTES.saturating_mul(2) {
+                return Err(Error::custom(format!("data is too large ({} chars)", data.len())));
+            }
+            Vec::<u8>::from_hex(data.as_str()).map_err(|e| Error::custom(format!("data: {e}")))
+        })
+        .transpose()?;
     Ok(RetainContextRequest { name, data })
 });
 

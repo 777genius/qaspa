@@ -142,6 +142,11 @@ impl Address {
         let (version_byte, payload) = payload_u8.split_first().ok_or(AddressError::BadPayload)?;
         let version: Version = (*version_byte).try_into()?;
 
+        // Stealth prefixes must only be used with stealth version bytes (and vice versa).
+        if prefix.is_stealth() != (version == Version::Stealth) {
+            return Err(AddressError::BadPayload);
+        }
+
         // Address::new enforces payload length via assert (except for special test prefixes),
         // so validate here and return a proper error instead of panicking on malformed input.
         if (version == Version::PubKeyMLDSA || !prefix.is_test()) && payload.len() != version.public_key_len() {
@@ -169,5 +174,22 @@ mod tests {
 
         let decoded = Address::decode_payload(prefix, &address);
         assert_eq!(decoded, Err(AddressError::BadPayload));
+    }
+
+    #[test]
+    fn decode_payload_rejects_stealth_prefix_with_non_stealth_version() {
+        let bad =
+            Address { prefix: Prefix::StealthMainnet, version: Version::PubKey, payload: crate::PayloadVec::from_slice(&[0u8; 32]) };
+        let encoded = bad.to_string();
+        let parsed: Result<Address, AddressError> = encoded.as_str().try_into();
+        assert_eq!(parsed, Err(AddressError::BadPayload));
+    }
+
+    #[test]
+    fn decode_payload_rejects_stealth_version_with_regular_prefix() {
+        let bad = Address { prefix: Prefix::Mainnet, version: Version::Stealth, payload: crate::PayloadVec::from_slice(&[0u8; 64]) };
+        let encoded = bad.to_string();
+        let parsed: Result<Address, AddressError> = encoded.as_str().try_into();
+        assert_eq!(parsed, Err(AddressError::BadPayload));
     }
 }

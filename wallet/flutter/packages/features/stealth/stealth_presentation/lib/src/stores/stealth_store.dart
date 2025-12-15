@@ -75,8 +75,17 @@ abstract class _StealthStoreBase with Store {
   @computed
   bool get canSend {
     if (recipientStealthAddress.isEmpty || sendAmount.isEmpty) return false;
+    if (isSending) return false;
+
+    try {
+      final address = Address.fromString(recipientStealthAddress);
+      if (address.type != AddressType.stealth) return false;
+    } catch (_) {
+      return false;
+    }
+
     final amount = double.tryParse(sendAmount);
-    return amount != null && amount > 0 && !isSending;
+    return amount != null && amount > 0;
   }
 
   @computed

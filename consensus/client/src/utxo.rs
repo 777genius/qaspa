@@ -467,9 +467,43 @@ impl UtxoEntryReference {
     }
 
     pub fn simulated_with_address(amount: u64, address: &Address) -> Self {
+        use kaspa_addresses::Version;
+        use kaspa_consensus_core::tx::ScriptVec;
+        use kaspa_txscript::STEALTH_SCRIPT_VERSION;
+        use rand::RngCore;
+        use secp256k1::{PublicKey, SecretKey, SECP256K1};
+
         let outpoint = TransactionOutpoint::simulated();
-        let script_public_key =
-            kaspa_txscript::pay_to_address_script(address).expect("simulated_with_address requires a non-stealth, valid address");
+        let script_public_key = match address.version {
+            Version::Stealth => {
+                let mut rng = rand::thread_rng();
+
+                fn random_secret_key<R: RngCore>(rng: &mut R) -> SecretKey {
+                    let mut bytes = [0u8; 32];
+                    loop {
+                        rng.fill_bytes(&mut bytes);
+                        if let Ok(sk) = SecretKey::from_slice(&bytes) {
+                            return sk;
+                        }
+                    }
+                }
+
+                let r_pubkey = PublicKey::from_secret_key(SECP256K1, &random_secret_key(&mut rng));
+                let p_full = PublicKey::from_secret_key(SECP256K1, &random_secret_key(&mut rng));
+                let (p_dest, _) = p_full.x_only_public_key();
+                let view_tag = rng.next_u32() as u8;
+
+                let mut bytes = [0u8; 66];
+                bytes[..33].copy_from_slice(&r_pubkey.serialize());
+                bytes[33] = view_tag;
+                bytes[34..].copy_from_slice(&p_dest.serialize());
+
+                ScriptPublicKey::new(STEALTH_SCRIPT_VERSION, ScriptVec::from_slice(&bytes))
+            }
+            _ => {
+                kaspa_txscript::pay_to_address_script(address).unwrap_or_else(|_| ScriptPublicKey::new(0, ScriptVec::from_slice(&[])))
+            }
+        };
         let block_daa_score = 0;
         let is_coinbase = false;
 
@@ -477,5 +511,27 @@ impl UtxoEntryReference {
             UtxoEntry { address: Some(address.clone()), outpoint, amount, script_public_key, block_daa_score, is_coinbase };
 
         UtxoEntryReference::from(utxo_entry)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kaspa_addresses::{Prefix, Version};
+    use kaspa_txscript::STEALTH_SCRIPT_VERSION;
+
+    #[test]
+    fn simulated_with_address_supports_stealth_without_panicking() {
+        let stealth = Address::new(Prefix::StealthTestnet, Version::Stealth, &[7u8; 64]);
+        let entry = UtxoEntryReference::simulated_with_address(1000, &stealth);
+        assert_eq!(entry.utxo.script_public_key.version(), STEALTH_SCRIPT_VERSION);
+        assert_eq!(entry.utxo.script_public_key.script().len(), 66);
+    }
+
+    #[test]
+    fn simulated_with_address_supports_regular_addresses() {
+        let regular = Address::new(Prefix::Testnet, Version::PubKey, &[0u8; 32]);
+        let entry = UtxoEntryReference::simulated_with_address(1000, &regular);
+        assert_eq!(entry.utxo.script_public_key.version(), 0);
     }
 }

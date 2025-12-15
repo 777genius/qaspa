@@ -141,10 +141,47 @@ impl LocalStoreInner {
     fn rename(&self, filename: &str) -> Result<()> {
         let store = (**self.store.read().unwrap()).clone();
         let filename = make_filename(&None, &Some(filename.to_string()));
+        if filename.is_empty() {
+            return Err(Error::InvalidFilename("filename is empty".to_string()));
+        }
+        if filename.contains('/') || filename.contains('\\') {
+            return Err(Error::InvalidFilename("filename must not contain path separators".to_string()));
+        }
         match store {
             Store::Resident => Err(Error::ResidentWallet),
             Store::Storage(mut storage) => {
-                storage.rename_sync(filename.as_str())?;
+                let current = storage.filename().clone();
+                let parent = current.parent().ok_or_else(|| Error::InvalidFilename("invalid wallet path".to_string()))?;
+                let old_stem = current
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| Error::InvalidFilename("invalid wallet filename".to_string()))?;
+
+                // No-op rename.
+                if filename == old_stem {
+                    return Ok(());
+                }
+
+                let target_wallet_path = parent.join(format!("{filename}.wallet"));
+                if fs::exists_sync(&target_wallet_path)? {
+                    return Err(Error::WalletAlreadyExists);
+                }
+
+                let old_data_root = parent.join(old_stem);
+                let new_data_root = parent.join(&filename);
+                if fs::exists_sync(&new_data_root)? {
+                    return Err(Error::WalletAlreadyExists);
+                }
+
+                // Rename wallet file first; if moving the auxiliary data dir fails, rollback.
+                storage.rename_sync(target_wallet_path.to_string_lossy().as_ref())?;
+                if fs::exists_sync(&old_data_root)? {
+                    if let Err(err) = fs::rename_sync(&old_data_root, &new_data_root) {
+                        // Best-effort rollback: move wallet file back.
+                        let _ = storage.rename_sync(current.to_string_lossy().as_ref());
+                        return Err(err.into());
+                    }
+                }
                 *self.store.write().unwrap() = Arc::new(Store::Storage(storage));
                 Ok(())
             }
@@ -653,6 +690,45 @@ mod tests {
 
             let err = store.close().await.expect_err("must fail when wallet is not open");
             assert!(matches!(err, Error::WalletNotOpen));
+
+            Ok(())
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn rename_moves_aux_data_root_dir() -> Result<()> {
+        use std::path::Path;
+        use tempfile::tempdir;
+
+        async_std::task::block_on(async {
+            let temp = tempdir().expect("tempdir");
+            let folder = temp.path().to_string_lossy().to_string();
+            let wallet_secret = Secret::from("test-secret");
+
+            let args =
+                CreateArgs::new(Some("test".to_string()), Some("old".to_string()), EncryptionKind::XChaCha20Poly1305, None, true);
+            let inner = LocalStoreInner::try_create(&wallet_secret, &folder, args, false).await?;
+            inner.store(&wallet_secret).await?;
+
+            let old_wallet = Path::new(&folder).join("old.wallet");
+            assert!(old_wallet.exists(), "wallet file must exist before rename");
+
+            // Simulate cached auxiliary data (stealth keys, delegations, etc.).
+            let old_data_root = Path::new(&folder).join("old");
+            std::fs::create_dir_all(&old_data_root).expect("create old data root");
+            std::fs::write(old_data_root.join("dummy"), b"1").expect("write dummy");
+
+            inner.rename("new")?;
+
+            let new_wallet = Path::new(&folder).join("new.wallet");
+            assert!(new_wallet.exists(), "wallet file must be renamed");
+            assert!(!old_wallet.exists(), "old wallet file must be gone");
+
+            let new_data_root = Path::new(&folder).join("new");
+            assert!(new_data_root.exists(), "data root dir must be renamed");
+            assert!(!old_data_root.exists(), "old data root dir must be gone");
+            assert!(new_data_root.join("dummy").exists(), "data root contents must be preserved");
 
             Ok(())
         })

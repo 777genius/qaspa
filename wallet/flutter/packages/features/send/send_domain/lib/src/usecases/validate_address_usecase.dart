@@ -1,11 +1,9 @@
 import 'package:injectable/injectable.dart';
+import 'package:wallet_domain/wallet_domain.dart' as wallet_domain;
 
 /// Use case for validating Kaspa addresses.
 @injectable
 class ValidateAddressUseCase {
-  /// Valid Bech32 characters (excluding 1, b, i, o for readability).
-  static const _bech32Charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-
   /// Minimum address length: prefix (6-10) + separator (1) + data (minimum ~40).
   static const _minAddressLength = 50;
 
@@ -17,47 +15,26 @@ class ValidateAddressUseCase {
 
   /// Validate a Kaspa address.
   ///
-  /// Returns true if the address is potentially valid.
-  /// Note: Full validation including checksum requires the Rust bridge.
+  /// Returns true if the address is valid (checksum + payload length + type).
   bool call(String address) {
     if (address.isEmpty) return false;
 
+    final trimmed = address.trim();
+
     // Check length bounds
-    if (address.length < _minAddressLength ||
-        address.length > _maxAddressLength) {
+    if (trimmed.length < _minAddressLength || trimmed.length > _maxAddressLength) {
       return false;
     }
 
-    // Check prefix and extract data
-    final String data;
+    // Fast path: ensure prefix separator exists
+    if (!trimmed.contains(':')) return false;
 
-    if (address.startsWith('kaspa:')) {
-      data = address.substring(6);
-    } else if (address.startsWith('kaspatest:')) {
-      data = address.substring(10);
-    } else if (address.startsWith('kaspadev:')) {
-      data = address.substring(9);
-    } else if (address.startsWith('kaspasim:')) {
-      data = address.substring(9);
-    } else if (address.startsWith('qs:')) {
-      data = address.substring(3);
-    } else if (address.startsWith('qstest:')) {
-      data = address.substring(7);
-    } else {
+    // Full validation (checksum + payload length + type parsing)
+    try {
+      wallet_domain.Address.fromString(trimmed);
+      return true;
+    } catch (_) {
       return false;
     }
-
-    // Check data part is not empty
-    if (data.isEmpty) return false;
-
-    // Check all characters are valid bech32 (lowercase only)
-    for (final char in data.toLowerCase().codeUnits) {
-      final charStr = String.fromCharCode(char);
-      if (!_bech32Charset.contains(charStr)) {
-        return false;
-      }
-    }
-
-    return true;
   }
 }
