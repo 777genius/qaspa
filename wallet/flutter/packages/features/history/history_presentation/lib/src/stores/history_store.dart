@@ -74,14 +74,18 @@ abstract class _HistoryStoreBase with Store {
     ).listen(
       (newTransactions) {
         if (_isDisposed || currentAccountId != accountId) return;
-        transactions
-          ..clear()
-          ..addAll(newTransactions);
+        runInAction(() {
+          transactions
+            ..clear()
+            ..addAll(newTransactions);
+        });
       },
       onError: (error) {
         if (_isDisposed || currentAccountId != accountId) return;
         developer.log('Transaction stream error', error: error, name: 'HistoryStore');
-        errorMessage = 'Failed to sync transactions';
+        runInAction(() {
+          errorMessage = 'Failed to sync transactions';
+        });
       },
     );
   }

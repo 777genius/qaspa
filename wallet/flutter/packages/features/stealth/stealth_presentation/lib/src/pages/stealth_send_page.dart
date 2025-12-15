@@ -140,9 +140,7 @@ class StealthSendPage extends StatelessWidget {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Private payment sent')),
                           );
-                          if (context.mounted) {
-                            context.pop();
-                          }
+                          context.pop();
                         }
                       } else if (store.errorMessage != null) {
                         if (dialogContext.mounted) {

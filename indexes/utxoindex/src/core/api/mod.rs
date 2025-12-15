@@ -175,7 +175,7 @@ mod tests {
         let inner = Arc::new(RwLock::new(PanickingUtxoIndexApi));
         let proxy = UtxoIndexProxy::new(inner);
 
-        let err = proxy.get_circulating_supply().await.err().expect("must return error");
+        let err = proxy.get_circulating_supply().await.expect_err("must return error");
         assert!(matches!(err, StoreError::DataInconsistency(_)));
     }
 }

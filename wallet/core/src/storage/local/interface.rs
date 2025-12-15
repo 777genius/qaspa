@@ -496,27 +496,6 @@ impl Interface for LocalStore {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn invalid_calls_return_errors_instead_of_panicking() -> Result<()> {
-        async_std::task::block_on(async {
-            let store = LocalStore::try_new(true)?;
-            let wallet_secret = Secret::from("test");
-
-            let err = store.flush(&wallet_secret).await.expect_err("must fail when not in batch mode");
-            assert!(err.to_string().contains("batch"));
-
-            let err = store.close().await.expect_err("must fail when wallet is not open");
-            assert!(matches!(err, Error::WalletNotOpen));
-
-            Ok(())
-        })
-    }
-}
-
 #[async_trait]
 impl PrvKeyDataStore for LocalStoreInner {
     async fn is_empty(&self) -> Result<bool> {
@@ -656,5 +635,26 @@ impl AddressBookStore for LocalStoreInner {
             .collect();
 
         Ok(matches)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_calls_return_errors_instead_of_panicking() -> Result<()> {
+        async_std::task::block_on(async {
+            let store = LocalStore::try_new(true)?;
+            let wallet_secret = Secret::from("test");
+
+            let err = store.flush(&wallet_secret).await.expect_err("must fail when not in batch mode");
+            assert!(err.to_string().contains("batch"));
+
+            let err = store.close().await.expect_err("must fail when wallet is not open");
+            assert!(matches!(err, Error::WalletNotOpen));
+
+            Ok(())
+        })
     }
 }

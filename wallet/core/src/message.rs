@@ -73,6 +73,9 @@ pub(crate) mod serde_hex_array_32 {
             {
                 let mut bytes = Vec::with_capacity(32);
                 while let Some(val) = seq.next_element::<u8>()? {
+                    if bytes.len() == 32 {
+                        return Err(A::Error::invalid_length(33, &"32-byte array"));
+                    }
                     bytes.push(val);
                 }
                 if bytes.len() != 32 {
@@ -103,6 +106,12 @@ pub(crate) mod serde_base64_bytes {
     use serde::{Deserializer, Serializer};
     use std::fmt;
 
+    // Hard limit to avoid OOM/DoS when deserializing untrusted JSON (e.g. delegation records).
+    // Must be large enough for ML-DSA-87 signatures (4627 bytes) and some headroom.
+    const MAX_DECODED_LEN: usize = 16 * 1024;
+    // Base64 expands data by ~4/3 (+ padding). Keep a small slack for padding.
+    const MAX_ENCODED_LEN: usize = MAX_DECODED_LEN.div_ceil(3) * 4 + 8;
+
     pub fn serialize<S>(value: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -126,7 +135,14 @@ pub(crate) mod serde_base64_bytes {
             where
                 E: DeError,
             {
-                general_purpose::STANDARD.decode(v).map_err(E::custom)
+                if v.len() > MAX_ENCODED_LEN {
+                    return Err(E::custom(format!("base64 string too long ({} chars)", v.len())));
+                }
+                let decoded = general_purpose::STANDARD.decode(v).map_err(E::custom)?;
+                if decoded.len() > MAX_DECODED_LEN {
+                    return Err(E::custom(format!("base64 data too large ({} bytes)", decoded.len())));
+                }
+                Ok(decoded)
             }
 
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
@@ -140,6 +156,9 @@ pub(crate) mod serde_base64_bytes {
             where
                 E: DeError,
             {
+                if v.len() > MAX_DECODED_LEN {
+                    return Err(E::custom(format!("base64 data too large ({} bytes)", v.len())));
+                }
                 Ok(v.to_vec())
             }
 
@@ -149,6 +168,9 @@ pub(crate) mod serde_base64_bytes {
             {
                 let mut bytes = Vec::new();
                 while let Some(val) = seq.next_element::<u8>()? {
+                    if bytes.len() >= MAX_DECODED_LEN {
+                        return Err(A::Error::custom(format!("base64 data too large (>{} bytes)", MAX_DECODED_LEN)));
+                    }
                     bytes.push(val);
                 }
                 Ok(bytes)
@@ -317,11 +339,13 @@ pub fn calc_request_id(body: &MasterDelegationRequestBodyV1) -> Result<[u8; 32]>
 mod tests {
     use super::*;
     use crate::account::delegation::{sign_with_master, DelegationStatus};
+    use base64::{engine::general_purpose, Engine as _};
     use kaspa_consensus_core::network::NetworkType;
     use kaspa_hashes::Hash;
     use kaspa_mldsa::MlDsaLevel;
     use kaspa_utils::hex::ToHex;
     use kaspa_wallet_keys::keypair_mldsa::MlDsaKeypair;
+    use serde::Deserialize;
 
     /// Sign message equivalent that's only used for tests
     /// Necessary only because of KIP test vectors
@@ -624,6 +648,53 @@ Ut omnis magnam et accusamus earum rem impedit provident eum commodi repellat qu
         assert_ne!(request_id, changed_id);
 
         assert_eq!(request_id, calc_request_id(&request).expect("calc id same"));
+    }
+
+    #[test]
+    fn serde_base64_bytes_accepts_mldsa_level5_signature_size() {
+        #[derive(Debug, Deserialize)]
+        struct Wrapper {
+            #[serde(with = "crate::message::serde_base64_bytes")]
+            sig: Vec<u8>,
+        }
+
+        let raw = vec![0u8; MlDsaLevel::Level5.signature_len()];
+        let encoded = general_purpose::STANDARD.encode(&raw);
+        let json = format!(r#"{{"sig":"{encoded}"}}"#);
+        let parsed: Wrapper = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.sig.len(), raw.len());
+    }
+
+    #[test]
+    fn serde_base64_bytes_rejects_oversized_payloads() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct Wrapper {
+            #[serde(with = "crate::message::serde_base64_bytes")]
+            sig: Vec<u8>,
+        }
+
+        let raw = vec![0u8; 50_000];
+        let encoded = general_purpose::STANDARD.encode(&raw);
+        let json = format!(r#"{{"sig":"{encoded}"}}"#);
+        let err = serde_json::from_str::<Wrapper>(&json).expect_err("must fail");
+        let msg = err.to_string();
+        assert!(msg.contains("too long") || msg.contains("too large"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn serde_hex_array_32_rejects_overlong_sequences() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct Wrapper {
+            #[serde(with = "crate::message::serde_hex_array_32")]
+            v: [u8; 32],
+        }
+
+        let json = r#"{"v":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"#;
+        let err = serde_json::from_str::<Wrapper>(json).expect_err("must fail");
+        let msg = err.to_string();
+        assert!(msg.contains("invalid length") || msg.contains("32-byte"), "unexpected error: {msg}");
     }
 
     #[test]

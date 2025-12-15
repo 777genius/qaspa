@@ -147,9 +147,7 @@ class _SendPageState extends State<SendPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Transaction sent!')),
                           );
-                          if (context.mounted) {
-                            context.pop();
-                          }
+                          context.pop();
                         }
                       } else if (store.errorMessage != null) {
                         if (dialogContext.mounted) {

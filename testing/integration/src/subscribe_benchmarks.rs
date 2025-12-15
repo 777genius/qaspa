@@ -177,7 +177,7 @@ async fn utxos_changed_subscriptions_client(address_cycle_seconds: u64, address_
     let prealloc_address =
         Address::new(NetworkType::Simnet.into(), kaspa_addresses::Version::PubKey, &prealloc_pk.x_only_public_key().0.serialize());
     let schnorr_key = secp256k1::Keypair::from_secret_key(secp256k1::SECP256K1, &prealloc_sk);
-    let spk = pay_to_address_script(&prealloc_address);
+    let spk = pay_to_address_script(&prealloc_address).expect("valid address");
 
     let args = ArgsBuilder::simnet(TX_LEVEL_WIDTH as u64 * CONTRACT_FACTOR, PREALLOC_AMOUNT)
         .prealloc_address(prealloc_address)

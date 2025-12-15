@@ -105,7 +105,11 @@ abstract class _SettingsStoreBase with Store {
   }
 
   void _startMnemonicClearTimer() {
-    _mnemonicClearTimer = Timer(_mnemonicClearTimeout, clearExportedMnemonic);
+    _mnemonicClearTimer = Timer(_mnemonicClearTimeout, () {
+      if (!_isDisposed) {
+        clearExportedMnemonic();
+      }
+    });
   }
 
   void _cancelMnemonicClearTimer() {
@@ -193,6 +197,7 @@ abstract class _SettingsStoreBase with Store {
   }
 
   void dispose() {
+    _isDisposed = true;
     _cancelMnemonicClearTimer();
     exportedMnemonic = null;
   }

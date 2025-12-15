@@ -141,9 +141,7 @@ class SettingsPage extends StatelessWidget {
                         if (success) {
                           Navigator.pop(dialogContext);
                           if (context.mounted) {
-                            if (context.mounted) {
-                              context.go(OnboardingRoutes.welcome);
-                            }
+                            context.go(OnboardingRoutes.welcome);
                           }
                         }
                       } finally {

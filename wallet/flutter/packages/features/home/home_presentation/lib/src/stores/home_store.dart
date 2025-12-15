@@ -168,7 +168,9 @@ abstract class _HomeStoreBase with Store {
     _balanceSubscription = _watchBalanceUseCase(accountId: accountId).listen(
       (newBalance) {
         if (_isDisposed || currentAccountId != accountId) return;
-        balance = newBalance;
+        runInAction(() {
+          balance = newBalance;
+        });
       },
       onError: (e) {
         if (_isDisposed || currentAccountId != accountId) return;
@@ -177,7 +179,9 @@ abstract class _HomeStoreBase with Store {
           error: e,
           name: 'HomeStore',
         );
-        errorMessage = 'Connection error';
+        runInAction(() {
+          errorMessage = 'Connection error';
+        });
       },
     );
   }

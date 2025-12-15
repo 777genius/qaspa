@@ -1729,25 +1729,25 @@ impl StealthUtxoHandler for StealthAccount {
                 if matches!(rec.status, DelegationStatus::Active) {
                     if let Some(until) = rec.valid_until_daa {
                         // `valid_until_daa` включительно: делегация считается истёкшей только когда DAA > until.
-                        if current_daa_score > until {
-                            if self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationExpired, current_daa_score) {
-                                let _ = self
-                                    .wallet()
-                                    .notify(Events::MasterDelegationExpired {
-                                        account_id: *self.id(),
-                                        delegation_id: id.0,
-                                        anchor,
-                                        valid_until_daa: until,
-                                    })
-                                    .await;
-                                log_warn!(
-                                    "Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}",
-                                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)),
-                                    id.0,
-                                    until,
-                                    current_daa_score
-                                );
-                            }
+                        if current_daa_score > until
+                            && self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationExpired, current_daa_score)
+                        {
+                            let _ = self
+                                .wallet()
+                                .notify(Events::MasterDelegationExpired {
+                                    account_id: *self.id(),
+                                    delegation_id: id.0,
+                                    anchor,
+                                    valid_until_daa: until,
+                                })
+                                .await;
+                            log_warn!(
+                                "Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}",
+                                crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)),
+                                id.0,
+                                until,
+                                current_daa_score
+                            );
                         }
                     }
                 }
@@ -1759,13 +1759,14 @@ impl StealthUtxoHandler for StealthAccount {
             if let Some((_latest_id, latest_rec)) = records.iter().max_by_key(|(_, r)| r.nonce) {
                 if matches!(latest_rec.status, DelegationStatus::Revoked { .. }) {
                     for (id, rec) in records.iter() {
-                        if rec.nonce < latest_rec.nonce && matches!(rec.status, DelegationStatus::Active) {
-                            if self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationRevoked, current_daa_score) {
-                                let _ = self
-                                    .wallet()
-                                    .notify(Events::MasterDelegationRevoked { account_id: *self.id(), delegation_id: id.0, anchor })
-                                    .await;
-                            }
+                        if rec.nonce < latest_rec.nonce
+                            && matches!(rec.status, DelegationStatus::Active)
+                            && self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationRevoked, current_daa_score)
+                        {
+                            let _ = self
+                                .wallet()
+                                .notify(Events::MasterDelegationRevoked { account_id: *self.id(), delegation_id: id.0, anchor })
+                                .await;
                         }
                     }
                 }
