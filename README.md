@@ -4,10 +4,11 @@
 
 New features:
 - Privacy: Stealth Address
-- MLDSA (Quantum Resistant) accounts (70% ready)
-- MLDSA: пока поддержан только Level2 в транзакциях; Level3/Level5 планируем включить позже
+- MLDSA (Quantum Resistant)
 - Privacy: random fees
 - Airgap делегации мастера → стелс (офлайн поток; см. `docs/guides/master_cold_storage.md`)
+
+MLDSA: поддержан Level2 в транзакциях; Как улучшение планируем Level3/Level5 включить позже
 
 Welcome to the Rust-based implementation of the Kaspa full-node and its ancillary libraries. The contained node release serves as a drop-in replacement to the established <a href="https://github.com/kaspanet/kaspad">Golang node</a> and to date is the recommended node software for the Kaspa network, introducing developers to the possibilities of Rust in the Kaspa network's context.
 
