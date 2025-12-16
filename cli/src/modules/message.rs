@@ -108,7 +108,8 @@ impl Message {
             return Err(Error::custom("Address not supported for message signing. Only supports PubKey addresses"));
         }
 
-        let pubkey = XOnlyPublicKey::from_slice(&kaspa_address.payload[0..32]).unwrap();
+        let pubkey = XOnlyPublicKey::from_slice(&kaspa_address.payload[0..32])
+            .map_err(|_| Error::custom("Invalid public key in address payload"))?;
 
         let mut signature_hex = [0u8; 64];
         faster_hex::hex_decode(signature.as_bytes(), &mut signature_hex)?;
@@ -150,8 +151,10 @@ impl Message {
             KEYPAIR_ACCOUNT_KIND => {
                 let (wallet_secret, payment_secret) = ctx.ask_wallet_secret(Some(&account)).await?;
                 let keydata = account.prv_key_data(wallet_secret).await?;
-                let decrypted_privkey = keydata.payload.decrypt(payment_secret.as_ref()).unwrap();
-                let secretkey = decrypted_privkey.as_secret_key()?.unwrap();
+                let decrypted_privkey =
+                    keydata.payload.decrypt(payment_secret.as_ref()).map_err(|e| Error::custom(format!("Decryption failed: {e}")))?;
+                let secretkey =
+                    decrypted_privkey.as_secret_key()?.ok_or_else(|| Error::custom("Missing secret key for keypair account"))?;
                 Ok(secretkey.secret_bytes())
             }
             _ => Err(Error::custom("Unsupported account kind")),

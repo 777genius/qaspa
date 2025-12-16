@@ -147,6 +147,17 @@ impl Address {
             return Err(AddressError::BadPayload);
         }
 
+        // Reject non-canonical encodings: the decoded bytes must re-encode to the
+        // exact same 5-bit payload values. This prevents multiple distinct strings
+        // from decoding to the same address bytes (padding / extra u5 groups).
+        let mut canonical_bytes = Vec::with_capacity(1 + payload.len());
+        canonical_bytes.push(*version_byte);
+        canonical_bytes.extend_from_slice(payload);
+        let canonical_u5 = conv8to5(&canonical_bytes);
+        if canonical_u5.as_slice() != payload_u5 {
+            return Err(AddressError::BadPayload);
+        }
+
         // Address::new enforces payload length via assert (except for special test prefixes),
         // so validate here and return a proper error instead of panicking on malformed input.
         if (version == Version::PubKeyMLDSA || !prefix.is_test()) && payload.len() != version.public_key_len() {
@@ -191,5 +202,48 @@ mod tests {
         let encoded = bad.to_string();
         let parsed: Result<Address, AddressError> = encoded.as_str().try_into();
         assert_eq!(parsed, Err(AddressError::BadPayload));
+    }
+
+    #[test]
+    fn decode_payload_rejects_non_canonical_stealth_with_extra_u5_group() {
+        let prefix = Prefix::StealthTestnet;
+        let version_byte = Version::Stealth as u8;
+        let payload_bytes = [7u8; 64];
+
+        let canonical_u5 = conv8to5(&[[version_byte].as_slice(), payload_bytes.as_slice()].concat());
+
+        let mut non_canonical_u5 = canonical_u5.clone();
+        non_canonical_u5.push(1u8);
+
+        let fivebit_prefix = prefix.as_str().as_bytes().iter().copied().map(|c| c & 0x1fu8);
+        let check = checksum(non_canonical_u5.as_slice(), fivebit_prefix);
+        let checksum_u5 = conv8to5(&check.to_be_bytes()[3..]);
+
+        let address =
+            String::from_utf8([non_canonical_u5, checksum_u5].concat().iter().map(|c| CHARSET[*c as usize]).collect()).unwrap();
+
+        let decoded = Address::decode_payload(prefix, &address);
+        assert_eq!(decoded, Err(AddressError::BadPayload));
+    }
+
+    #[test]
+    fn decode_payload_rejects_non_canonical_pubkey_with_padding_bit_set() {
+        let prefix = Prefix::Mainnet;
+        let version_byte = Version::PubKey as u8;
+        let payload_bytes = [0u8; 32];
+
+        let mut payload_u5 = conv8to5(&[[version_byte].as_slice(), payload_bytes.as_slice()].concat());
+        if let Some(last) = payload_u5.last_mut() {
+            *last |= 1u8;
+        }
+
+        let fivebit_prefix = prefix.as_str().as_bytes().iter().copied().map(|c| c & 0x1fu8);
+        let check = checksum(payload_u5.as_slice(), fivebit_prefix);
+        let checksum_u5 = conv8to5(&check.to_be_bytes()[3..]);
+
+        let address = String::from_utf8([payload_u5, checksum_u5].concat().iter().map(|c| CHARSET[*c as usize]).collect()).unwrap();
+
+        let decoded = Address::decode_payload(prefix, &address);
+        assert_eq!(decoded, Err(AddressError::BadPayload));
     }
 }

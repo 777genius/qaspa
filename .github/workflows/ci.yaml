@@ -13,6 +13,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "27.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install stable toolchain
@@ -91,6 +92,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "27.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install stable toolchain
@@ -193,6 +195,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "27.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install stable toolchain
@@ -231,6 +234,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "27.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install system dependencies for wasm32 builds
@@ -283,6 +287,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "27.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install stable toolchain
@@ -339,6 +344,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "27.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install stable toolchain

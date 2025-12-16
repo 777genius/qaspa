@@ -315,7 +315,11 @@ impl Address {
 
     #[wasm_bindgen(setter, js_name = "setPrefix")]
     pub fn set_prefix_from_str(&mut self, prefix: &str) -> std::result::Result<(), JsValue> {
-        self.prefix = Prefix::try_from(prefix).map_err(|err| JsValue::from_str(&format!("invalid prefix `{prefix}`: {err}")))?;
+        let candidate = Prefix::try_from(prefix).map_err(|err| JsValue::from_str(&format!("invalid prefix `{prefix}`: {err}")))?;
+        if candidate.is_stealth() != (self.version == Version::Stealth) {
+            return Err(JsValue::from_str("invalid stealth prefix/version combination"));
+        }
+        self.prefix = candidate;
         Ok(())
     }
 
@@ -564,6 +568,47 @@ impl<'de> Deserialize<'de> for Address {
         }
 
         deserializer.deserialize_any(AddressVisitor::default())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod set_prefix_tests {
+    use super::*;
+
+    #[test]
+    fn set_prefix_rejects_stealth_prefix_on_non_stealth_address() {
+        let mut addr: Address =
+            "kaspa:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e".try_into().expect("valid address");
+        let original = addr.prefix;
+        let err = addr.set_prefix_from_str("qs").expect_err("must reject stealth prefix for non-stealth version");
+        assert!(err.as_string().unwrap_or_default().to_lowercase().contains("stealth"));
+        assert_eq!(addr.prefix, original);
+    }
+
+    #[test]
+    fn set_prefix_rejects_regular_prefix_on_stealth_address() {
+        let mut addr = Address::new(Prefix::StealthTestnet, Version::Stealth, &[7u8; 64]);
+        let original = addr.prefix;
+        let err = addr.set_prefix_from_str("kaspa").expect_err("must reject regular prefix for stealth version");
+        assert!(err.as_string().unwrap_or_default().to_lowercase().contains("stealth"));
+        assert_eq!(addr.prefix, original);
+    }
+
+    #[test]
+    fn set_prefix_allows_regular_to_regular() {
+        let mut addr: Address =
+            "kaspa:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e".try_into().expect("valid address");
+        addr.set_prefix_from_str("kaspatest").expect("regular prefix change should succeed");
+        assert_eq!(addr.prefix, Prefix::Testnet);
+        assert_eq!(addr.version, Version::PubKey);
+    }
+
+    #[test]
+    fn set_prefix_allows_stealth_to_stealth() {
+        let mut addr = Address::new(Prefix::StealthMainnet, Version::Stealth, &[9u8; 64]);
+        addr.set_prefix_from_str("qstest").expect("stealth prefix change should succeed");
+        assert_eq!(addr.prefix, Prefix::StealthTestnet);
+        assert_eq!(addr.version, Version::Stealth);
     }
 }
 

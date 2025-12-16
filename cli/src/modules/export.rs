@@ -47,8 +47,12 @@ async fn export_multisig_account(ctx: Arc<KaspaCli>, account: Arc<MultiSig>) -> 
             let mut generated_xpub_keys = Vec::with_capacity(prv_key_data_ids.len());
 
             for (id, prv_key_data_id) in prv_key_data_ids.iter().enumerate() {
-                let prv_key_data = prv_key_data_store.load_key_data(&wallet_secret, prv_key_data_id).await?.unwrap();
-                let mnemonic = prv_key_data.as_mnemonic(None).unwrap().unwrap();
+                let prv_key_data =
+                    prv_key_data_store.load_key_data(&wallet_secret, prv_key_data_id).await?.ok_or(Error::KeyDataNotFound)?;
+                let mnemonic = prv_key_data
+                    .as_mnemonic(None)
+                    .map_err(|e| Error::custom(format!("Failed to decrypt mnemonic: {e}")))?
+                    .ok_or(Error::WatchOnlyAccountNoKeyData)?;
 
                 let xpub_key: kaspa_bip32::ExtendedPublicKey<kaspa_bip32::secp256k1::PublicKey> =
                     prv_key_data.create_xpub(None, MULTISIG_ACCOUNT_KIND.into(), 0).await?; // todo it can be done concurrently
