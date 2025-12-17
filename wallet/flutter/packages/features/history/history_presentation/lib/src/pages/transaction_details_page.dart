@@ -126,6 +126,10 @@ class _DetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final colorScheme = theme.colorScheme;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -134,8 +138,8 @@ class _DetailCard extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+              style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -144,12 +148,13 @@ class _DetailCard extends StatelessWidget {
                 Expanded(
                   child: SelectableText(
                     value,
-                    style: Theme.of(context).textTheme.bodyLarge,
+                    style: textTheme.bodyLarge,
                   ),
                 ),
                 if (copyable)
                   IconButton(
                     icon: const Icon(Icons.copy, size: 20),
+                    tooltip: 'Copy to clipboard',
                     onPressed: () async {
                       try {
                         await Clipboard.setData(ClipboardData(text: value));
@@ -157,8 +162,11 @@ class _DetailCard extends StatelessWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Copied to clipboard')),
                         );
-                      } catch (_) {
-                        // Clipboard operation failed silently
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Failed to copy')),
+                        );
                       }
                     },
                   ),

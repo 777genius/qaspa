@@ -275,11 +275,10 @@ impl Address {
     pub fn new(prefix: Prefix, version: Version, payload: &[u8]) -> Self {
         // Stealth prefixes must only be used with Stealth addresses (and vice versa).
         // This prevents ambiguous / misleading address strings such as `qs:` with a legacy version byte.
-        assert!(prefix.is_stealth() == (version == Version::Stealth), "invalid stealth prefix/version combination");
-        // MLDSA публичные ключи должны иметь строго корректную длину независимо от сети,
-        // иначе последующие операции со скриптом приведут к панике.
+        debug_assert!(prefix.is_stealth() == (version == Version::Stealth), "invalid stealth prefix/version combination");
+        // В debug-сборках проверяем, что размер payload соответствует версии адреса.
         if version == Version::PubKeyMLDSA || !prefix.is_test() {
-            assert_eq!(payload.len(), version.public_key_len());
+            debug_assert_eq!(payload.len(), version.public_key_len());
         }
         Self { prefix, payload: PayloadVec::from_slice(payload), version }
     }

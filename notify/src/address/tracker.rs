@@ -238,7 +238,8 @@ impl Inner {
     /// The upper bound of the maximum address count. Note that the upper bound must
     /// never exceed `Index::MAX` since we cast the returned indexes to `Index`. See
     /// compile-time assertion above
-    const MAX_ADDRESS_UPPER_BOUND: usize = Self::expand_max_addresses(10_000_000);
+    const RAW_MAX_ADDRESS_UPPER_BOUND: usize = 10_000_000;
+    const MAX_ADDRESS_UPPER_BOUND: usize = Self::expand_max_addresses(Self::RAW_MAX_ADDRESS_UPPER_BOUND);
 
     /// The lower bound of the maximum address count
     const MAX_ADDRESS_LOWER_BOUND: usize = 6;
@@ -265,15 +266,11 @@ impl Inner {
         // Expands the maximum address count to the IndexMap actual usable allocated size minus 1.
         // Saving one entry for the insert/swap_remove scheme during entry recycling prevents a reallocation
         // when reaching the maximum.
-        let max_addresses = max_addresses.map(Self::expand_max_addresses);
+        let max_addresses = max_addresses.map(|x| x.min(Self::RAW_MAX_ADDRESS_UPPER_BOUND)).map(Self::expand_max_addresses);
         let addresses_preallocation = max_addresses;
         let capacity = max_addresses.map(|x| x + 1).unwrap_or_default();
 
-        assert!(
-            capacity <= Self::MAX_ADDRESS_UPPER_BOUND + 1,
-            "Tracker maximum address count cannot exceed {}",
-            Self::MAX_ADDRESS_UPPER_BOUND
-        );
+        debug_assert!(capacity <= Self::MAX_ADDRESS_UPPER_BOUND + 1);
         let max_addresses = max_addresses.unwrap_or(Self::DEFAULT_MAX_ADDRESSES);
         debug!("Memory configuration: UTXO changed events wil be tracked for at most {} addresses", max_addresses);
 
@@ -808,5 +805,12 @@ mod tests {
         let (_, count) = inner.script_pub_keys.get_index(index as usize).expect("index exists");
         assert_eq!(*count, 0);
         assert!(inner.empty_entries.contains(&index));
+    }
+
+    #[test]
+    fn new_clamps_oversized_max_addresses_instead_of_panicking() {
+        let tracker = Tracker::new(Some(usize::MAX));
+        assert!(tracker.addresses_preallocation().unwrap() <= Tracker::MAX_ADDRESS_UPPER_BOUND);
+        assert!(tracker.capacity() <= Tracker::MAX_ADDRESS_UPPER_BOUND + 1);
     }
 }

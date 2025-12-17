@@ -216,6 +216,7 @@ class ImportMnemonicGrid extends StatelessWidget {
         final hasValue = word.isNotEmpty;
 
         return MnemonicInputField(
+          key: ValueKey('word_$index'),
           wordIndex: index + 1,
           value: word,
           onChanged: (value) => onWordChanged(index, value),

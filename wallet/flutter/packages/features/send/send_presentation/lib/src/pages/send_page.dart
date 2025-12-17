@@ -17,15 +17,17 @@ class SendPage extends StatefulWidget {
 }
 
 class _SendPageState extends State<SendPage> {
+  late final SendStore _store;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       try {
-        final store = ModuleProvider.of(context).get<SendStore>();
+        _store = ModuleProvider.of(context).get<SendStore>();
         // TODO: Get actual account ID from wallet state
-        store.setAccountId('default');
+        _store.setAccountId('default');
       } catch (e) {
         developer.log(
           'SendPage initState error',
@@ -35,6 +37,10 @@ class _SendPageState extends State<SendPage> {
       }
     });
   }
+
+  void _onRecipientChanged(String value) => _store.setRecipientAddress(value.trim());
+
+  void _onAmountChanged(String value) => _store.setAmount(value.trim());
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +64,7 @@ class _SendPageState extends State<SendPage> {
                       : null,
                 ),
                 maxLength: 3000,
-                onChanged: (value) => store.setRecipientAddress(value.trim()),
+                onChanged: _onRecipientChanged,
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
@@ -66,12 +72,14 @@ class _SendPageState extends State<SendPage> {
                   labelText: 'Amount',
                   hintText: '0.00',
                   suffixText: 'KAS',
+                  counterText: '',
                   errorText: store.amount.isNotEmpty && !store.isAmountValid
                       ? 'Enter a valid amount greater than 0'
                       : null,
                 ),
                 keyboardType: TextInputType.number,
-                onChanged: (value) => store.setAmount(value.trim()),
+                maxLength: 30,
+                onChanged: _onAmountChanged,
               ),
               const SizedBox(height: AppSpacing.lg),
               if (store.estimatedFee != null)

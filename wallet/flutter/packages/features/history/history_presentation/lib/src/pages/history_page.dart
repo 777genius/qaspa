@@ -17,6 +17,7 @@ class HistoryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = ModuleProvider.of(context).get<HistoryStore>();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transaction History')),
@@ -53,7 +54,7 @@ class HistoryPage extends StatelessWidget {
                   Icon(
                     Icons.receipt_long_outlined,
                     size: 64,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   const Text('No transactions yet'),
@@ -115,6 +116,7 @@ class _TransactionListItem extends StatelessWidget {
     final isIncoming = transaction.isIncoming;
     final amountColor = isIncoming ? AppColors.success : AppColors.error;
     final amountPrefix = isIncoming ? '+' : '-';
+    final textTheme = Theme.of(context).textTheme;
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -136,7 +138,7 @@ class _TransactionListItem extends StatelessWidget {
         ),
         subtitle: Text(
           _formatDate(transaction.date),
-          style: Theme.of(context).textTheme.bodySmall,
+          style: textTheme.bodySmall,
         ),
         trailing: Icon(
           transaction.isConfirmed ? Icons.check_circle : Icons.schedule,

@@ -58,6 +58,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                             ? Icons.visibility_off
                             : Icons.visibility,
                       ),
+                      tooltip: _currentPasswordVisible ? 'Hide password' : 'Show password',
                       onPressed: () {
                         setState(() =>
                             _currentPasswordVisible = !_currentPasswordVisible);
@@ -83,6 +84,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                             ? Icons.visibility_off
                             : Icons.visibility,
                       ),
+                      tooltip: _newPasswordVisible ? 'Hide password' : 'Show password',
                       onPressed: () {
                         setState(
                             () => _newPasswordVisible = !_newPasswordVisible);
@@ -111,6 +113,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                             ? Icons.visibility_off
                             : Icons.visibility,
                       ),
+                      tooltip: _newPasswordVisible ? 'Hide password' : 'Show password',
                       onPressed: () {
                         setState(
                             () => _newPasswordVisible = !_newPasswordVisible);

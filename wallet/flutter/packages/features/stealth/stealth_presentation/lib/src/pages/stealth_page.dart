@@ -40,6 +40,9 @@ class _StealthPageState extends State<StealthPage> {
   @override
   Widget build(BuildContext context) {
     final store = ModuleProvider.of(context).get<StealthStore>();
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -71,17 +74,17 @@ class _StealthPageState extends State<StealthPage> {
                         Icon(
                           Icons.visibility_off,
                           size: 48,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: colorScheme.primary,
                         ),
                         const SizedBox(height: AppSpacing.md),
                         Text(
                           'Private Balance',
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: textTheme.titleMedium,
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
                           '${store.stealthBalanceInKas.toStringAsFixed(8)} KAS',
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          style: textTheme.headlineMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                         ),
@@ -100,12 +103,12 @@ class _StealthPageState extends State<StealthPage> {
                           const SizedBox(height: AppSpacing.sm),
                           Text(
                             'Scanning for payments...',
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            style: textTheme.bodyMedium,
                           ),
                           if (store.scanTotal > 0)
                             Text(
                               '${store.scanProgress} / ${store.scanTotal} blocks',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: textTheme.bodySmall,
                             ),
                         ],
                       ),
@@ -151,7 +154,7 @@ class _StealthPageState extends State<StealthPage> {
                 const SizedBox(height: AppSpacing.xl),
                 Text(
                   'Recent Private Transactions',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: textTheme.titleMedium,
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Expanded(
@@ -163,7 +166,7 @@ class _StealthPageState extends State<StealthPage> {
                               Icon(
                                 Icons.receipt_long_outlined,
                                 size: 48,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: colorScheme.onSurfaceVariant,
                               ),
                               const SizedBox(height: AppSpacing.md),
                               const Text('No private transactions yet'),
@@ -184,10 +187,10 @@ class _StealthPageState extends State<StealthPage> {
                               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                               child: ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                  backgroundColor: colorScheme.primaryContainer,
                                   child: Icon(
                                     Icons.visibility_off,
-                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    color: colorScheme.onPrimaryContainer,
                                   ),
                                 ),
                                 title: Text(

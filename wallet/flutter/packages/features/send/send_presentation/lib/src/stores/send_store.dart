@@ -112,6 +112,14 @@ abstract class _SendStoreBase with Store {
 
   @action
   void setAccountId(String accountId) {
+    if (currentAccountId != accountId) {
+      // Clear form when switching accounts to avoid stale data
+      recipientAddress = '';
+      amount = '';
+      estimatedFee = null;
+      errorMessage = null;
+      sentTransactionId = null;
+    }
     currentAccountId = accountId;
   }
 

@@ -173,6 +173,7 @@ pub fn lock_script_sig_templating_bytes(payload: Vec<u8>, pubkey_bytes: Option<&
 }
 
 pub fn script_sig_to_address(script_sig: &[u8], prefix: kaspa_addresses::Prefix) -> Result<Address, Error> {
+    let prefix = prefix.to_regular().unwrap_or(prefix);
     extract_script_pub_key_address(&pay_to_script_hash_script(script_sig), prefix).map_err(Error::P2SHExtractError)
 }
 
@@ -345,6 +346,19 @@ mod tests {
 
         let err = unlock_utxos_as_pskb(vec![(utxo_entry, outpoint)], &recipient, vec![0u8], 1).expect_err("must fail");
         assert!(err.to_string().to_lowercase().contains("stealth"));
+    }
+
+    #[test]
+    fn script_sig_to_address_normalizes_stealth_prefix() {
+        let (_, redeem_script) = mock_context();
+
+        let addr_test = script_sig_to_address(&redeem_script, Prefix::StealthTestnet).expect("address");
+        assert_eq!(addr_test.prefix, Prefix::Testnet);
+        assert_eq!(addr_test.version, kaspa_addresses::Version::ScriptHash);
+
+        let addr_main = script_sig_to_address(&redeem_script, Prefix::StealthMainnet).expect("address");
+        assert_eq!(addr_main.prefix, Prefix::Mainnet);
+        assert_eq!(addr_main.version, kaspa_addresses::Version::ScriptHash);
     }
 
     #[test]

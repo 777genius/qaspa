@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use kaspa_addresses::{Address, AddressError};
+use kaspa_addresses::Address;
 use kaspa_consensus_core::{
     acceptance_data::{AcceptanceData, MergesetBlockAcceptanceData},
     block::Block,
@@ -269,10 +269,7 @@ impl ConsensusConverter {
                 Default::default()
             },
             script_public_key_address: if verbosity.include_script_public_key_address.unwrap_or(false) {
-                Some(
-                    extract_script_pub_key_address(&utxo.script_public_key, self.config.prefix())
-                        .map_err(|_| AddressError::InvalidAddress)?,
-                )
+                extract_script_pub_key_address(&utxo.script_public_key, self.config.prefix()).ok()
             } else {
                 Default::default()
             },
@@ -337,10 +334,7 @@ impl ConsensusConverter {
                 Default::default()
             },
             script_public_key_address: if verbosity.include_script_public_key_address.unwrap_or(false) {
-                Some(
-                    extract_script_pub_key_address(&output.script_public_key, self.config.prefix())
-                        .map_err(|_| AddressError::InvalidAddress)?,
-                )
+                extract_script_pub_key_address(&output.script_public_key, self.config.prefix()).ok()
             } else {
                 Default::default()
             },

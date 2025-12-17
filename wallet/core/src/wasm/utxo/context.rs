@@ -193,7 +193,7 @@ impl UtxoContext {
         if from == to {
             return Ok(Array::new().unchecked_into());
         }
-        let slice = context.mature.get(from..to).unwrap();
+        let slice = context.mature.get(from..to).ok_or_else(|| Error::custom("Requested mature UTXO range is no longer available"))?;
         let array = Array::new();
         for entry in slice.iter() {
             array.push(&JsValue::from(entry.clone()));

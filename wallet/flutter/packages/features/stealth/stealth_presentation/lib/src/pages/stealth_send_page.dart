@@ -7,12 +7,31 @@ import 'package:modularity_flutter/modularity_flutter.dart';
 import '../stores/stealth_store.dart';
 
 /// Page to send stealth (private) payment.
-class StealthSendPage extends StatelessWidget {
+class StealthSendPage extends StatefulWidget {
   const StealthSendPage({super.key});
 
   @override
+  State<StealthSendPage> createState() => _StealthSendPageState();
+}
+
+class _StealthSendPageState extends State<StealthSendPage> {
+  late final StealthStore _store;
+
+  @override
+  void initState() {
+    super.initState();
+    _store = ModuleProvider.of(context).get<StealthStore>();
+  }
+
+  void _onRecipientChanged(String value) => _store.setRecipientStealthAddress(value.trim());
+
+  void _onAmountChanged(String value) => _store.setSendAmount(value.trim());
+
+  @override
   Widget build(BuildContext context) {
-    final store = ModuleProvider.of(context).get<StealthStore>();
+    final store = _store;
+
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Send Private Payment')),
@@ -23,21 +42,21 @@ class StealthSendPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
-                color: Theme.of(context).colorScheme.primaryContainer,
+                color: colorScheme.primaryContainer,
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Row(
                     children: [
                       Icon(
                         Icons.visibility_off,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        color: colorScheme.onPrimaryContainer,
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
                           'Private payments hide the amount and recipient on the blockchain.',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            color: colorScheme.onPrimaryContainer,
                           ),
                         ),
                       ),
@@ -53,7 +72,7 @@ class StealthSendPage extends StatelessWidget {
                   counterText: '',
                 ),
                 maxLength: 3000,
-                onChanged: (value) => store.setRecipientStealthAddress(value.trim()),
+                onChanged: _onRecipientChanged,
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(
@@ -61,10 +80,12 @@ class StealthSendPage extends StatelessWidget {
                   labelText: 'Amount',
                   hintText: '0.00',
                   suffixText: 'KAS',
+                  counterText: '',
                   helperText: 'Available: ${store.stealthBalanceInKas.toStringAsFixed(8)} KAS',
                 ),
                 keyboardType: TextInputType.number,
-                onChanged: (value) => store.setSendAmount(value.trim()),
+                maxLength: 30,
+                onChanged: _onAmountChanged,
               ),
               if (store.errorMessage != null) ...[
                 const SizedBox(height: AppSpacing.md),

@@ -47,6 +47,7 @@ class MnemonicVerificationGrid extends StatelessWidget {
         final isCorrect = correctOptionIndex == index;
 
         return VerificationOptionCard(
+          key: ValueKey('option_$index\_$word'),
           word: word,
           index: index,
           isSelected: isSelected,

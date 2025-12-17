@@ -105,10 +105,10 @@ impl Scan {
     }
 
     pub async fn scan_with_address_manager(&self, address_manager: &Arc<AddressManager>, utxo_context: &UtxoContext) -> Result<()> {
-        let params = utxo_context.processor().network_params()?;
-
         let window_size = self.window_size.unwrap_or(DEFAULT_WINDOW_SIZE) as u32;
-        let extent = self.extent.expect("address manager requires an extent");
+        let extent = self.extent.ok_or_else(|| Error::Custom("scan_with_address_manager requires an extent".to_string()))?;
+
+        let params = utxo_context.processor().network_params()?;
 
         let mut cursor: u32 = 0;
         let mut last_address_index = address_manager.index();
@@ -210,8 +210,10 @@ impl Scan {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utxo::UtxoContextBinding;
     use kaspa_addresses::Version;
     use kaspa_rpc_core::{RpcTransactionOutpoint, RpcUtxoEntry, RpcUtxosByAddressesEntry};
+    use std::sync::Arc;
 
     #[test]
     fn filter_scan_window_utxos_skips_unknown_addresses_instead_of_panicking() {
@@ -249,5 +251,33 @@ mod tests {
         let addresses: Vec<Address> = refs.iter().filter_map(|r| r.utxo.address.clone()).collect();
         assert!(addresses.contains(&known_0));
         assert!(addresses.contains(&known_1));
+    }
+
+    #[tokio::test]
+    async fn scan_with_address_manager_returns_error_when_extent_missing() -> Result<()> {
+        let network_id = NetworkId::with_suffix(NetworkType::Testnet, 10);
+
+        // Minimal wallet + derivation manager to obtain an AddressManager instance.
+        let store = crate::wallet::Wallet::resident_store()?;
+        let wallet = Arc::new(crate::wallet::Wallet::try_with_rpc(None, store, Some(network_id))?);
+        let derivation = crate::derivation::AddressDerivationManager::create_legacy_pubkey_managers(
+            &wallet,
+            0,
+            crate::derivation::AddressDerivationMeta::new(0, 0),
+        )?;
+        let address_manager = derivation.receive_address_manager();
+
+        // Minimal UTXO context (RPC is mocked, but we should fail before any RPC call anyway).
+        let rpc_api_mock = Arc::new(crate::tests::RpcCoreMock::new());
+        let processor = UtxoProcessor::new(Some(rpc_api_mock.into()), Some(network_id), None, None);
+        let utxo_context = UtxoContext::new(&processor, UtxoContextBinding::default());
+
+        let balance = Arc::new(AtomicBalance::default());
+        let scan = Scan::new_with_address_manager(address_manager.clone(), &balance, 0, None, None);
+
+        let err = scan.scan_with_address_manager(&address_manager, &utxo_context).await.expect_err("must error without extent");
+        assert!(err.to_string().contains("requires an extent"));
+
+        Ok(())
     }
 }

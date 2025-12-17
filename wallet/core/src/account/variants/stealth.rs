@@ -1339,8 +1339,7 @@ impl Account for StealthAccount {
 
     /// Returns the stealth address encoded as bech32m (qs1...)
     fn receive_address(&self) -> Result<Address> {
-        // CRITICAL: Version::Stealth requires EXACTLY 64 bytes: [32 scan][32 spend]
-        // Address::new() will panic if payload != 64 on mainnet/testnet!
+        // Version::Stealth payload: [32 scan][32 spend]
         let prefix = self.wallet().address_prefix()?.to_stealth().ok_or(Error::InvalidNetworkPrefix)?;
 
         let mut payload = [0u8; 64];

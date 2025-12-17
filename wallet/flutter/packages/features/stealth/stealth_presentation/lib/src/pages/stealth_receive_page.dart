@@ -31,6 +31,9 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
   @override
   Widget build(BuildContext context) {
     final store = ModuleProvider.of(context).get<StealthStore>();
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Receive Private Payment')),
@@ -41,21 +44,21 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
-                color: Theme.of(context).colorScheme.primaryContainer,
+                color: colorScheme.primaryContainer,
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.md),
                   child: Row(
                     children: [
                       Icon(
                         Icons.visibility_off,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        color: colorScheme.onPrimaryContainer,
                       ),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
                           'Share this stealth address to receive private payments.',
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            color: colorScheme.onPrimaryContainer,
                           ),
                         ),
                       ),
@@ -67,7 +70,7 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(AppSpacing.md),
                 ),
                 child: const Center(
@@ -78,12 +81,12 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(AppSpacing.sm),
                 ),
                 child: SelectableText(
                   store.stealthAddress?.value ?? 'Loading...',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: textTheme.bodySmall?.copyWith(
                         fontFamily: 'monospace',
                       ),
                   textAlign: TextAlign.center,
@@ -152,7 +155,7 @@ class _StealthReceivePageState extends State<StealthReceivePage> {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   '${store.scanProgress} / ${store.scanTotal} blocks',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: textTheme.bodySmall,
                   textAlign: TextAlign.center,
                 ),
               ],

@@ -145,6 +145,9 @@ pub fn pay_to_script_hash_signature_script(redeem_script: Vec<u8>, signature: Ve
 ///    or use `address.version` directly instead, where address is the successfully
 ///    returned address.
 pub fn extract_script_pub_key_address(script_public_key: &ScriptPublicKey, prefix: Prefix) -> Result<Address, TxScriptError> {
+    if prefix.is_stealth() {
+        return Err(TxScriptError::PubKeyFormat);
+    }
     let class = ScriptClass::from_script(script_public_key);
     if script_public_key.version() > class.version() {
         return Err(TxScriptError::PubKeyFormat);
@@ -317,5 +320,16 @@ mod tests {
             payload: kaspa_addresses::PayloadVec::from_slice(&[1u8; 31]),
         };
         assert_eq!(pay_to_address_script(&invalid), Err(TxScriptError::InvalidPublicKeyLen(31)));
+    }
+
+    #[test]
+    fn extract_script_pub_key_address_rejects_stealth_prefix() {
+        let spk = ScriptPublicKey::new(
+            ScriptClass::PubKey.version(),
+            ScriptVec::from_slice(&hex::decode("207bc04196f1125e4f2676cd09ed14afb77223b1f62177da5488346323eaa91a69ac").unwrap()),
+        );
+
+        assert_eq!(extract_script_pub_key_address(&spk, Prefix::StealthMainnet), Err(TxScriptError::PubKeyFormat));
+        assert_eq!(extract_script_pub_key_address(&spk, Prefix::StealthTestnet), Err(TxScriptError::PubKeyFormat));
     }
 }

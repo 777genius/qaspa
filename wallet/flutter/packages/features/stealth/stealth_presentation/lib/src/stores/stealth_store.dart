@@ -106,6 +106,12 @@ abstract class _StealthStoreBase with Store {
 
   @action
   void setAccountId(String accountId) {
+    if (currentAccountId != accountId) {
+      // Clear send form when switching accounts to avoid stale data
+      recipientStealthAddress = '';
+      sendAmount = '';
+      errorMessage = null;
+    }
     currentAccountId = accountId;
     loadStealthData();
   }

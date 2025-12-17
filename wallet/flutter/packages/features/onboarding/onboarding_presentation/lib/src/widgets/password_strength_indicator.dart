@@ -9,6 +9,12 @@ class PasswordStrengthIndicator extends StatelessWidget {
   /// Minimum required length
   final int minLength;
 
+  // Cached RegExp patterns for performance (avoid creating on every build)
+  static final _lowercasePattern = RegExp(r'[a-z]');
+  static final _uppercasePattern = RegExp(r'[A-Z]');
+  static final _digitPattern = RegExp(r'[0-9]');
+  static final _specialPattern = RegExp(r'[!@#$%^&*(),.?":{}|<>]');
+
   const PasswordStrengthIndicator({
     super.key,
     required this.password,
@@ -67,11 +73,11 @@ class PasswordStrengthIndicator extends StatelessWidget {
     if (password.length >= 12) score += 2;
     else if (password.length >= 10) score += 1;
 
-    // Character variety
-    if (password.contains(RegExp(r'[a-z]'))) score++;
-    if (password.contains(RegExp(r'[A-Z]'))) score++;
-    if (password.contains(RegExp(r'[0-9]'))) score++;
-    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) score++;
+    // Character variety (using cached patterns)
+    if (password.contains(_lowercasePattern)) score++;
+    if (password.contains(_uppercasePattern)) score++;
+    if (password.contains(_digitPattern)) score++;
+    if (password.contains(_specialPattern)) score++;
 
     if (score <= 2) return PasswordStrength.weak;
     if (score <= 4) return PasswordStrength.fair;
