@@ -118,7 +118,7 @@ impl Header {
     /// big integers.
     #[wasm_bindgen(js_name = asJSON)]
     pub fn as_json(&self) -> String {
-        serde_json::to_string(self.inner()).unwrap()
+        serde_json::to_string(self.inner()).unwrap_or_else(|_| "{}".to_string())
     }
 
     #[wasm_bindgen(getter = version)]
@@ -239,7 +239,7 @@ impl Header {
 
     #[wasm_bindgen(getter = parentsByLevel)]
     pub fn get_parents_by_level_as_js_value(&self) -> JsValue {
-        to_value(&self.inner().parents_by_level).expect("invalid parents_by_level")
+        to_value(&self.inner().parents_by_level).unwrap_or(JsValue::UNDEFINED)
     }
 
     #[wasm_bindgen(setter = parentsByLevel)]

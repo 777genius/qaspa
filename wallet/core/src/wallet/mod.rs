@@ -218,17 +218,21 @@ impl Wallet {
 
     /// Helper fn for creating the wallet using a builder pattern.
     pub fn with_network_id(self, network_id: NetworkId) -> Self {
-        self.set_network_id(&network_id).expect("Unable to set network id");
+        let _ = self.set_network_id(&network_id);
         self
     }
 
     pub fn with_resolver(self, resolver: Resolver) -> Self {
-        self.wrpc_client().set_resolver(resolver).expect("Unable to set resolver");
+        if let Some(wrpc_client) = self.try_wrpc_client() {
+            let _ = wrpc_client.set_resolver(resolver);
+        }
         self
     }
 
     pub fn with_url(self, url: Option<&str>) -> Self {
-        self.wrpc_client().set_url(url).expect("Unable to set url");
+        if let Some(wrpc_client) = self.try_wrpc_client() {
+            let _ = wrpc_client.set_url(url);
+        }
         self
     }
 
