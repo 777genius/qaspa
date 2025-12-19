@@ -622,8 +622,8 @@ impl From<NetworkId> for Params {
             NetworkType::Mainnet => MAINNET_PARAMS,
             NetworkType::Testnet => match value.suffix {
                 Some(10) => TESTNET_PARAMS,
-                Some(x) => panic!("Testnet suffix {} is not supported", x),
-                None => panic!("Testnet suffix not provided"),
+                // Default testnet params are defined for testnet-10; other suffixes are treated as testnet-10.
+                Some(_) | None => TESTNET_PARAMS,
             },
             NetworkType::Devnet => DEVNET_PARAMS,
             NetworkType::Simnet => SIMNET_PARAMS,

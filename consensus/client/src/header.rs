@@ -262,7 +262,7 @@ impl Header {
 
     #[wasm_bindgen(getter = blueWork)]
     pub fn blue_work(&self) -> js_sys::BigInt {
-        self.inner().blue_work.try_into().unwrap_or_else(|err| panic!("invalid blue work: {err}"))
+        self.inner().blue_work.try_into().unwrap_or_else(|_| js_sys::BigInt::from(0u64))
     }
 
     #[wasm_bindgen(js_name = getBlueWorkAsHex)]

@@ -42,7 +42,7 @@ impl Drop for PrivateKeyDataImplV0 {
 pub fn create_master_key_from_mnemonics(seed_words: &str) -> Result<ExtendedPrivateKey<SecretKey>> {
     let mnemonic = Mnemonic::new(seed_words, Language::English)?;
     let seed = mnemonic.to_seed("");
-    let xprv = ExtendedPrivateKey::<SecretKey>::new(seed).unwrap();
+    let xprv = ExtendedPrivateKey::<SecretKey>::new(seed).map_err(|e| Error::Custom(format!("Unable to derive master key: {e}")))?;
     Ok(xprv)
 }
 
@@ -90,21 +90,37 @@ fn get_v0_parts(data: &str) -> Result<CipherData> {
     let mut ptr = data;
     let mut list = vec![];
     while !ptr.is_empty() {
-        let len: usize = ptr[0..5].parse().unwrap();
+        if ptr.len() < 5 {
+            return Err(Error::custom("Unable to decrypt wallet - invalid data"));
+        }
+        let len: usize = ptr[0..5].parse().map_err(|_| Error::custom("Unable to decrypt wallet - invalid data"))?;
+        if len % 2 != 0 {
+            return Err(Error::custom("Unable to decrypt wallet - invalid data"));
+        }
+        let end = 5usize.checked_add(len).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?;
+        if end > ptr.len() {
+            return Err(Error::custom("Unable to decrypt wallet - invalid data"));
+        }
         let mut data = vec![0; len / 2];
-        hex_decode(&ptr.as_bytes()[5..(5 + len)], &mut data).unwrap();
+        hex_decode(&ptr.as_bytes()[5..end], &mut data).map_err(|_| Error::custom("Unable to decrypt wallet - invalid data"))?;
         list.push(data);
-        ptr = &ptr[(5 + len)..];
+        ptr = &ptr[end..];
     }
 
-    let cipher_data = CipherData { content: list[0].clone(), iv: list[1].clone(), salt: list[2].clone(), pass_salt: list[3].clone() };
+    let cipher_data = CipherData {
+        content: list.get(0).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
+        iv: list.get(1).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
+        salt: list.get(2).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
+        pass_salt: list.get(3).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
+    };
 
     Ok(cipher_data)
 }
 
 pub fn get_v0_keydata(data: &str, phrase: &Secret) -> Result<PrivateKeyDataV0> {
     let mut json = get_v0_string(data, phrase)?;
-    let keydata: PrivateKeyDataImplV0 = serde_json::from_str(&json).unwrap();
+    let keydata: PrivateKeyDataImplV0 =
+        serde_json::from_str(&json).map_err(|_| Error::custom("Unable to decrypt wallet - invalid password"))?;
     json.zeroize();
     keydata.try_into()
 }
@@ -112,14 +128,18 @@ fn get_v0_string(data: &str, phrase: &Secret) -> Result<String> {
     let CipherData { content, iv, salt, pass_salt } = get_v0_parts(data)?;
 
     let mut key = [0u8; 64];
-    pbkdf2::<Hmac<Sha1>>(phrase.as_ref(), &pass_salt, 1000, &mut key).expect("pbkdf2 failure");
+    pbkdf2::<Hmac<Sha1>>(phrase.as_ref(), &pass_salt, 1000, &mut key).map_err(|_| Error::custom("Unable to decrypt wallet"))?;
 
     let key_hex = hex_string(&key).as_bytes().to_vec();
     key.zeroize();
     let mut key_out = [0u8; 32];
     evpkdf::<Md5>(&key_hex, &salt, 1, &mut key_out);
-    let key: [u8; 32] = key_out[0..32].try_into().unwrap();
-    let iv: [u8; 16] = iv[0..16].try_into().unwrap();
+    let key: [u8; 32] = key_out;
+    let iv: [u8; 16] = iv
+        .get(..16)
+        .ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?
+        .try_into()
+        .map_err(|_| Error::custom("Unable to decrypt wallet - invalid data"))?;
 
     let mut content = content.to_vec();
     let json = aes_decrypt_v0(&key, &iv, &mut content)?;
@@ -129,8 +149,15 @@ fn get_v0_string(data: &str, phrase: &Secret) -> Result<String> {
 
 fn aes_decrypt_v0(key: &[u8], iv: &[u8], content: &mut [u8]) -> Result<String> {
     Aes256CfbDec::new(key.into(), iv.into()).decrypt(content);
-    let last = content.len() - *content.last().unwrap() as usize;
-    String::from_utf8(content[0..last].to_vec()).map_err(|_| Error::custom("Unable to decrypt wallet - invalid password"))
+    let Some(pad) = content.last().copied() else {
+        return Err(Error::custom("Unable to decrypt wallet - invalid password"));
+    };
+    let pad = pad as usize;
+    if pad == 0 || pad > content.len() {
+        return Err(Error::custom("Unable to decrypt wallet - invalid password"));
+    }
+    let last = content.len() - pad;
+    String::from_utf8(content[..last].to_vec()).map_err(|_| Error::custom("Unable to decrypt wallet - invalid password"))
 }
 
 // ---
@@ -230,4 +257,13 @@ fn test_v0_padding() {
         // println!("{}: s: {} text: {}", n, s, text);
         assert_eq!(text, s);
     }
+}
+
+#[test]
+fn malformed_v0_input_returns_error_instead_of_panicking() {
+    let secret = Secret::new(b"x".to_vec());
+
+    assert!(get_v0_keydata("abc", &secret).is_err());
+    assert!(get_v0_string("00001a", &secret).is_err()); // odd hex length
+    assert!(get_v0_string("99999", &secret).is_err()); // length exceeds remaining data
 }

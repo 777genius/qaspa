@@ -123,6 +123,12 @@ impl AddressManager {
 
     pub fn get_range_with_args(&self, indexes: std::ops::Range<u32>, update_indexes: bool) -> Result<Vec<Address>> {
         let manager_length = self.pubkey_managers.len();
+        if manager_length == 0 {
+            return Err("Invalid keys: keys are required for address derivation".to_string().into());
+        }
+        if indexes.start >= indexes.end {
+            return Ok(vec![]);
+        }
 
         let list = self.pubkey_managers.iter().map(|m| m.get_range(indexes.clone()));
 
@@ -131,7 +137,7 @@ impl AddressManager {
         let is_multisig = manager_length > 1;
 
         if !is_multisig {
-            let keys = manager_keys.first().unwrap().clone();
+            let keys = manager_keys.first().ok_or_else(|| Error::Custom("Invalid address derivation state".to_string()))?.clone();
             let mut addresses = vec![];
             for key in keys {
                 addresses.push(self.create_address(vec![key])?);
@@ -143,14 +149,21 @@ impl AddressManager {
         }
 
         let mut addresses = vec![];
-        for key_index in indexes.clone() {
-            let mut keys = vec![];
-            for i in 0..manager_length {
-                let Some(k) = manager_keys.get(i).unwrap().get(key_index as usize) else { continue };
-                keys.push(*k);
+        let expected_len = (indexes.end - indexes.start) as usize;
+        for keys in manager_keys.iter() {
+            if keys.len() != expected_len {
+                return Err(Error::Custom("Invalid address derivation key range".to_string()));
             }
-            if keys.is_empty() {
-                continue;
+        }
+
+        for offset in 0..expected_len {
+            let mut keys = Vec::with_capacity(manager_length);
+            for keys_for_manager in manager_keys.iter() {
+                let key = keys_for_manager
+                    .get(offset)
+                    .copied()
+                    .ok_or_else(|| Error::Custom("Invalid address derivation key range".to_string()))?;
+                keys.push(key);
             }
             addresses.push(self.create_address(keys)?);
         }
@@ -543,6 +556,77 @@ pub async fn create_xpub_from_xprv(
     let xkey = ExtendedPublicKey { public_key: secret_key.get_public_key(), attrs };
 
     Ok(xkey)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::account::variants::MULTISIG_ACCOUNT_KIND;
+    use crate::wallet::Wallet;
+    use kaspa_consensus_core::network::{NetworkId, NetworkType};
+    use kaspa_wallet_keys::derivation::traits::PubkeyDerivationManagerTrait;
+    use secp256k1::{PublicKey, SecretKey, SECP256K1};
+    use std::sync::Mutex as StdMutex;
+
+    struct MockPubkeyManager {
+        base: u8,
+        index: StdMutex<u32>,
+    }
+
+    impl MockPubkeyManager {
+        fn new(base: u8, index: u32) -> Self {
+            Self { base, index: StdMutex::new(index) }
+        }
+
+        fn derive(&self, index: u32) -> PublicKey {
+            let mut bytes = [0u8; 32];
+            bytes[0] = self.base.max(1);
+            bytes[28..].copy_from_slice(&index.to_le_bytes());
+            let sk = SecretKey::from_slice(&bytes).unwrap_or_else(|_| SecretKey::from_slice(&[1u8; 32]).expect("fallback secret"));
+            PublicKey::from_secret_key(SECP256K1, &sk)
+        }
+    }
+
+    impl PubkeyDerivationManagerTrait for MockPubkeyManager {
+        fn new_pubkey(&self) -> kaspa_wallet_keys::result::Result<PublicKey> {
+            let next = self.index()? + 1;
+            self.set_index(next)?;
+            self.current_pubkey()
+        }
+
+        fn current_pubkey(&self) -> kaspa_wallet_keys::result::Result<PublicKey> {
+            Ok(self.derive(self.index()?))
+        }
+
+        fn index(&self) -> kaspa_wallet_keys::result::Result<u32> {
+            Ok(*self.index.lock().map_err(|_| kaspa_wallet_keys::error::Error::Custom("lock poisoned".to_string()))?)
+        }
+
+        fn set_index(&self, index: u32) -> kaspa_wallet_keys::result::Result<()> {
+            *self.index.lock().map_err(|_| kaspa_wallet_keys::error::Error::Custom("lock poisoned".to_string()))? = index;
+            Ok(())
+        }
+
+        fn get_range(&self, range: std::ops::Range<u32>) -> kaspa_wallet_keys::result::Result<Vec<PublicKey>> {
+            Ok(range.map(|i| self.derive(i)).collect())
+        }
+    }
+
+    #[test]
+    fn multisig_get_range_works_for_nonzero_index_range() {
+        let store = Wallet::resident_store().expect("store");
+        let wallet =
+            Arc::new(Wallet::try_with_rpc(None, store, Some(NetworkId::with_suffix(NetworkType::Testnet, 10))).expect("wallet"));
+
+        let m1: Arc<dyn PubkeyDerivationManagerTrait> = Arc::new(MockPubkeyManager::new(7, 0));
+        let m2: Arc<dyn PubkeyDerivationManagerTrait> = Arc::new(MockPubkeyManager::new(9, 0));
+
+        let manager = AddressManager::new(wallet, MULTISIG_ACCOUNT_KIND.into(), vec![m1, m2], false, 0, 2).expect("mgr");
+        let addresses = manager.get_range(10..13).expect("addresses");
+
+        assert_eq!(addresses.len(), 3);
+        assert!(addresses.iter().all(|a| a.prefix == Prefix::Testnet));
+    }
 }
 
 pub fn build_derivate_path(

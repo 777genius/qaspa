@@ -42,7 +42,11 @@ async fn get_vcc_v2() -> Result<()> {
     let resolver = None;
 
     let network_type = NetworkType::Mainnet;
-    let selected_network = Some(NetworkId::new(network_type));
+    // Testnet requires a suffix; default to 10 (testnet-10).
+    let selected_network = Some(match network_type {
+        NetworkType::Testnet => NetworkId::with_suffix(NetworkType::Testnet, 10),
+        _ => NetworkId::new(network_type),
+    });
 
     // Advanced options
     let subscription_context = None;

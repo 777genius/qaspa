@@ -37,7 +37,11 @@ async fn check_node_status() -> Result<()> {
     // Define the network your Kaspa node is connected to
     // You can select NetworkType::Mainnet, NetworkType::Testnet, NetworkType::Devnet, NetworkType::Simnet
     let network_type = NetworkType::Mainnet;
-    let selected_network = Some(NetworkId::new(network_type));
+    // Testnet requires a suffix; default to 10 (testnet-10).
+    let selected_network = Some(match network_type {
+        NetworkType::Testnet => NetworkId::with_suffix(NetworkType::Testnet, 10),
+        _ => NetworkId::new(network_type),
+    });
 
     // Advanced options
     let subscription_context = None;
