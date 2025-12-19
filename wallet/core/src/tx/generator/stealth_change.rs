@@ -241,12 +241,11 @@ impl StealthChangeCreatorImpl {
 
 impl StealthChangeCreator for StealthChangeCreatorImpl {
     fn create_change_output(&self, amount: u64) -> Result<(TransactionOutput, PendingStealthChange)> {
-        use kaspa_stealth::{create_stealth_output_with_blinding, derive_spending_key};
+        use kaspa_stealth::{derive_spending_key, try_create_stealth_output_with_blinding};
         use kaspa_txscript::pay_to_stealth;
-        use rand::rngs::OsRng;
 
         // 1. Generate ephemeral output with blinding factor
-        let (ephemeral_output, blinding_factor) = create_stealth_output_with_blinding(&self.stealth_address, &mut OsRng)
+        let (ephemeral_output, blinding_factor) = try_create_stealth_output_with_blinding(&self.stealth_address)
             .map_err(|e| crate::error::Error::Custom(format!("Stealth output creation failed: {}", e)))?;
 
         // 2. Pre-calculate spending key (we know the spend_secret!)
@@ -270,13 +269,12 @@ mod tests {
 
     #[test]
     fn test_pending_stealth_change_debug_redacts_secrets() {
-        use kaspa_stealth::{create_stealth_output_with_blinding, derive_spending_key, StealthSecretKey};
-        use rand::rngs::OsRng;
+        use kaspa_stealth::{derive_spending_key, try_create_stealth_output_with_blinding, StealthSecretKey};
 
         let keys = StealthSecretKey::generate();
         let address = keys.to_address();
 
-        let (ephemeral_output, blinding_factor) = create_stealth_output_with_blinding(&address, &mut OsRng).unwrap();
+        let (ephemeral_output, blinding_factor) = try_create_stealth_output_with_blinding(&address).unwrap();
         let spending_secret = derive_spending_key(&keys.spend_secret(), &blinding_factor).unwrap();
 
         let pending = PendingStealthChange::new(ephemeral_output, blinding_factor, spending_secret);

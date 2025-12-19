@@ -25,6 +25,61 @@ use crate::hash::{BlindingFactorHash, ViewTagHash};
 use crate::keys::{EphemeralOutput, StealthAddress};
 use rand_core::CryptoRngCore;
 use secp256k1::{Scalar, SecretKey, SECP256K1};
+use zeroize::Zeroize;
+
+fn try_generate_secret_key() -> Result<SecretKey> {
+    const MAX_ATTEMPTS: usize = 128;
+
+    for _ in 0..MAX_ATTEMPTS {
+        let mut bytes = [0u8; 32];
+        getrandom::getrandom(&mut bytes).map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
+
+        let secret = match SecretKey::from_slice(&bytes) {
+            Ok(sk) => {
+                bytes.zeroize();
+                sk
+            }
+            Err(_) => {
+                bytes.zeroize();
+                continue;
+            }
+        };
+
+        return Ok(secret);
+    }
+
+    Err(StealthError::RandomnessFailed(format!("failed to generate valid secret key after {MAX_ATTEMPTS} attempts")))
+}
+
+/// Creates a stealth output using the system RNG via `getrandom` (fallible).
+///
+/// This is intended for environments where `rand` RNG adapters may panic on RNG failures (notably some WASM setups).
+pub fn try_create_stealth_output(address: &StealthAddress) -> Result<EphemeralOutput> {
+    // Step 1: Generate ephemeral secret key r (fallible)
+    let ephemeral_secret = try_generate_secret_key()?;
+
+    // Step 2: Compute R = r * G (ephemeral public key)
+    let ephemeral_pubkey = ephemeral_secret.public_key(SECP256K1);
+
+    // Step 3: Compute shared secret S = r * PubScan (ECDH)
+    let shared_secret = compute_shared_secret_xonly(&ephemeral_secret, &address.scan_pubkey);
+
+    // Step 4: Compute view tag = Hash("StealthViewTag", S)[0]
+    let view_tag = ViewTagHash::compute_tag(shared_secret);
+
+    // Step 5: Compute blinding factor t = Hash("StealthBlindingFactor", S)
+    let blinding_hash = BlindingFactorHash::hash(shared_secret);
+
+    // Convert hash to scalar (mod n where n is the curve order)
+    let blinding_scalar = Scalar::from_be_bytes(blinding_hash.as_bytes())
+        .map_err(|_| StealthError::TweakFailed("blinding factor scalar overflow".into()))?;
+
+    // Step 6: Compute P_dest = PubSpend + t*G
+    let (destination_pubkey, _parity) =
+        address.spend_pubkey.add_tweak(SECP256K1, &blinding_scalar).map_err(|e| StealthError::TweakFailed(e.to_string()))?;
+
+    Ok(EphemeralOutput::new(ephemeral_pubkey, view_tag, destination_pubkey))
+}
 
 /// Creates a stealth output for sending funds to a stealth address.
 ///
@@ -83,6 +138,25 @@ pub fn create_stealth_output<R: CryptoRngCore>(address: &StealthAddress, rng: &m
         address.spend_pubkey.add_tweak(SECP256K1, &blinding_scalar).map_err(|e| StealthError::TweakFailed(e.to_string()))?;
 
     Ok(EphemeralOutput::new(ephemeral_pubkey, view_tag, destination_pubkey))
+}
+
+/// Creates a stealth output AND returns the blinding factor using system RNG via `getrandom` (fallible).
+pub fn try_create_stealth_output_with_blinding(address: &StealthAddress) -> Result<(EphemeralOutput, Scalar)> {
+    let ephemeral_secret = try_generate_secret_key()?;
+    let ephemeral_pubkey = ephemeral_secret.public_key(SECP256K1);
+
+    let shared_secret = compute_shared_secret_xonly(&ephemeral_secret, &address.scan_pubkey);
+    let view_tag = ViewTagHash::compute_tag(shared_secret);
+
+    let blinding_hash = BlindingFactorHash::hash(shared_secret);
+    let blinding_factor = Scalar::from_be_bytes(blinding_hash.as_bytes())
+        .map_err(|_| StealthError::TweakFailed("blinding factor scalar overflow".into()))?;
+
+    let (destination_pubkey, _parity) =
+        address.spend_pubkey.add_tweak(SECP256K1, &blinding_factor).map_err(|e| StealthError::TweakFailed(e.to_string()))?;
+
+    let output = EphemeralOutput::new(ephemeral_pubkey, view_tag, destination_pubkey);
+    Ok((output, blinding_factor))
 }
 
 /// Creates a stealth output AND returns the blinding factor.

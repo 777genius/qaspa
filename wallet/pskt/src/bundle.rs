@@ -352,11 +352,11 @@ mod tests {
     fn script_sig_to_address_normalizes_stealth_prefix() {
         let (_, redeem_script) = mock_context();
 
-        let addr_test = script_sig_to_address(&redeem_script, Prefix::StealthTestnet).expect("address");
+        let addr_test = script_sig_to_address(redeem_script, Prefix::StealthTestnet).expect("address");
         assert_eq!(addr_test.prefix, Prefix::Testnet);
         assert_eq!(addr_test.version, kaspa_addresses::Version::ScriptHash);
 
-        let addr_main = script_sig_to_address(&redeem_script, Prefix::StealthMainnet).expect("address");
+        let addr_main = script_sig_to_address(redeem_script, Prefix::StealthMainnet).expect("address");
         assert_eq!(addr_main.prefix, Prefix::Mainnet);
         assert_eq!(addr_main.version, kaspa_addresses::Version::ScriptHash);
     }

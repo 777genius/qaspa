@@ -108,7 +108,7 @@ fn get_v0_parts(data: &str) -> Result<CipherData> {
     }
 
     let cipher_data = CipherData {
-        content: list.get(0).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
+        content: list.first().ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
         iv: list.get(1).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
         salt: list.get(2).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),
         pass_salt: list.get(3).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?.clone(),

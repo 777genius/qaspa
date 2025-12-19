@@ -5,7 +5,7 @@ use crate::wasm::tx::generator::*;
 use kaspa_addresses::Version;
 use kaspa_consensus_client::*;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
-use kaspa_stealth::{create_stealth_output, StealthAddress};
+use kaspa_stealth::{try_create_stealth_output, StealthAddress};
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use kaspa_wasm_core::types::BinaryT;
@@ -18,8 +18,7 @@ fn payment_outputs_to_transaction_outputs(outputs: PaymentOutputs) -> crate::res
             let stealth_addr = StealthAddress::try_from_slice(&output.address.payload)
                 .map_err(|_| Error::custom("Invalid stealth address payload"))?;
             // Generate ephemeral output with random ephemeral key (required for stealth scripts)
-            let ephemeral_output =
-                create_stealth_output(&stealth_addr, &mut rand::thread_rng()).map_err(|e| Error::custom(format!("{e}")))?;
+            let ephemeral_output = try_create_stealth_output(&stealth_addr).map_err(|e| Error::custom(format!("{e}")))?;
             pay_to_stealth(&ephemeral_output)
         } else {
             pay_to_address_script(&output.address).map_err(|e| Error::custom(e.to_string()))?

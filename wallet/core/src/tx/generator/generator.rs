@@ -70,7 +70,7 @@ use kaspa_consensus_client::UtxoEntry;
 use kaspa_consensus_core::constants::UNACCEPTED_DAA_SCORE;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspa_consensus_core::tx::{Transaction, TransactionInput, TransactionOutpoint, TransactionOutput};
-use kaspa_stealth::{create_stealth_output, StealthAddress};
+use kaspa_stealth::StealthAddress;
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use rand::{rngs::OsRng, Rng};
 use std::collections::VecDeque;
@@ -425,7 +425,7 @@ impl Generator {
                         // and generate ephemeral output with random ephemeral key
                         let stealth_addr = StealthAddress::try_from_slice(&output.address.payload)
                             .map_err(|_| Error::Custom("Invalid stealth address payload".to_string()))?;
-                        let ephemeral_output = create_stealth_output(&stealth_addr, &mut rand::thread_rng())
+                        let ephemeral_output = kaspa_stealth::try_create_stealth_output(&stealth_addr)
                             .map_err(|e| Error::Custom(format!("Failed to create stealth output: {}", e)))?;
                         pay_to_stealth(&ephemeral_output)
                     } else {

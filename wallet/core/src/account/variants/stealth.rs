@@ -1791,13 +1791,12 @@ struct StealthChangeCreatorImpl {
 
 impl StealthChangeCreator for StealthChangeCreatorImpl {
     fn create_change_output(&self, amount: u64) -> Result<(kaspa_consensus_core::tx::TransactionOutput, PendingStealthChange)> {
-        use kaspa_stealth::create_stealth_output_with_blinding;
+        use kaspa_stealth::try_create_stealth_output_with_blinding;
         use kaspa_txscript::pay_to_stealth;
-        use rand::rngs::OsRng;
 
         // Create ephemeral output with blinding factor
         let (ephemeral_output, blinding_factor) =
-            create_stealth_output_with_blinding(&self.stealth_address, &mut OsRng).map_err(|e| Error::Custom(e.to_string()))?;
+            try_create_stealth_output_with_blinding(&self.stealth_address).map_err(|e| Error::Custom(e.to_string()))?;
 
         // Pre-compute spending key immediately (critical for change recovery)
         let spending_secret = derive_spending_key(&self.spend_secret, &blinding_factor).map_err(|e| Error::Custom(e.to_string()))?;

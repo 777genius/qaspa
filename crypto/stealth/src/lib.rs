@@ -101,7 +101,10 @@ pub use keys::{
     STEALTH_ADDRESS_SIZE, XONLY_PUBKEY_SIZE,
 };
 pub use receiver::{check_view_tag, derive_spending_key, scan_output, try_scan_output, verify_derived_key, ScanResult};
-pub use sender::{create_stealth_output, create_stealth_output_with_blinding, create_stealth_outputs_batch};
+pub use sender::{
+    create_stealth_output, create_stealth_output_with_blinding, create_stealth_outputs_batch, try_create_stealth_output,
+    try_create_stealth_output_with_blinding,
+};
 
 // Re-export script constants for convenience
 // These are also defined in kaspa-txscript, but re-exported here for users who only depend on kaspa-stealth

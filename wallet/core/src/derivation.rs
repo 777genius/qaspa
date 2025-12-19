@@ -558,6 +558,32 @@ pub async fn create_xpub_from_xprv(
     Ok(xkey)
 }
 
+pub fn build_derivate_path(
+    account_kind: &AccountKind,
+    account_index: u64,
+    cosigner_index: u32,
+    address_type: AddressType,
+) -> Result<DerivationPath> {
+    match account_kind.as_ref() {
+        LEGACY_ACCOUNT_KIND => Ok(WalletDerivationManagerV0::build_derivate_path(account_index, Some(address_type))?),
+        BIP32_ACCOUNT_KIND => Ok(WalletDerivationManager::build_derivate_path(false, account_index, None, Some(address_type))?),
+        MULTISIG_ACCOUNT_KIND => {
+            Ok(WalletDerivationManager::build_derivate_path(true, account_index, Some(cosigner_index), Some(address_type))?)
+        }
+        _ => Err(Error::InvalidAccountKind),
+    }
+}
+
+pub fn build_derivate_paths(
+    account_kind: &AccountKind,
+    account_index: u64,
+    cosigner_index: u32,
+) -> Result<(DerivationPath, DerivationPath)> {
+    let receive_path = build_derivate_path(account_kind, account_index, cosigner_index, AddressType::Receive)?;
+    let change_path = build_derivate_path(account_kind, account_index, cosigner_index, AddressType::Change)?;
+    Ok((receive_path, change_path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -627,30 +653,4 @@ mod tests {
         assert_eq!(addresses.len(), 3);
         assert!(addresses.iter().all(|a| a.prefix == Prefix::Testnet));
     }
-}
-
-pub fn build_derivate_path(
-    account_kind: &AccountKind,
-    account_index: u64,
-    cosigner_index: u32,
-    address_type: AddressType,
-) -> Result<DerivationPath> {
-    match account_kind.as_ref() {
-        LEGACY_ACCOUNT_KIND => Ok(WalletDerivationManagerV0::build_derivate_path(account_index, Some(address_type))?),
-        BIP32_ACCOUNT_KIND => Ok(WalletDerivationManager::build_derivate_path(false, account_index, None, Some(address_type))?),
-        MULTISIG_ACCOUNT_KIND => {
-            Ok(WalletDerivationManager::build_derivate_path(true, account_index, Some(cosigner_index), Some(address_type))?)
-        }
-        _ => Err(Error::InvalidAccountKind),
-    }
-}
-
-pub fn build_derivate_paths(
-    account_kind: &AccountKind,
-    account_index: u64,
-    cosigner_index: u32,
-) -> Result<(DerivationPath, DerivationPath)> {
-    let receive_path = build_derivate_path(account_kind, account_index, cosigner_index, AddressType::Receive)?;
-    let change_path = build_derivate_path(account_kind, account_index, cosigner_index, AddressType::Change)?;
-    Ok((receive_path, change_path))
 }

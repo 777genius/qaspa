@@ -11,7 +11,7 @@ use crate::tx::generator::stealth_change::PendingStealthChange;
 use crate::tx::{DataKind, Generator, MAXIMUM_STANDARD_TRANSACTION_MASS};
 use crate::utxo::{UtxoContext, UtxoEntryId, UtxoEntryReference, UtxoIterator};
 use kaspa_consensus_core::hashing::sighash_type::SigHashType;
-use kaspa_consensus_core::sign::{sign_input, sign_with_multiple_v2, Signed};
+use kaspa_consensus_core::sign::{sign_with_multiple_v2, try_sign_input, Signed};
 use kaspa_consensus_core::tx::{SignableTransaction, Transaction, TransactionId, TransactionInput, TransactionOutput};
 use kaspa_rpc_core::{RpcTransaction, RpcTransactionId};
 
@@ -365,7 +365,7 @@ impl PendingTransaction {
         let mutable_tx = self.inner.signable_tx.lock()?.clone();
         let verifiable_tx = mutable_tx.as_verifiable();
 
-        Ok(sign_input(&verifiable_tx, input_index, private_key, hash_type))
+        try_sign_input(&verifiable_tx, input_index, private_key, hash_type).map_err(|e| Error::Custom(format!("{e}")))
     }
 
     pub fn fill_input(&self, input_index: usize, signature_script: Vec<u8>) -> Result<()> {
@@ -381,7 +381,7 @@ impl PendingTransaction {
 
         let signature_script = {
             let verifiable_tx = &mutable_tx.as_verifiable();
-            sign_input(verifiable_tx, input_index, private_key, hash_type)
+            try_sign_input(verifiable_tx, input_index, private_key, hash_type).map_err(|e| Error::Custom(format!("{e}")))?
         };
 
         mutable_tx.tx.inputs[input_index].signature_script = signature_script;

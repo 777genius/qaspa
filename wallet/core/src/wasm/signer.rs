@@ -3,7 +3,7 @@ use crate::result::Result;
 use js_sys::Array;
 use kaspa_consensus_client::{sign_with_multiple_v3, Transaction};
 use kaspa_consensus_core::hashing::wasm::SighashType;
-use kaspa_consensus_core::sign::sign_input;
+use kaspa_consensus_core::sign::try_sign_input;
 use kaspa_consensus_core::tx::PopulatedTransaction;
 use kaspa_consensus_core::{hashing::sighash_type::SIG_HASH_ALL, sign::verify};
 use kaspa_hashes::Hash;
@@ -79,12 +79,13 @@ pub fn create_input_signature(
     let (cctx, utxos) = tx.tx_and_utxos()?;
     let populated_transaction = PopulatedTransaction::new(&cctx, utxos);
 
-    let signature = sign_input(
+    let signature = try_sign_input(
         &populated_transaction,
         input_index.into(),
         &private_key.secret_bytes(),
         sighash_type.unwrap_or(SighashType::All).into(),
-    );
+    )
+    .map_err(|e| Error::custom(format!("{e}")))?;
 
     Ok(signature.to_hex().into())
 }

@@ -168,14 +168,27 @@ impl Args {
 
         #[cfg(feature = "devnet-prealloc")]
         if let Some(num_prealloc_utxos) = self.num_prealloc_utxos {
-            config.initial_utxo_set = Arc::new(self.generate_prealloc_utxos(num_prealloc_utxos));
+            let prealloc = self.generate_prealloc_utxos(num_prealloc_utxos);
+            if !prealloc.is_empty() {
+                config.initial_utxo_set = Arc::new(prealloc);
+            }
         }
     }
 
     #[cfg(feature = "devnet-prealloc")]
     pub fn generate_prealloc_utxos(&self, num_prealloc_utxos: u64) -> kaspa_consensus_core::utxo::utxo_collection::UtxoCollection {
-        let addr = Address::try_from(&self.prealloc_address.as_ref().unwrap()[..]).unwrap();
-        let spk = pay_to_address_script(&addr).unwrap();
+        let Some(prealloc_address) = self.prealloc_address.as_deref() else {
+            return Default::default();
+        };
+
+        let Ok(addr) = Address::try_from(prealloc_address) else {
+            return Default::default();
+        };
+
+        let Ok(spk) = pay_to_address_script(&addr) else {
+            return Default::default();
+        };
+
         (1..=num_prealloc_utxos)
             .map(|i| {
                 (
@@ -411,8 +424,20 @@ a large RAM (~64GB) can set this value to ~3.0-4.0 and gain superior performance
 
     #[cfg(feature = "devnet-prealloc")]
     let cmd = cmd
-        .arg(Arg::new("num-prealloc-utxos").long("num-prealloc-utxos").require_equals(true).value_parser(clap::value_parser!(u64)))
-        .arg(Arg::new("prealloc-address").long("prealloc-address").require_equals(true).value_parser(clap::value_parser!(String)))
+        .arg(
+            Arg::new("num-prealloc-utxos")
+                .long("num-prealloc-utxos")
+                .require_equals(true)
+                .value_parser(clap::value_parser!(u64))
+                .requires("prealloc-address"),
+        )
+        .arg(
+            Arg::new("prealloc-address")
+                .long("prealloc-address")
+                .require_equals(true)
+                .value_parser(clap::value_parser!(String))
+                .requires("num-prealloc-utxos"),
+        )
         .arg(Arg::new("prealloc-amount").long("prealloc-amount").require_equals(true).value_parser(clap::value_parser!(u64)));
 
     cmd
