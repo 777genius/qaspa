@@ -1,0 +1,65 @@
+name: admin
+description: Qaspa Testnet Admin Panel
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Core packages
+  admin_domain:
+    path: ../../packages/core/admin_domain
+  admin_data:
+    path: ../../packages/core/admin_data
+  admin_design_system:
+    path: ../../packages/ui/admin_design_system
+
+  # Feature packages
+  dashboard_domain:
+    path: ../../packages/features/dashboard/dashboard_domain
+  dashboard_presentation:
+    path: ../../packages/features/dashboard/dashboard_presentation
+  nodes_domain:
+    path: ../../packages/features/nodes/nodes_domain
+  nodes_presentation:
+    path: ../../packages/features/nodes/nodes_presentation
+  miners_domain:
+    path: ../../packages/features/miners/miners_domain
+  miners_presentation:
+    path: ../../packages/features/miners/miners_presentation
+  logs_domain:
+    path: ../../packages/features/logs/logs_domain
+  logs_presentation:
+    path: ../../packages/features/logs/logs_presentation
+  dag_domain:
+    path: ../../packages/core/dag_domain
+  dag_data:
+    path: ../../packages/core/dag_data
+  dag_presentation:
+    path: ../../packages/features/dag/dag_presentation
+
+  # Dependencies
+  go_router: ^15.1.2
+  get_it: ^8.0.3
+  injectable: ^2.7.0
+  modularity_core: ^0.1.0
+  modularity_flutter: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.14
+  injectable_generator: ^2.7.0
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true

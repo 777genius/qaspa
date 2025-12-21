@@ -1,0 +1,60 @@
+[package]
+name = "testnet-controller"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "testnet-controller"
+path = "src/main.rs"
+
+[dependencies]
+# Kaspa internal
+kaspa-grpc-client.workspace = true
+kaspa-rpc-core.workspace = true
+kaspa-consensus-core.workspace = true
+kaspa-addresses.workspace = true
+kaspa-hashes.workspace = true
+
+# Web framework
+axum = { version = "0.8", features = ["ws", "macros"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+
+# Docker
+bollard = "0.18"
+
+# HTTP client for miner stats
+reqwest = { version = "0.12", features = ["json"] }
+
+# Database ORM
+sea-orm = { version = "1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = "1.1"
+migration = { path = "migration" }
+
+# Async runtime
+tokio = { workspace = true, features = ["full", "signal"] }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utils
+thiserror = { workspace = true }
+tracing = "0.1"
+regex = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dashmap = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+anyhow = "1.0"
+chrono = { workspace = true }
+
+[lints]
+workspace = true

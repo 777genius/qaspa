@@ -1,0 +1,29 @@
+name: testnet_admin_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+dev_dependencies:
+  build_runner: ^2.4.15
+  mobx_codegen: ^2.6.1
+  injectable_generator: ^2.6.2
+  json_serializable: ^6.9.4
+  freezed: ^3.0.6
+
+workspace:
+  - apps/admin
+  - packages/core/admin_domain
+  - packages/core/admin_data
+  - packages/core/dag_domain
+  - packages/core/dag_data
+  - packages/ui/admin_design_system
+  - packages/features/dashboard/dashboard_domain
+  - packages/features/dashboard/dashboard_presentation
+  - packages/features/nodes/nodes_domain
+  - packages/features/nodes/nodes_presentation
+  - packages/features/miners/miners_domain
+  - packages/features/miners/miners_presentation
+  - packages/features/logs/logs_domain
+  - packages/features/logs/logs_presentation
+  - packages/features/dag/dag_presentation

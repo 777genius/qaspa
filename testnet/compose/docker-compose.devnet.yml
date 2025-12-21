@@ -1,0 +1,259 @@
+version: "3.9"
+
+networks:
+  qaspa_testnet_net:
+    name: qaspa_testnet_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  seed_data:
+  peer1_data:
+  peer2_data:
+  postgres_data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qaspa_postgres
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.5
+    # Port exposed only for debugging; controller connects via Docker network
+    # ports:
+    #   - "127.0.0.1:5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: qaspa
+      POSTGRES_PASSWORD: qaspa_dev
+      POSTGRES_DB: qaspa_testnet
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: database
+      qaspa.name: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qaspa -d qaspa_testnet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  seed:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.kaspad
+    image: qaspa/kaspad:latest
+    container_name: qaspa_seed
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.10
+    ports:
+      - "127.0.0.1:16210:16210"
+      - "127.0.0.1:16211:16211"
+    volumes:
+      - seed_data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+    command:
+      - /app/kaspad
+      - --devnet
+      - --listen=0.0.0.0:16211
+      - --rpclisten=0.0.0.0:16210
+      - --nodnsseed
+      - --utxoindex
+      - --enable-unsynced-mining
+      - --appdir=/app/data
+      - --loglevel=info
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: seed
+      qaspa.name: seed
+      qaspa.ports.p2p: "16211"
+      qaspa.ports.grpc: "16210"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 16210 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  peer-1:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.kaspad
+    image: qaspa/kaspad:latest
+    container_name: qaspa_peer_1
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.11
+    ports:
+      - "127.0.0.1:16310:16310"
+      - "127.0.0.1:16311:16311"
+    volumes:
+      - peer1_data:/app/data
+    command:
+      - /app/kaspad
+      - --devnet
+      - --listen=0.0.0.0:16311
+      - --rpclisten=0.0.0.0:16310
+      - --connect=172.28.0.10:16211
+      - --nodnsseed
+      - --appdir=/app/data
+      - --loglevel=info
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: peer
+      qaspa.name: peer-1
+      qaspa.ports.p2p: "16311"
+      qaspa.ports.grpc: "16310"
+    depends_on:
+      seed:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 16310 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  peer-2:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.kaspad
+    image: qaspa/kaspad:latest
+    container_name: qaspa_peer_2
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.12
+    ports:
+      - "127.0.0.1:16410:16410"
+      - "127.0.0.1:16411:16411"
+    volumes:
+      - peer2_data:/app/data
+    command:
+      - /app/kaspad
+      - --devnet
+      - --listen=0.0.0.0:16411
+      - --rpclisten=0.0.0.0:16410
+      - --connect=172.28.0.10:16211
+      - --nodnsseed
+      - --appdir=/app/data
+      - --loglevel=info
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: peer
+      qaspa.name: peer-2
+      qaspa.ports.p2p: "16411"
+      qaspa.ports.grpc: "16410"
+    depends_on:
+      seed:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 16410 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  rothschild:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.rothschild
+    image: qaspa/rothschild:latest
+    container_name: qaspa_rothschild
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.20
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+    command:
+      - /app/rothschild
+      - --rpcserver=grpc://172.28.0.10:16210
+      - --tps=1
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: txgen
+      qaspa.name: rothschild
+    depends_on:
+      seed:
+        condition: service_healthy
+    profiles:
+      - txgen
+    restart: unless-stopped
+
+  controller:
+    build:
+      context: ../..
+      dockerfile: testnet/docker/Dockerfile.controller
+    image: qaspa/controller:latest
+    container_name: qaspa_controller
+    # Run as root for Docker socket access on macOS
+    # For production: use Docker socket proxy (e.g., tecnativa/docker-socket-proxy)
+    user: root
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.100
+    ports:
+      # External access is restricted to localhost only via 127.0.0.1 binding
+      - "127.0.0.1:8081:8080"
+    volumes:
+      # SECURITY WARNING: Docker socket access grants near-root privileges.
+      # A compromised controller could create containers with host mounts.
+      # For production: use Docker socket proxy (e.g., tecnativa/docker-socket-proxy)
+      # or restrict API access to specific endpoints only.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../admin_flutter/apps/admin/build/web:/static:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+    environment:
+      - RUST_LOG=info
+      # HTTP_BIND=0.0.0.0 is required inside container for Docker networking.
+      # External access is controlled by ports mapping above (127.0.0.1 only).
+      - HTTP_BIND=0.0.0.0:8080
+      - STATIC_DIR=/static
+      - DOCKER_SOCKET=unix:///var/run/docker.sock
+      - NETWORK_NAME=qaspa_testnet_net
+      - CLUSTER_LABEL=testnet_local
+      - SEED_GRPC_URL=grpc://172.28.0.10:16210
+      - DATABASE_URL=postgres://qaspa:qaspa_dev@172.28.0.5:5432/qaspa_testnet
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: controller
+      qaspa.name: controller
+    depends_on:
+      seed:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    profiles:
+      - controller
+    restart: unless-stopped
