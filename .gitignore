@@ -11,9 +11,9 @@ analyzer-target
 .DS_Store
 *.code-workspace
 
-# Flutter tooling caches
-wallet/flutter/.dart_tool/
-wallet/flutter/build/
+# Flutter/Dart tooling caches
+**/.dart_tool/
+**/pubspec.lock
 /setup
 testing/integration/perflogs*
 Servers.toml
