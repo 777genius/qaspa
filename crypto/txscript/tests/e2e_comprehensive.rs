@@ -31,7 +31,7 @@ use std::time::Instant;
 /// Helper function to create and verify an ML-DSA transaction
 fn create_and_verify_mldsa_tx(level: MlDsaLevel) -> (Transaction, usize) {
     // Generate keypair for specified level
-    let keypair = generate_keypair(level);
+    let keypair = generate_keypair(level).unwrap();
     let address = Address::new(Prefix::Testnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
     let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
@@ -59,7 +59,7 @@ fn create_and_verify_mldsa_tx(level: MlDsaLevel) -> (Transaction, usize) {
         &reused_values,
     );
 
-    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key);
+    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key).unwrap();
 
     // Create signature script
     let mut sig_with_hash_type = signature.as_bytes().to_vec();
@@ -101,9 +101,9 @@ fn test_e2e_all_security_levels() {
 
     println!("Testing ML-DSA Level 2 (128-bit security)...");
     let start = Instant::now();
-    let keypair2 = generate_keypair(MlDsaLevel::Level2);
+    let keypair2 = generate_keypair(MlDsaLevel::Level2).unwrap();
     let message = b"test message for level 2";
-    let sig2 = sign(message, &keypair2.secret_key);
+    let sig2 = sign(message, &keypair2.secret_key).unwrap();
     let verified2 = kaspa_mldsa::verify(message, &sig2, &keypair2.public_key);
     let duration2 = start.elapsed();
     println!("  ✅ Level 2 verified in {:?}", duration2);
@@ -113,8 +113,8 @@ fn test_e2e_all_security_levels() {
 
     println!("\nTesting ML-DSA Level 3 (192-bit security)...");
     let start = Instant::now();
-    let keypair3 = generate_keypair(MlDsaLevel::Level3);
-    let sig3 = sign(message, &keypair3.secret_key);
+    let keypair3 = generate_keypair(MlDsaLevel::Level3).unwrap();
+    let sig3 = sign(message, &keypair3.secret_key).unwrap();
     let verified3 = kaspa_mldsa::verify(message, &sig3, &keypair3.public_key);
     let duration3 = start.elapsed();
     println!("  ✅ Level 3 verified in {:?}", duration3);
@@ -124,8 +124,8 @@ fn test_e2e_all_security_levels() {
 
     println!("\nTesting ML-DSA Level 5 (256-bit security)...");
     let start = Instant::now();
-    let keypair5 = generate_keypair(MlDsaLevel::Level5);
-    let sig5 = sign(message, &keypair5.secret_key);
+    let keypair5 = generate_keypair(MlDsaLevel::Level5).unwrap();
+    let sig5 = sign(message, &keypair5.secret_key).unwrap();
     let verified5 = kaspa_mldsa::verify(message, &sig5, &keypair5.public_key);
     let duration5 = start.elapsed();
     println!("  ✅ Level 5 verified in {:?}", duration5);
@@ -215,7 +215,7 @@ fn test_e2e_mass_optimization() {
 fn test_e2e_security_validation() {
     println!("\n🚀 E2E Test: Security Validation\n");
 
-    let keypair = generate_keypair(MlDsaLevel::Level2);
+    let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
     let address = Address::new(Prefix::Testnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
     let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
@@ -240,7 +240,7 @@ fn test_e2e_security_validation() {
         &reused_values,
     );
 
-    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key);
+    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key).unwrap();
 
     // Test 1: Valid signature should pass
     println!("Test 1: Valid signature...");
@@ -296,8 +296,8 @@ fn test_e2e_security_validation() {
     // Test 3: Wrong public key should fail
     println!("\nTest 3: Wrong public key...");
     {
-        let wrong_keypair = generate_keypair(MlDsaLevel::Level2);
-        let wrong_signature = sign(sig_hash.as_bytes().as_slice(), &wrong_keypair.secret_key);
+        let wrong_keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let wrong_signature = sign(sig_hash.as_bytes().as_slice(), &wrong_keypair.secret_key).unwrap();
 
         let mut sig_with_hash_type = wrong_signature.as_bytes().to_vec();
         sig_with_hash_type.push(SIG_HASH_ALL.to_u8());
@@ -374,13 +374,13 @@ fn test_e2e_production_readiness() {
     // Check 1: All security levels work
     println!("Check 1: All security levels...");
     // Test signature generation for all levels
-    let kp2 = generate_keypair(MlDsaLevel::Level2);
-    let kp3 = generate_keypair(MlDsaLevel::Level3);
-    let kp5 = generate_keypair(MlDsaLevel::Level5);
+    let kp2 = generate_keypair(MlDsaLevel::Level2).unwrap();
+    let kp3 = generate_keypair(MlDsaLevel::Level3).unwrap();
+    let kp5 = generate_keypair(MlDsaLevel::Level5).unwrap();
     let test_msg = b"test";
-    let sig2 = sign(test_msg, &kp2.secret_key);
-    let sig3 = sign(test_msg, &kp3.secret_key);
-    let sig5 = sign(test_msg, &kp5.secret_key);
+    let sig2 = sign(test_msg, &kp2.secret_key).unwrap();
+    let sig3 = sign(test_msg, &kp3.secret_key).unwrap();
+    let sig5 = sign(test_msg, &kp5.secret_key).unwrap();
     assert!(kaspa_mldsa::verify(test_msg, &sig2, &kp2.public_key));
     assert!(kaspa_mldsa::verify(test_msg, &sig3, &kp3.public_key));
     assert!(kaspa_mldsa::verify(test_msg, &sig5, &kp5.public_key));
@@ -391,7 +391,7 @@ fn test_e2e_production_readiness() {
 
     // Check 2: Signature verification is strict
     println!("\nCheck 2: Signature verification strictness...");
-    let keypair = generate_keypair(MlDsaLevel::Level2);
+    let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
     let address = Address::new(Prefix::Testnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
     let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
@@ -417,8 +417,8 @@ fn test_e2e_production_readiness() {
         &reused_values,
     );
 
-    let wrong_keypair = generate_keypair(MlDsaLevel::Level2);
-    let wrong_sig = sign(sig_hash.as_bytes().as_slice(), &wrong_keypair.secret_key);
+    let wrong_keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
+    let wrong_sig = sign(sig_hash.as_bytes().as_slice(), &wrong_keypair.secret_key).unwrap();
     let mut sig_bytes = wrong_sig.as_bytes().to_vec();
     sig_bytes.push(SIG_HASH_ALL.to_u8());
 

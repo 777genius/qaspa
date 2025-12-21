@@ -586,7 +586,7 @@ Ut omnis magnam et accusamus earum rem impedit provident eum commodi repellat qu
     }
 
     fn sample_header() -> DelegationRecordHeaderV1 {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
         DelegationRecordHeaderV1 {
             version: 1,
             level: MlDsaLevel::Level2 as u8,

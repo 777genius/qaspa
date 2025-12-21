@@ -32,14 +32,14 @@ class QrDisplay extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(AppSpacing.sm),
           decoration: BoxDecoration(
-            color: backgroundColor ?? Colors.white,
+            color: backgroundColor ?? AppColors.white,
             borderRadius: AppRadii.borderRadiusMd,
           ),
           child: QrImageView(
             data: data,
             version: QrVersions.auto,
             size: size,
-            backgroundColor: Colors.white,
+            backgroundColor: AppColors.white,
             eyeStyle: QrEyeStyle(
               eyeShape: QrEyeShape.square,
               color: foregroundColor ?? AppColors.kaspaDark,

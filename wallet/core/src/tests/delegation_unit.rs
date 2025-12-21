@@ -18,7 +18,7 @@ fn sample_record(anchor: [u8; 32], nonce: u64) -> DelegationRecordV1 {
 
 #[test]
 fn delegation_sign_verify_roundtrip() {
-    let master = MlDsaKeypair::random(MlDsaLevel::Level2);
+    let master = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
     let anchor = master.anchor();
     let mut record = sample_record(*anchor.as_bytes(), 1);
 
@@ -30,7 +30,7 @@ fn delegation_sign_verify_roundtrip() {
 
 #[test]
 fn delegation_nonce_monotonic_selects_latest_active() {
-    let master = MlDsaKeypair::random(MlDsaLevel::Level2);
+    let master = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
     let anchor = master.anchor();
 
     let mut r1 = sample_record(*anchor.as_bytes(), 1);
@@ -48,7 +48,7 @@ fn delegation_nonce_monotonic_selects_latest_active() {
 
 #[test]
 fn delegation_rejects_wrong_anchor() {
-    let master = MlDsaKeypair::random(MlDsaLevel::Level2);
+    let master = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
     let anchor = master.anchor();
     let mut record = sample_record(*anchor.as_bytes(), 7);
     sign_with_master(&master, &mut record).expect("sign");
@@ -61,7 +61,7 @@ fn delegation_rejects_wrong_anchor() {
 
 #[test]
 fn delegation_signature_survives_warned_at_and_version_bump() {
-    let master = MlDsaKeypair::random(MlDsaLevel::Level2);
+    let master = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
     let anchor = master.anchor();
     let mut record = sample_record(*anchor.as_bytes(), 1);
     record.version = 1; // имитируем старую запись/протокол

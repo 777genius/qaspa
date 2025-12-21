@@ -174,7 +174,8 @@ pub fn delegation_message_hash(record: &DelegationRecordV1) -> Result<[u8; 32]> 
 
 pub fn sign_with_master(master_key: &MlDsaKeypair, record: &mut DelegationRecordV1) -> Result<()> {
     let hash = delegation_message_hash(record)?;
-    let sig = sign(hash.as_slice(), master_key.secret_key());
+    let sig =
+        sign(hash.as_slice(), master_key.secret_key()).map_err(|e| Error::Custom(format!("failed to sign delegation record: {e}")))?;
 
     let expected_len = record.signature_len().ok_or_else(|| Error::Custom("invalid delegation level".to_string()))?;
 
@@ -323,7 +324,7 @@ mod tests {
 
     #[test]
     fn sign_and_verify_roundtrip() {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
         let anchor = keypair.anchor();
 
         let mut record = DelegationRecordV1::new(
@@ -347,7 +348,7 @@ mod tests {
 
     #[test]
     fn verify_fails_for_anchor_mismatch_or_corrupted_signature() {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
         let anchor = keypair.anchor();
 
         let mut record = DelegationRecordV1::new(

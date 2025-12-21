@@ -392,9 +392,9 @@ mod tests {
 
     #[test]
     fn test_verify_level2() {
-        let keypair = kaspa_mldsa::generate_keypair(MlDsaLevel::Level2);
+        let keypair = kaspa_mldsa::generate_keypair(MlDsaLevel::Level2).unwrap();
         let message = b"test message";
-        let signature = kaspa_mldsa::sign(message, &keypair.secret_key);
+        let signature = kaspa_mldsa::sign(message, &keypair.secret_key).unwrap();
 
         let result = unsafe {
             kaspa_mldsa_verify(
@@ -412,9 +412,9 @@ mod tests {
 
     #[test]
     fn test_verify_invalid() {
-        let keypair = kaspa_mldsa::generate_keypair(MlDsaLevel::Level2);
+        let keypair = kaspa_mldsa::generate_keypair(MlDsaLevel::Level2).unwrap();
         let message = b"test message";
-        let signature = kaspa_mldsa::sign(message, &keypair.secret_key);
+        let signature = kaspa_mldsa::sign(message, &keypair.secret_key).unwrap();
 
         // Corrupt signature
         let mut corrupted = signature.as_bytes().to_vec();

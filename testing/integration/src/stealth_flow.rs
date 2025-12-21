@@ -287,7 +287,7 @@ impl StealthTestEnv {
         let change_amount = total_in.saturating_sub(amount).saturating_sub(FEE);
         let change_output = if change_amount > 0 {
             // Route change to a fresh stealth address not tracked by the receiver to avoid extra detected keys
-            let change_secret = kaspa_stealth::StealthSecretKey::generate();
+            let change_secret = kaspa_stealth::StealthSecretKey::generate().unwrap();
             let change_addr = change_secret.to_address();
             let change_ephemeral = create_stealth_output(&change_addr, &mut thread_rng()).expect("Failed to create stealth change");
             Some(TransactionOutput { value: change_amount, script_public_key: pay_to_stealth(&change_ephemeral) })

@@ -17,7 +17,7 @@ proptest! {
     /// Property: For any stealth address, sender can create output and receiver can scan it
     #[test]
     fn prop_sender_receiver_roundtrip(_dummy in any::<u8>()) {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let output = create_stealth_output(&address, &mut OsRng)
@@ -44,7 +44,7 @@ proptest! {
     /// Property: Each output to the same address is unique
     #[test]
     fn prop_output_uniqueness(n in 2usize..20) {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let outputs: Vec<_> = (0..n)
@@ -71,8 +71,8 @@ proptest! {
     /// Property: Different recipients cannot claim each other's outputs
     #[test]
     fn prop_privacy_isolation(_dummy in any::<u8>()) {
-        let alice = StealthSecretKey::generate();
-        let bob = StealthSecretKey::generate();
+        let alice = StealthSecretKey::generate().unwrap();
+        let bob = StealthSecretKey::generate().unwrap();
 
         let alice_addr = alice.to_address();
         let bob_addr = bob.to_address();
@@ -100,7 +100,7 @@ proptest! {
     /// Property: Serialization roundtrips preserve all data
     #[test]
     fn prop_address_serialization_roundtrip(_dummy in any::<u8>()) {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let bytes = address.to_bytes();
@@ -118,7 +118,7 @@ proptest! {
     /// Property: Ephemeral output serialization roundtrips
     #[test]
     fn prop_output_serialization_roundtrip(_dummy in any::<u8>()) {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
 
@@ -155,12 +155,12 @@ proptest! {
     /// Property: View tag provides ~256x filtering
     #[test]
     fn prop_view_tag_filtering_effectiveness(_dummy in any::<u8>()) {
-        let scanner = StealthSecretKey::generate();
+        let scanner = StealthSecretKey::generate().unwrap();
 
         // Create 256 outputs to random addresses
         let mut matches = 0;
         for _ in 0..256 {
-            let other = StealthSecretKey::generate();
+            let other = StealthSecretKey::generate().unwrap();
             let output = create_stealth_output(&other.to_address(), &mut OsRng).unwrap();
 
             if check_view_tag(&output.ephemeral_pubkey, output.view_tag, &scanner.scan_secret()) {
@@ -180,11 +180,11 @@ proptest! {
     /// Property: Different scan keys produce different view tags
     #[test]
     fn prop_view_tags_depend_on_scan_key(_dummy in any::<u8>()) {
-        let sender = StealthSecretKey::generate();
+        let sender = StealthSecretKey::generate().unwrap();
         let output = create_stealth_output(&sender.to_address(), &mut OsRng).unwrap();
 
-        let key1 = StealthSecretKey::generate();
-        let key2 = StealthSecretKey::generate();
+        let key1 = StealthSecretKey::generate().unwrap();
+        let key2 = StealthSecretKey::generate().unwrap();
 
         let tag1_matches = check_view_tag(&output.ephemeral_pubkey, output.view_tag, &key1.scan_secret());
         let tag2_matches = check_view_tag(&output.ephemeral_pubkey, output.view_tag, &key2.scan_secret());
@@ -200,7 +200,7 @@ proptest! {
     #[test]
     fn prop_ecdh_parity_independent(_dummy in any::<u8>()) {
         // Generate many keys - statistically ~50% will have odd parity
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         // Check the parity of the original scan pubkey
@@ -274,7 +274,7 @@ mod edge_cases {
 
     #[test]
     fn test_debug_output_safety() {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let debug = format!("{:?}", keys);
 
         // Must contain redaction
@@ -294,7 +294,7 @@ mod edge_cases {
     fn test_stealth_addresses_look_random() {
         use std::collections::HashSet;
 
-        let receiver = StealthSecretKey::generate();
+        let receiver = StealthSecretKey::generate().unwrap();
         let address = receiver.to_address();
 
         // Create 100 outputs to the same recipient

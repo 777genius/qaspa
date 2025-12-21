@@ -579,7 +579,7 @@ async fn test_mldsa_master_delegation_flow() {
     assert!(summary.aggregate_fees > 0, "fee should be positive for delegated spend, got {}", summary.aggregate_fees);
 
     // Дополнительная проверка: оффлайн VM верификация MLDSA spend без отправки в mempool
-    let mldsa_pair = kaspa_mldsa::generate_keypair(MlDsaLevel::Level2);
+    let mldsa_pair = kaspa_mldsa::generate_keypair(MlDsaLevel::Level2).unwrap();
     let mldsa_address = Address::new(Prefix::Simnet, Version::PubKeyMLDSA, mldsa_pair.public_key.as_bytes());
     let mldsa_spk = pay_to_address_script(&mldsa_address).expect("valid address");
     assert!(matches!(ScriptClass::from_script(&mldsa_spk), ScriptClass::PubKeyMLDSA), "funding output must classify as PubKeyMLDSA");
@@ -600,7 +600,7 @@ async fn test_mldsa_master_delegation_flow() {
     let reused = SigHashReusedValuesUnsync::new();
     let sighash =
         kaspa_consensus_core::hashing::sighash::calc_schnorr_signature_hash(&mutable.as_verifiable(), 0, SIG_HASH_ALL, &reused);
-    let signature = kaspa_mldsa::sign(sighash.as_bytes().as_slice(), &mldsa_pair.secret_key);
+    let signature = kaspa_mldsa::sign(sighash.as_bytes().as_slice(), &mldsa_pair.secret_key).unwrap();
     let mut sig_with_type = signature.as_bytes().to_vec();
     sig_with_type.push(SIG_HASH_ALL.to_u8());
     mutable.tx.inputs[0].signature_script = ScriptBuilder::new().add_data(&sig_with_type).expect("sig script").drain();

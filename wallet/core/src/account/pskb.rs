@@ -622,7 +622,7 @@ mod tests {
         let change_address = Address::new(Prefix::Testnet, Version::PubKey, &[2u8; 32]);
 
         let mut rng = StdRng::seed_from_u64(123);
-        let receiver_keys = StealthSecretKey::generate();
+        let receiver_keys = StealthSecretKey::generate().unwrap();
         let stealth_address = receiver_keys.to_address();
         let ephemeral_output = create_stealth_output(&stealth_address, &mut rng).expect("stealth output");
         let stealth_spk = pay_to_stealth(&ephemeral_output);

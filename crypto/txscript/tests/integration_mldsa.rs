@@ -24,7 +24,7 @@ use kaspa_txscript::TxScriptEngine;
 #[ignore]
 fn test_mldsa_transaction_end_to_end() {
     // Step 1: Generate ML-DSA keypair (Level 2 for optimal size)
-    let keypair = generate_keypair(MlDsaLevel::Level2);
+    let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
 
     println!("✓ Generated ML-DSA Level 2 keypair");
     println!("  Public key size: {} bytes", keypair.public_key.len());
@@ -71,7 +71,7 @@ fn test_mldsa_transaction_end_to_end() {
     println!("✓ Calculated sighash: {}", sig_hash);
 
     // Step 6: Sign the sighash with ML-DSA
-    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key);
+    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key).unwrap();
 
     println!("✓ Generated ML-DSA signature ({} bytes)", signature.len());
     assert_eq!(signature.len(), 2420); // ML-DSA Level 2 signature size
@@ -121,7 +121,7 @@ fn test_mldsa_transaction_end_to_end() {
 #[ignore]
 fn test_mldsa_signature_invalid() {
     // Test that invalid signatures are rejected
-    let keypair = generate_keypair(MlDsaLevel::Level2);
+    let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
     let address = Address::new(Prefix::Mainnet, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
     let script_pubkey = pay_to_address_script(&address).expect("valid ML-DSA address");
 
@@ -148,7 +148,7 @@ fn test_mldsa_signature_invalid() {
         &reused_values,
     );
 
-    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key);
+    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair.secret_key).unwrap();
 
     // Corrupt the signature by modifying the bytes
     let mut corrupted_sig_bytes = signature.as_bytes().to_vec();
@@ -187,8 +187,8 @@ fn test_mldsa_signature_invalid() {
 fn test_mldsa_wrong_public_key() {
     // Test that signature from wrong keypair is rejected
     // Address has keypair1's public key, but we sign with keypair2's secret key
-    let keypair1 = generate_keypair(MlDsaLevel::Level2);
-    let keypair2 = generate_keypair(MlDsaLevel::Level2);
+    let keypair1 = generate_keypair(MlDsaLevel::Level2).unwrap();
+    let keypair2 = generate_keypair(MlDsaLevel::Level2).unwrap();
 
     // Address created with keypair1 - so script_pubkey has keypair1's public key
     let address = Address::new(Prefix::Mainnet, Version::PubKeyMLDSA, keypair1.public_key.as_bytes());
@@ -219,7 +219,7 @@ fn test_mldsa_wrong_public_key() {
 
     // Sign with keypair2's secret key (wrong key!)
     // But the script_pubkey expects keypair1's public key
-    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair2.secret_key);
+    let signature = sign(sig_hash.as_bytes().as_slice(), &keypair2.secret_key).unwrap();
 
     let mut sig_with_hash_type = signature.as_bytes().to_vec();
     sig_with_hash_type.push(SIG_HASH_ALL.to_u8());

@@ -616,7 +616,8 @@ pub struct AccountsGetResponse {
 /// The address can bea receive address or a change address.
 ///
 /// @category Wallet API
-#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize, CastFromJs)]
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[cfg_attr(feature = "wasm32-sdk", derive(CastFromJs))]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "wasm32-sdk", wasm_bindgen)]
 pub enum NewAddressKind {
@@ -992,7 +993,8 @@ pub struct AccountsCommitRevealManualResponse {
 /// operation to.
 ///
 /// @category Wallet API
-#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize, CastFromJs)]
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+#[cfg_attr(feature = "wasm32-sdk", derive(CastFromJs))]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "wasm32-sdk", wasm_bindgen)]
 pub enum CommitRevealAddressKind {

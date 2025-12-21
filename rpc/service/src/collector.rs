@@ -71,7 +71,7 @@ impl MasterAwareConsensusCollector {
     }
 
     fn should_emit(&self, anchor: [u8; 32], delegation_id: u64, current_daa: u64) -> bool {
-        let mut guard = self.last_emitted.lock().unwrap();
+        let mut guard = self.last_emitted.lock().unwrap_or_else(|e| e.into_inner());
         let key = (anchor, delegation_id);
         match guard.get(&key).copied() {
             None => {
@@ -106,14 +106,14 @@ impl MasterAwareConsensusCollector {
 
     async fn emit_for_current_daa(&self, notifier: &DynNotify<Notification>, current_daa: u64) {
         let anchors: Vec<[u8; 32]> = {
-            let guard = self.mldsa_anchor_keys.lock().unwrap();
+            let guard = self.mldsa_anchor_keys.lock().unwrap_or_else(|e| e.into_inner());
             guard.iter().copied().collect()
         };
         if anchors.is_empty() {
             return;
         }
 
-        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        let provider = { self.delegation_provider.lock().unwrap_or_else(|e| e.into_inner()).clone() };
         let Some(provider) = provider else {
             return;
         };
@@ -262,7 +262,7 @@ impl MasterDelegationExpiringSoonCollector {
     }
 
     fn should_emit(&self, anchor: [u8; 32], delegation_id: u64, current_daa: u64) -> bool {
-        let mut guard = self.last_emitted.lock().unwrap();
+        let mut guard = self.last_emitted.lock().unwrap_or_else(|e| e.into_inner());
         let key = (anchor, delegation_id);
         match guard.get(&key).copied() {
             None => {
@@ -297,14 +297,14 @@ impl MasterDelegationExpiringSoonCollector {
 
     async fn emit_for_current_daa(&self, notifier: &DynNotify<Notification>, current_daa: u64) {
         let anchors: Vec<[u8; 32]> = {
-            let guard = self.mldsa_anchor_keys.lock().unwrap();
+            let guard = self.mldsa_anchor_keys.lock().unwrap_or_else(|e| e.into_inner());
             guard.iter().copied().collect()
         };
         if anchors.is_empty() {
             return;
         }
 
-        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        let provider = { self.delegation_provider.lock().unwrap_or_else(|e| e.into_inner()).clone() };
         let Some(provider) = provider else {
             return;
         };

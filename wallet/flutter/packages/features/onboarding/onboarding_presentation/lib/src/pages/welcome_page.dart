@@ -74,7 +74,7 @@ class WelcomeHeader extends StatelessWidget {
           child: const Icon(
             Icons.account_balance_wallet_rounded,
             size: 48,
-            color: Colors.white,
+            color: AppColors.white,
           ),
         ),
         const SizedBox(height: AppSpacing.xl),

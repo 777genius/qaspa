@@ -122,6 +122,11 @@ class SetPasswordForm extends StatelessWidget {
 class PasswordRequirements extends StatelessWidget {
   final String password;
 
+  // Cached RegExp patterns for performance (avoid creating on every build)
+  static final _uppercasePattern = RegExp(r'[A-Z]');
+  static final _lowercasePattern = RegExp(r'[a-z]');
+  static final _digitPattern = RegExp(r'[0-9]');
+
   const PasswordRequirements({
     super.key,
     required this.password,
@@ -138,15 +143,15 @@ class PasswordRequirements extends StatelessWidget {
       ),
       (
         'Contains uppercase letter',
-        password.contains(RegExp(r'[A-Z]')),
+        password.contains(_uppercasePattern),
       ),
       (
         'Contains lowercase letter',
-        password.contains(RegExp(r'[a-z]')),
+        password.contains(_lowercasePattern),
       ),
       (
         'Contains number',
-        password.contains(RegExp(r'[0-9]')),
+        password.contains(_digitPattern),
       ),
     ];
 

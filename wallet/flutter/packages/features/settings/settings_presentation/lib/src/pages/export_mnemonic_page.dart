@@ -93,6 +93,7 @@ class _ExportMnemonicPageState extends State<ExportMnemonicPage> {
                             ? Icons.visibility_off
                             : Icons.visibility,
                       ),
+                      tooltip: _passwordVisible ? 'Hide password' : 'Show password',
                       onPressed: () {
                         setState(() => _passwordVisible = !_passwordVisible);
                       },
@@ -240,6 +241,7 @@ class _MnemonicDisplayState extends State<_MnemonicDisplay> {
               itemCount: words.length,
               itemBuilder: (context, index) {
                 return Card(
+                  key: ValueKey('word_$index'),
                   child: Center(
                     child: Text(
                       '${index + 1}. ${words[index]}',

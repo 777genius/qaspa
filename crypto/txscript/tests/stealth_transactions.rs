@@ -74,7 +74,7 @@ fn create_stealth_test_transaction(
 #[test]
 fn test_stealth_output_creation() {
     // Generate receiver's stealth keys
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
 
     // Sender creates a stealth output
@@ -91,7 +91,7 @@ fn test_stealth_output_creation() {
 #[test]
 fn test_stealth_transaction_valid_signature() {
     // Generate receiver's stealth keys
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
 
     // Sender creates a stealth output
@@ -130,7 +130,7 @@ fn test_stealth_transaction_valid_signature() {
 #[test]
 fn test_stealth_transaction_invalid_signature() {
     // Generate receiver's stealth keys
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
 
     // Sender creates a stealth output
@@ -167,7 +167,7 @@ fn test_stealth_transaction_invalid_signature() {
 #[test]
 fn test_stealth_sig_op_count() {
     // Generate stealth output
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
     let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
     let stealth_spk = pay_to_stealth(&ephemeral_output);
@@ -180,7 +180,7 @@ fn test_stealth_sig_op_count() {
 #[test]
 fn test_stealth_signature_with_delegation_tlv() {
     // Generate receiver's stealth keys
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
 
     // Sender creates a stealth output
@@ -213,7 +213,7 @@ fn test_stealth_signature_with_delegation_tlv() {
 
 #[test]
 fn test_stealth_signature_with_unknown_tlv() {
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
     let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
     let stealth_spk = pay_to_stealth(&ephemeral_output);
@@ -239,7 +239,7 @@ fn test_stealth_signature_with_unknown_tlv() {
 
 #[test]
 fn test_stealth_signature_requires_activation_flag_for_tlv() {
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
     let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
     let stealth_spk = pay_to_stealth(&ephemeral_output);
@@ -267,7 +267,7 @@ fn test_stealth_signature_requires_activation_flag_for_tlv() {
 
 #[test]
 fn test_stealth_signature_with_truncated_tlv_prefix() {
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
     let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
     let stealth_spk = pay_to_stealth(&ephemeral_output);
@@ -295,7 +295,7 @@ fn test_stealth_signature_with_truncated_tlv_prefix() {
 
 #[test]
 fn test_stealth_signature_rejects_oversized_script() {
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
     let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
     let stealth_spk = pay_to_stealth(&ephemeral_output);
@@ -327,7 +327,7 @@ fn test_stealth_script_class() {
     use kaspa_txscript::script_class::ScriptClass;
 
     // Generate stealth output
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
     let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
     let stealth_spk = pay_to_stealth(&ephemeral_output);
@@ -353,7 +353,7 @@ fn test_stealth_extract_output() {
     use kaspa_txscript::extract_stealth_output;
 
     // Generate stealth output
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
     let ephemeral_output = create_stealth_output(&receiver_address, &mut OsRng).unwrap();
     let stealth_spk = pay_to_stealth(&ephemeral_output);
@@ -368,7 +368,7 @@ fn test_stealth_extract_output() {
 #[test]
 fn test_stealth_wrong_signature_length() {
     // Generate receiver's stealth keys
-    let receiver_keys = StealthSecretKey::generate();
+    let receiver_keys = StealthSecretKey::generate().unwrap();
     let receiver_address = receiver_keys.to_address();
 
     // Sender creates a stealth output

@@ -299,7 +299,7 @@ impl RpcCoreService {
     }
 
     pub fn set_delegation_provider(&self, provider: Arc<dyn DelegationProvider>) {
-        let mut guard = self.delegation_provider.lock().unwrap();
+        let mut guard = self.delegation_provider.lock().unwrap_or_else(|e| e.into_inner());
         *guard = Some(provider);
     }
 
@@ -1404,12 +1404,12 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         let is_synced = self.mining_rule_engine.is_sink_recent_and_connected(sink_daa_score_timestamp);
         let virtual_daa_score = session.get_virtual_daa_score();
         let params = &self.config.params;
-        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        let provider = { self.delegation_provider.lock().unwrap_or_else(|e| e.into_inner()).clone() };
         let has_mldsa_master = if let Some(provider) = provider {
             // If provider errors, fall back to anchor memory set
-            provider.has_masters().await.unwrap_or_else(|_| !self.mldsa_anchors.lock().unwrap().is_empty())
+            provider.has_masters().await.unwrap_or_else(|_| !self.mldsa_anchors.lock().unwrap_or_else(|e| e.into_inner()).is_empty())
         } else {
-            !self.mldsa_anchors.lock().unwrap().is_empty()
+            !self.mldsa_anchors.lock().unwrap_or_else(|e| e.into_inner()).is_empty()
         };
         let (mut mldsa_master_enabled, mldsa_master_activation_daa, invalid_activation) =
             compute_mldsa_master_status(params, virtual_daa_score);
@@ -1476,7 +1476,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
             }
         }
         let anchor_hex = anchor.as_slice().to_hex();
-        let mut anchors = self.mldsa_anchors.lock().unwrap();
+        let mut anchors = self.mldsa_anchors.lock().unwrap_or_else(|e| e.into_inner());
         if anchors.len() >= MAX_MLDSA_ANCHORS && !anchors.contains_key(&anchor) {
             warn!("register_mldsa_anchor rejected: anchor store is full ({} entries)", MAX_MLDSA_ANCHORS);
             return Err(RpcError::General("anchor registry capacity exceeded".to_string()));
@@ -1498,7 +1498,7 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         } else {
             info!("mldsa_anchor already registered: {}", anchor_hex);
         }
-        let _ = self.mldsa_anchor_keys.lock().unwrap().insert(anchor_key);
+        let _ = self.mldsa_anchor_keys.lock().unwrap_or_else(|e| e.into_inner()).insert(anchor_key);
         Ok(RegisterMldsaAnchorResponse { accepted })
     }
 
@@ -1511,13 +1511,13 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
             warn!("list_mldsa_delegations called while node in safe RPC mode -- ignoring.");
             return Err(RpcError::UnavailableInSafeMode);
         }
-        let provider = { self.delegation_provider.lock().unwrap().clone() };
+        let provider = { self.delegation_provider.lock().unwrap_or_else(|e| e.into_inner()).clone() };
         if let Some(provider) = provider {
             let delegations = provider.list_by_anchor(request.anchor).await?;
             return Ok(ListMldsaDelegationsResponse { delegations });
         }
 
-        let anchors = self.mldsa_anchors.lock().unwrap();
+        let anchors = self.mldsa_anchors.lock().unwrap_or_else(|e| e.into_inner());
         if !anchors.contains_key(&request.anchor) {
             return Ok(ListMldsaDelegationsResponse { delegations: vec![] });
         }

@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn test_create_stealth_output() {
-        let recipient_keys = StealthSecretKey::generate();
+        let recipient_keys = StealthSecretKey::generate().unwrap();
         let address = recipient_keys.to_address();
 
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
@@ -267,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_unique_outputs_per_call() {
-        let recipient_keys = StealthSecretKey::generate();
+        let recipient_keys = StealthSecretKey::generate().unwrap();
         let address = recipient_keys.to_address();
 
         let output1 = create_stealth_output(&address, &mut OsRng).unwrap();
@@ -281,9 +281,9 @@ mod tests {
 
     #[test]
     fn test_batch_creation() {
-        let keys1 = StealthSecretKey::generate();
-        let keys2 = StealthSecretKey::generate();
-        let keys3 = StealthSecretKey::generate();
+        let keys1 = StealthSecretKey::generate().unwrap();
+        let keys2 = StealthSecretKey::generate().unwrap();
+        let keys3 = StealthSecretKey::generate().unwrap();
 
         let addresses = vec![keys1.to_address(), keys2.to_address(), keys3.to_address()];
 
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn test_output_serialization() {
-        let recipient_keys = StealthSecretKey::generate();
+        let recipient_keys = StealthSecretKey::generate().unwrap();
         let address = recipient_keys.to_address();
 
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
@@ -316,7 +316,7 @@ mod tests {
     fn test_create_stealth_output_with_blinding() {
         use crate::receiver::{derive_spending_key, verify_derived_key};
 
-        let recipient_keys = StealthSecretKey::generate();
+        let recipient_keys = StealthSecretKey::generate().unwrap();
         let address = recipient_keys.to_address();
 
         // Create output with blinding factor
@@ -340,7 +340,7 @@ mod tests {
     fn test_with_blinding_matches_regular_output() {
         use crate::receiver::{derive_spending_key, scan_output, verify_derived_key};
 
-        let recipient_keys = StealthSecretKey::generate();
+        let recipient_keys = StealthSecretKey::generate().unwrap();
         let address = recipient_keys.to_address();
 
         // Create output with blinding factor (pre-calculation method)

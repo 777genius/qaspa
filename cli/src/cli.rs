@@ -627,7 +627,10 @@ impl KaspaCli {
 
                 accounts.iter().for_each(|(seq, account)| {
                     let seq = style(seq.to_string()).cyan();
-                    let ls_string = account.get_list_string().unwrap_or_else(|err| panic!("{err}"));
+                    let ls_string = match account.get_list_string() {
+                        Ok(s) => s,
+                        Err(err) => format!("<error: {err}>"),
+                    };
                     tprintln!(self, "    {seq}: {ls_string}");
                 })
             });
@@ -638,7 +641,10 @@ impl KaspaCli {
 
             watch_accounts.iter().for_each(|(seq, account)| {
                 let seq = style(seq.to_string()).cyan();
-                let ls_string = account.get_list_string().unwrap_or_else(|err| panic!("{err}"));
+                let ls_string = match account.get_list_string() {
+                    Ok(s) => s,
+                    Err(err) => format!("<error: {err}>"),
+                };
                 tprintln!(self, "    {seq}: {ls_string}");
             });
 
