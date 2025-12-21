@@ -187,7 +187,7 @@ mod tests {
     }
 
     fn build_stealth_signer_with_tx(delegation_id: Option<u64>) -> (StealthSigner, SignableTransaction) {
-        let receiver_keys = StealthSecretKey::generate();
+        let receiver_keys = StealthSecretKey::generate().unwrap();
         let receiver_address = receiver_keys.to_address();
         let spend_secret = receiver_keys.spend_secret();
 

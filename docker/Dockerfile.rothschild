@@ -35,7 +35,7 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharin
 
 
 # ---------------------------------------- Runtime image ----------------------------------------
-FROM alpine AS runtime
+FROM alpine:3.21 AS runtime
 WORKDIR /app
 
 RUN apk --no-cache add \
@@ -44,8 +44,13 @@ RUN apk --no-cache add \
   tini \
   ca-certificates
 
+# Create non-root user for security
+RUN addgroup -g 1000 app && adduser -u 1000 -G app -h /app -D app
+
 COPY --from=builder /app/rothschild .
 
-USER root
+RUN chown -R app:app /app
+
+USER app
 ENTRYPOINT [ "/sbin/tini", "--" ]
 CMD [ "/app/rothschild" ]

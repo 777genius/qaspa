@@ -67,8 +67,8 @@ impl StealthSecretKey {
     /// Generates a new random stealth secret key.
     ///
     /// Uses the system's cryptographically secure RNG.
-    pub fn generate() -> Self {
-        Self::try_generate().unwrap_or_else(|e| panic!("{e}"))
+    pub fn generate() -> Result<Self> {
+        Self::try_generate()
     }
 
     /// Generates a new random stealth secret key (fallible).
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_secret_key_generation() {
-        let sk = StealthSecretKey::generate();
+        let sk = StealthSecretKey::generate().unwrap();
         let address = sk.to_address();
 
         // Verify keys are valid
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_secret_key_from_bytes() {
-        let sk1 = StealthSecretKey::generate();
+        let sk1 = StealthSecretKey::generate().unwrap();
         let sk2 = StealthSecretKey::from_bytes(*sk1.scan_secret_bytes(), *sk1.spend_secret_bytes()).unwrap();
 
         assert_eq!(sk1.to_address(), sk2.to_address());
@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_address_serialization() {
-        let sk = StealthSecretKey::generate();
+        let sk = StealthSecretKey::generate().unwrap();
         let address = sk.to_address();
 
         let bytes = address.to_bytes();
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_address_borsh_roundtrip() {
-        let sk = StealthSecretKey::generate();
+        let sk = StealthSecretKey::generate().unwrap();
         let address = sk.to_address();
 
         let encoded = borsh::to_vec(&address).unwrap();
@@ -444,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_debug_does_not_leak_secrets() {
-        let sk = StealthSecretKey::generate();
+        let sk = StealthSecretKey::generate().unwrap();
         let debug_str = format!("{:?}", sk);
 
         let mut scan_hex = [0u8; 64];

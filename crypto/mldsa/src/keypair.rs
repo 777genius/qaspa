@@ -218,7 +218,7 @@ impl MlDsaKeypair {
 /// ```
 /// use kaspa_mldsa::{generate_keypair, MlDsaLevel};
 ///
-/// let keypair = generate_keypair(MlDsaLevel::Level2);
+/// let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
 /// assert_eq!(keypair.public_key.len(), 1312);
 /// assert_eq!(keypair.secret_key.len(), 2560);
 /// ```
@@ -231,8 +231,8 @@ pub fn try_generate_keypair(level: MlDsaLevel) -> Result<MlDsaKeypair> {
     Ok(keypair)
 }
 
-pub fn generate_keypair(level: MlDsaLevel) -> MlDsaKeypair {
-    try_generate_keypair(level).unwrap_or_else(|e| panic!("{e}"))
+pub fn generate_keypair(level: MlDsaLevel) -> Result<MlDsaKeypair> {
+    try_generate_keypair(level)
 }
 
 pub(crate) fn keypair_from_seed_bytes(seed: &[u8; 32], level: MlDsaLevel) -> MlDsaKeypair {
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_generate_keypair_level2() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         assert_eq!(kp.public_key.len(), 1312);
         assert_eq!(kp.secret_key.len(), 2560);
         assert_eq!(kp.level(), MlDsaLevel::Level2);
@@ -279,14 +279,14 @@ mod tests {
 
     #[test]
     fn test_generate_keypair_level3() {
-        let kp = generate_keypair(MlDsaLevel::Level3);
+        let kp = generate_keypair(MlDsaLevel::Level3).unwrap();
         assert_eq!(kp.public_key.len(), 1952);
         assert_eq!(kp.secret_key.len(), 4032);
     }
 
     #[test]
     fn test_generate_keypair_level5() {
-        let kp = generate_keypair(MlDsaLevel::Level5);
+        let kp = generate_keypair(MlDsaLevel::Level5).unwrap();
         assert_eq!(kp.public_key.len(), 2592);
         assert_eq!(kp.secret_key.len(), 4896);
     }
@@ -307,14 +307,14 @@ mod tests {
 
     #[test]
     fn test_public_key_serialization() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let hex = kp.public_key.to_hex();
         assert_eq!(hex.len(), 1312 * 2); // hex is 2 chars per byte
     }
 
     #[test]
     fn test_public_key_display_debug() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let pk = &kp.public_key;
 
         // Test hex encoding
@@ -333,13 +333,13 @@ mod tests {
 
     #[test]
     fn test_public_key_is_empty() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         assert!(!kp.public_key.is_empty());
     }
 
     #[test]
     fn test_public_key_serde() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let pk = &kp.public_key;
 
         // Test JSON serialization
@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_secret_key_zeroization() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let sk_bytes = kp.secret_key.as_bytes().to_vec();
 
         drop(kp);
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn test_keypair_debug() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let debug_str = format!("{:?}", kp);
 
         // Debug should show public key but redact secret key
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_keypair_clone() {
-        let kp1 = generate_keypair(MlDsaLevel::Level2);
+        let kp1 = generate_keypair(MlDsaLevel::Level2).unwrap();
         let kp2 = kp1.clone();
 
         assert_eq!(kp1.public_key, kp2.public_key);
@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_keypair_from_bytes_roundtrip() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let pk_bytes = kp.public_key.as_bytes();
         let sk_bytes = kp.secret_key.as_bytes();
 
@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn test_keypair_from_bytes_mismatched() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let pk_bytes = vec![0u8; 100]; // Wrong size
         let sk_bytes = kp.secret_key.as_bytes();
 
@@ -418,8 +418,8 @@ mod tests {
 
     #[test]
     fn test_keypair_serde_rejects_mismatched_levels() {
-        let kp2 = generate_keypair(MlDsaLevel::Level2);
-        let kp3 = generate_keypair(MlDsaLevel::Level3);
+        let kp2 = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let kp3 = generate_keypair(MlDsaLevel::Level3).unwrap();
 
         let json = serde_json::json!({
             "public_key": { "bytes": kp2.public_key.as_bytes().to_vec(), "level": "Level2" },

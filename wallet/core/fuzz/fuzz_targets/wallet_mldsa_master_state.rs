@@ -60,7 +60,7 @@ impl MasterMachine {
     }
 
     fn new_anchor(level: MlDsaLevel) -> [u8; 32] {
-        let pair = MlDsaKeypair::random(level);
+        let pair = MlDsaKeypair::random(level).unwrap();
         *pair.anchor().as_bytes()
     }
 

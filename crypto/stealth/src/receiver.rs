@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn test_view_tag_check() {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
@@ -185,7 +185,7 @@ mod tests {
         assert!(check_view_tag(&output.ephemeral_pubkey, output.view_tag, &keys.scan_secret()));
 
         // Someone else's scan key should (usually) not match
-        let other_keys = StealthSecretKey::generate();
+        let other_keys = StealthSecretKey::generate().unwrap();
         // Note: There's a 1/256 chance this could be a false positive
         // We don't assert here, just demonstrate the usage
         let _other_matches = check_view_tag(&output.ephemeral_pubkey, output.view_tag, &other_keys.scan_secret());
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_scan_output_success() {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
@@ -205,8 +205,8 @@ mod tests {
 
     #[test]
     fn test_scan_output_not_ours() {
-        let keys = StealthSecretKey::generate();
-        let other_keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
+        let other_keys = StealthSecretKey::generate().unwrap();
 
         let address = keys.to_address();
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_derive_spending_key() {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
@@ -238,7 +238,7 @@ mod tests {
         // This is the complete flow: send -> scan -> spend
 
         // 1. Recipient generates keys and shares address
-        let recipient_keys = StealthSecretKey::generate();
+        let recipient_keys = StealthSecretKey::generate().unwrap();
         let address = recipient_keys.to_address();
 
         // 2. Sender creates stealth output
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn test_multiple_outputs_to_same_address() {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         // Create multiple outputs to the same address
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn test_try_scan_output() {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
 
@@ -298,7 +298,7 @@ mod tests {
         assert!(result.is_some());
 
         // Other person should get None
-        let other_keys = StealthSecretKey::generate();
+        let other_keys = StealthSecretKey::generate().unwrap();
         let result = try_scan_output(&output, &other_keys.scan_secret(), &other_keys.to_address().spend_pubkey);
         assert!(result.is_none());
     }

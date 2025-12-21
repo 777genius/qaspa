@@ -19,9 +19,9 @@ use crate::{keypair::PublicKey, sign::Signature};
 /// ```
 /// use kaspa_mldsa::{generate_keypair, sign, verify, MlDsaLevel};
 ///
-/// let keypair = generate_keypair(MlDsaLevel::Level2);
+/// let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
 /// let message = b"Hello, quantum world!";
-/// let signature = sign(message, &keypair.secret_key);
+/// let signature = sign(message, &keypair.secret_key).unwrap();
 ///
 /// assert!(verify(message, &signature, &keypair.public_key));
 ///
@@ -104,18 +104,18 @@ mod tests {
 
     #[test]
     fn test_verify_valid_signature() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = b"test message";
-        let sig = sign(msg, &kp.secret_key);
+        let sig = sign(msg, &kp.secret_key).unwrap();
 
         assert!(verify(msg, &sig, &kp.public_key));
     }
 
     #[test]
     fn test_verify_invalid_signature_wrong_message() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = b"original message";
-        let sig = sign(msg, &kp.secret_key);
+        let sig = sign(msg, &kp.secret_key).unwrap();
 
         let wrong_msg = b"tampered message";
         assert!(!verify(wrong_msg, &sig, &kp.public_key));
@@ -123,9 +123,9 @@ mod tests {
 
     #[test]
     fn test_verify_invalid_signature_corrupted() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = b"test message";
-        let mut sig = sign(msg, &kp.secret_key);
+        let mut sig = sign(msg, &kp.secret_key).unwrap();
 
         // Corrupt the signature
         sig.bytes[0] ^= 0xFF;
@@ -135,11 +135,11 @@ mod tests {
 
     #[test]
     fn test_verify_wrong_public_key() {
-        let kp1 = generate_keypair(MlDsaLevel::Level2);
-        let kp2 = generate_keypair(MlDsaLevel::Level2);
+        let kp1 = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let kp2 = generate_keypair(MlDsaLevel::Level2).unwrap();
 
         let msg = b"test message";
-        let sig = sign(msg, &kp1.secret_key);
+        let sig = sign(msg, &kp1.secret_key).unwrap();
 
         // Signature from kp1, but verifying with kp2's public key
         assert!(!verify(msg, &sig, &kp2.public_key));
@@ -147,11 +147,11 @@ mod tests {
 
     #[test]
     fn test_verify_mismatched_levels() {
-        let kp2 = generate_keypair(MlDsaLevel::Level2);
-        let kp3 = generate_keypair(MlDsaLevel::Level3);
+        let kp2 = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let kp3 = generate_keypair(MlDsaLevel::Level3).unwrap();
 
         let msg = b"test";
-        let sig2 = sign(msg, &kp2.secret_key);
+        let sig2 = sign(msg, &kp2.secret_key).unwrap();
 
         // Level 2 signature with Level 3 public key
         assert!(!verify(msg, &sig2, &kp3.public_key));
@@ -160,9 +160,9 @@ mod tests {
     #[test]
     fn test_verify_all_levels() {
         for level in [MlDsaLevel::Level2, MlDsaLevel::Level3, MlDsaLevel::Level5] {
-            let kp = generate_keypair(level);
+            let kp = generate_keypair(level).unwrap();
             let msg = b"test for all levels";
-            let sig = sign(msg, &kp.secret_key);
+            let sig = sign(msg, &kp.secret_key).unwrap();
 
             assert!(verify(msg, &sig, &kp.public_key));
         }
@@ -170,18 +170,18 @@ mod tests {
 
     #[test]
     fn test_verify_empty_message() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = b"";
-        let sig = sign(msg, &kp.secret_key);
+        let sig = sign(msg, &kp.secret_key).unwrap();
 
         assert!(verify(msg, &sig, &kp.public_key));
     }
 
     #[test]
     fn test_verify_large_message() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = vec![0x42u8; 1_000_000]; // 1 MB message
-        let sig = sign(&msg, &kp.secret_key);
+        let sig = sign(&msg, &kp.secret_key).unwrap();
 
         assert!(verify(&msg, &sig, &kp.public_key));
     }

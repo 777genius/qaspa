@@ -1,1 +1,0 @@
-{"valid_import":true,"imports":[{"uri":"package:injectable/injectable.dart","transitive":false},{"uri":"package:modularity_injectable/modularity_injectable.dart","transitive":false},{"uri":"package:wallet_domain/wallet_domain.dart","transitive":false},{"uri":"package:wallet_data/src/datasources/rust_datasource.dart","transitive":false}],"elements":[]}

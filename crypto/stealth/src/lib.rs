@@ -46,9 +46,10 @@
 //!     check_view_tag, scan_output, derive_spending_key
 //! };
 //! use rand::rngs::OsRng;
+//! # fn main() -> Result<(), kaspa_stealth::StealthError> {
 //!
 //! // Recipient: Generate keys and share address
-//! let recipient_keys = StealthSecretKey::generate();
+//! let recipient_keys = StealthSecretKey::generate()?;
 //! let address = recipient_keys.to_address();
 //! // Share `address` publicly (e.g., in payment request)
 //!
@@ -69,6 +70,8 @@
 //!         // Use spending_key to sign transaction spending this UTXO
 //!     }
 //! }
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Security Considerations
@@ -123,7 +126,7 @@ mod integration_tests {
     fn test_complete_payment_flow() {
         // === SETUP ===
         // Recipient generates and publishes their stealth address
-        let recipient = StealthSecretKey::generate();
+        let recipient = StealthSecretKey::generate().unwrap();
         let stealth_address = recipient.to_address();
 
         // === PAYMENT ===
@@ -161,8 +164,8 @@ mod integration_tests {
     /// Tests that different recipients can't scan each other's outputs
     #[test]
     fn test_privacy_isolation() {
-        let alice = StealthSecretKey::generate();
-        let bob = StealthSecretKey::generate();
+        let alice = StealthSecretKey::generate().unwrap();
+        let bob = StealthSecretKey::generate().unwrap();
 
         let alice_address = alice.to_address();
 
@@ -183,7 +186,7 @@ mod integration_tests {
     /// Tests that each output is unlinkable
     #[test]
     fn test_unlinkability() {
-        let recipient = StealthSecretKey::generate();
+        let recipient = StealthSecretKey::generate().unwrap();
         let address = recipient.to_address();
 
         // Create 10 payments to the same address
@@ -207,7 +210,7 @@ mod integration_tests {
     /// Stress test with many keys and outputs
     #[test]
     fn test_stress_many_outputs() {
-        let recipient = StealthSecretKey::generate();
+        let recipient = StealthSecretKey::generate().unwrap();
         let address = recipient.to_address();
 
         // Create 100 outputs
@@ -224,7 +227,7 @@ mod integration_tests {
     /// Tests serialization roundtrips
     #[test]
     fn test_serialization_roundtrips() {
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
         let output = create_stealth_output(&address, &mut OsRng).unwrap();
 

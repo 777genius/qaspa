@@ -25,7 +25,7 @@ proptest! {
     fn prop_forged_signature_is_rejected(level in prop_oneof![Just(MlDsaLevel::Level2), Just(MlDsaLevel::Level3), Just(MlDsaLevel::Level5)],
                                          anchor_bytes in any::<[u8; 32]>(),
                                          sig_bytes in prop::collection::vec(any::<u8>(), 2000..5000)) {
-        let master = MlDsaKeypair::random(level);
+        let master = MlDsaKeypair::random(level).unwrap();
         let anchor = master.anchor();
 
         let mut record = make_record(level, anchor_bytes, 1, Some(10), 1);
@@ -55,7 +55,7 @@ proptest! {
     #[test]
     fn prop_expired_records_not_selected(valid_from in 0u64..10_000, span in 1u64..5_000, base_nonce in 1u64..100) {
         let level = MlDsaLevel::Level3;
-        let master = MlDsaKeypair::random(level);
+        let master = MlDsaKeypair::random(level).unwrap();
         let anchor = *master.anchor().as_bytes();
         let valid_until = valid_from.saturating_add(span);
 

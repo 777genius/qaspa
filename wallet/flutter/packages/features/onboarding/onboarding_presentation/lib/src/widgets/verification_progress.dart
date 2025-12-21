@@ -49,7 +49,7 @@ class VerificationProgress extends StatelessWidget {
                   ? const Icon(
                       Icons.check,
                       size: 8,
-                      color: Colors.white,
+                      color: AppColors.white,
                     )
                   : null,
             );

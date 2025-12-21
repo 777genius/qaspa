@@ -232,7 +232,7 @@ struct MLDSAWallet {
 
 impl MLDSAWallet {
     fn new(level: MlDsaLevel, prefix: Prefix) -> Self {
-        let keypair = generate_keypair(level);
+        let keypair = generate_keypair(level).unwrap();
         let address = Address::new(prefix, Version::PubKeyMLDSA, keypair.public_key.as_bytes());
 
         MLDSAWallet { keypair, address, level }
@@ -311,7 +311,7 @@ impl MLDSAWallet {
             );
 
             // Sign with ML-DSA
-            let signature = sign(sig_hash.as_bytes().as_slice(), &self.keypair.secret_key);
+            let signature = sign(sig_hash.as_bytes().as_slice(), &self.keypair.secret_key).unwrap();
 
             // Create signature script
             let mut sig_with_hash_type = signature.as_bytes().to_vec();

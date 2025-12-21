@@ -1010,7 +1010,7 @@ fn test_generator_produces_stealth_change_metadata() -> Result<()> {
 }
 
 fn new_stealth_change_address(network_type: NetworkType) -> (Address, StealthSecretKey, kaspa_stealth::StealthAddress) {
-    let keys = StealthSecretKey::generate();
+    let keys = StealthSecretKey::generate().unwrap();
     let stealth_address = keys.to_address();
     let prefix = match network_type {
         NetworkType::Mainnet => Prefix::StealthMainnet,

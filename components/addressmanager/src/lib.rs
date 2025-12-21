@@ -323,7 +323,7 @@ impl AddressManager {
     }
 
     pub fn get_all_banned_addresses(&self) -> Vec<IpAddress> {
-        self.banned_address_store.iterator().map(|x| IpAddress::from(x.unwrap().0)).collect_vec()
+        self.banned_address_store.iterator().filter_map(|x| x.ok().map(|(ip, _)| IpAddress::from(ip))).collect_vec()
     }
 }
 
@@ -362,8 +362,10 @@ mod address_store_with_cache {
             // We manage the cache ourselves on this level, so we disable the inner builtin cache
             let db_store = DbAddressesStore::new(db, CachePolicy::Empty);
             let mut addresses = HashMap::new();
-            for (key, entry) in db_store.iterator().map(|res| res.unwrap()) {
-                addresses.insert(key, entry);
+            for res in db_store.iterator() {
+                if let Ok((key, entry)) = res {
+                    addresses.insert(key, entry);
+                }
             }
 
             Self { db_store, addresses }
@@ -378,7 +380,7 @@ mod address_store_with_cache {
                 Some(entry) => Entry { connection_failed_count, address: entry.address },
                 None => Entry { connection_failed_count, address },
             };
-            self.db_store.set(address.into(), entry).unwrap();
+            let _ = self.db_store.set(address.into(), entry);
             self.addresses.insert(address.into(), entry);
             self.keep_limit();
         }
@@ -392,7 +394,7 @@ mod address_store_with_cache {
         }
 
         pub fn get(&self, address: NetAddress) -> Entry {
-            *self.addresses.get(&address.into()).unwrap()
+            self.addresses.get(&address.into()).copied().unwrap_or(Entry { connection_failed_count: 0, address })
         }
 
         pub fn remove(&mut self, address: NetAddress) {
@@ -401,7 +403,7 @@ mod address_store_with_cache {
 
         fn remove_by_key(&mut self, key: AddressKey) {
             self.addresses.remove(&key);
-            self.db_store.remove(key).unwrap()
+            let _ = self.db_store.remove(key);
         }
 
         pub fn iterate_addresses(&self) -> impl Iterator<Item = NetAddress> + '_ {
@@ -474,7 +476,7 @@ mod address_store_with_cache {
             let weighted_index = match WeightedIndex::new(weights) {
                 Ok(index) => Some(index),
                 Err(WeightedError::NoItem) => None,
-                Err(e) => panic!("{e}"),
+                Err(_) => None,
             };
             Self { weighted_index, remaining, addresses }
         }
@@ -490,7 +492,7 @@ mod address_store_with_cache {
                 match weighted_index.update_weights(&[(i, &0f64)]) {
                     Ok(_) => {}
                     Err(WeightedError::AllWeightsZero) => self.weighted_index = None,
-                    Err(e) => panic!("{e}"),
+                    Err(_) => self.weighted_index = None,
                 }
                 self.remaining -= 1;
                 if self.remaining == 0 {

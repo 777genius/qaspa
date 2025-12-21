@@ -22,11 +22,11 @@
 //! use kaspa_mldsa::{MlDsaLevel, generate_keypair, sign, verify};
 //!
 //! // Generate a keypair
-//! let keypair = generate_keypair(MlDsaLevel::Level2);
+//! let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
 //!
 //! // Sign a message
 //! let message = b"Hello, quantum-resistant world!";
-//! let signature = sign(message, &keypair.secret_key);
+//! let signature = sign(message, &keypair.secret_key).unwrap();
 //!
 //! // Verify the signature
 //! assert!(verify(message, &signature, &keypair.public_key));
@@ -52,17 +52,17 @@ mod tests {
 
     #[test]
     fn test_basic_sign_verify() {
-        let keypair = generate_keypair(MlDsaLevel::Level2);
+        let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
         let message = b"test message";
-        let sig = sign(message, &keypair.secret_key);
+        let sig = sign(message, &keypair.secret_key).unwrap();
         assert!(verify(message, &sig, &keypair.public_key));
     }
 
     #[test]
     fn test_invalid_signature() {
-        let keypair = generate_keypair(MlDsaLevel::Level2);
+        let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
         let message = b"test message";
-        let mut sig = sign(message, &keypair.secret_key);
+        let mut sig = sign(message, &keypair.secret_key).unwrap();
 
         // Corrupt signature
         sig.bytes[0] ^= 0xFF;
@@ -72,9 +72,9 @@ mod tests {
 
     #[test]
     fn test_wrong_message() {
-        let keypair = generate_keypair(MlDsaLevel::Level2);
+        let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
         let message = b"original message";
-        let sig = sign(message, &keypair.secret_key);
+        let sig = sign(message, &keypair.secret_key).unwrap();
 
         let wrong_message = b"tampered message";
         assert!(!verify(wrong_message, &sig, &keypair.public_key));
@@ -83,9 +83,9 @@ mod tests {
     #[test]
     fn test_all_security_levels() {
         for level in [MlDsaLevel::Level2, MlDsaLevel::Level3, MlDsaLevel::Level5] {
-            let keypair = generate_keypair(level);
+            let keypair = generate_keypair(level).unwrap();
             let message = b"test";
-            let sig = sign(message, &keypair.secret_key);
+            let sig = sign(message, &keypair.secret_key).unwrap();
             assert!(verify(message, &sig, &keypair.public_key));
         }
     }

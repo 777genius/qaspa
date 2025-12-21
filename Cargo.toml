@@ -64,6 +64,8 @@ members = [
     "metrics/core",
     "metrics/perf_monitor",
     "utils/alloc",
+    "testnet/controller",
+    "testnet/miner_agent",
 ]
 
 [workspace.package]

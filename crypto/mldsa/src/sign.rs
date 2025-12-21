@@ -102,9 +102,9 @@ impl fmt::Display for Signature {
 /// ```
 /// use kaspa_mldsa::{generate_keypair, sign, verify, MlDsaLevel};
 ///
-/// let keypair = generate_keypair(MlDsaLevel::Level2);
+/// let keypair = generate_keypair(MlDsaLevel::Level2).unwrap();
 /// let message = b"Hello, quantum world!";
-/// let signature = sign(message, &keypair.secret_key);
+/// let signature = sign(message, &keypair.secret_key).unwrap();
 ///
 /// assert!(verify(message, &signature, &keypair.public_key));
 /// ```
@@ -141,8 +141,8 @@ pub fn try_sign(message: &[u8], secret_key: &SecretKey) -> Result<Signature> {
     Ok(Signature { bytes: sig_bytes, level })
 }
 
-pub fn sign(message: &[u8], secret_key: &SecretKey) -> Signature {
-    try_sign(message, secret_key).unwrap_or_else(|e| panic!("{e}"))
+pub fn sign(message: &[u8], secret_key: &SecretKey) -> Result<Signature> {
+    try_sign(message, secret_key)
 }
 
 #[cfg(test)]
@@ -152,9 +152,9 @@ mod tests {
 
     #[test]
     fn test_sign_level2() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = b"test message";
-        let sig = sign(msg, &kp.secret_key);
+        let sig = sign(msg, &kp.secret_key).unwrap();
 
         assert_eq!(sig.len(), 2420);
         assert_eq!(sig.level(), MlDsaLevel::Level2);
@@ -162,9 +162,9 @@ mod tests {
 
     #[test]
     fn test_sign_level3() {
-        let kp = generate_keypair(MlDsaLevel::Level3);
+        let kp = generate_keypair(MlDsaLevel::Level3).unwrap();
         let msg = b"test message";
-        let sig = sign(msg, &kp.secret_key);
+        let sig = sign(msg, &kp.secret_key).unwrap();
 
         assert_eq!(sig.len(), 3309);
         assert_eq!(sig.level(), MlDsaLevel::Level3);
@@ -172,9 +172,9 @@ mod tests {
 
     #[test]
     fn test_sign_different_messages() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
-        let sig1 = sign(b"message1", &kp.secret_key);
-        let sig2 = sign(b"message2", &kp.secret_key);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let sig1 = sign(b"message1", &kp.secret_key).unwrap();
+        let sig2 = sign(b"message2", &kp.secret_key).unwrap();
 
         // Different messages should produce different signatures
         assert_ne!(sig1, sig2);
@@ -182,12 +182,12 @@ mod tests {
 
     #[test]
     fn test_signature_deterministic() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = b"deterministic test";
 
         // ML-DSA signatures are deterministic (same message + key → same signature)
-        let sig1 = sign(msg, &kp.secret_key);
-        let sig2 = sign(msg, &kp.secret_key);
+        let sig1 = sign(msg, &kp.secret_key).unwrap();
+        let sig2 = sign(msg, &kp.secret_key).unwrap();
 
         assert_eq!(sig1, sig2);
     }
@@ -201,9 +201,9 @@ mod tests {
 
     #[test]
     fn test_signature_display_debug() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
         let msg = b"test";
-        let sig = sign(msg, &kp.secret_key);
+        let sig = sign(msg, &kp.secret_key).unwrap();
 
         // Test hex encoding
         let hex = sig.to_hex();
@@ -222,8 +222,8 @@ mod tests {
 
     #[test]
     fn test_signature_is_empty() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
-        let sig = sign(b"test", &kp.secret_key);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let sig = sign(b"test", &kp.secret_key).unwrap();
 
         assert!(!sig.is_empty());
         assert_eq!(sig.len(), 2420);
@@ -232,16 +232,16 @@ mod tests {
     #[test]
     fn test_signature_level() {
         for level in [MlDsaLevel::Level2, MlDsaLevel::Level3, MlDsaLevel::Level5] {
-            let kp = generate_keypair(level);
-            let sig = sign(b"test", &kp.secret_key);
+            let kp = generate_keypair(level).unwrap();
+            let sig = sign(b"test", &kp.secret_key).unwrap();
             assert_eq!(sig.level(), level);
         }
     }
 
     #[test]
     fn test_signature_from_bytes_valid() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
-        let sig = sign(b"test", &kp.secret_key);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let sig = sign(b"test", &kp.secret_key).unwrap();
 
         // Recreate from bytes
         let sig2 = Signature::from_bytes(sig.as_bytes(), MlDsaLevel::Level2).unwrap();
@@ -250,8 +250,8 @@ mod tests {
 
     #[test]
     fn test_signature_serde() {
-        let kp = generate_keypair(MlDsaLevel::Level2);
-        let sig = sign(b"test", &kp.secret_key);
+        let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
+        let sig = sign(b"test", &kp.secret_key).unwrap();
 
         // Test JSON serialization
         let json = serde_json::to_string(&sig).unwrap();

@@ -1,8 +1,0 @@
-{
-  "elements": {},
-  "imports": [
-    "package:injectable/injectable.dart",
-    "package:wallet_domain/wallet_domain.dart",
-    "package:wallet_data/src/database/history_database.dart"
-  ]
-}

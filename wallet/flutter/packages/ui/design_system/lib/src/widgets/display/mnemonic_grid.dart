@@ -39,6 +39,7 @@ class MnemonicGrid extends StatelessWidget {
           itemCount: words.length,
           itemBuilder: (context, index) {
             return MnemonicWordChip(
+              key: ValueKey('word_$index'),
               index: index + 1,
               word: words[index],
               isHidden: isHidden,

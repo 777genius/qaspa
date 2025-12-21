@@ -271,7 +271,7 @@ mod tests {
     fn test_pending_stealth_change_debug_redacts_secrets() {
         use kaspa_stealth::{derive_spending_key, try_create_stealth_output_with_blinding, StealthSecretKey};
 
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let (ephemeral_output, blinding_factor) = try_create_stealth_output_with_blinding(&address).unwrap();
@@ -290,7 +290,7 @@ mod tests {
     fn test_stealth_change_creator_impl() {
         use kaspa_stealth::{verify_derived_key, StealthSecretKey, STEALTH_SCRIPT_VERSION};
 
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let creator = StealthChangeCreatorImpl::new(address, keys.spend_secret());
@@ -322,7 +322,7 @@ mod tests {
     fn test_stealth_change_creator_unique_outputs() {
         use kaspa_stealth::StealthSecretKey;
 
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let creator = StealthChangeCreatorImpl::new(address, keys.spend_secret());
@@ -354,7 +354,7 @@ mod tests {
     fn test_stealth_change_creator_spending_keys_are_unique() {
         use kaspa_stealth::StealthSecretKey;
 
-        let keys = StealthSecretKey::generate();
+        let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
 
         let creator = StealthChangeCreatorImpl::new(address, keys.spend_secret());

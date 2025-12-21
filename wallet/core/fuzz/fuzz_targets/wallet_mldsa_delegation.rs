@@ -15,7 +15,7 @@ fn try_verify(mut record: DelegationRecordV1) {
         record.signature.truncate(MAX_SIGNATURE_LEN);
     }
 
-    let master = MlDsaKeypair::random(level);
+    let master = MlDsaKeypair::random(level).unwrap();
     let anchor = master.anchor();
 
     // ensure window fields stay consistent

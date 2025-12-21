@@ -19,6 +19,12 @@ abstract class _OnboardingStoreBase with Store {
   final ImportWalletUseCase _importWalletUseCase;
   final Bip39WordlistService _wordlistService;
 
+  // Cached RegExp patterns for password strength calculation
+  static final _lowercasePattern = RegExp(r'[a-z]');
+  static final _uppercasePattern = RegExp(r'[A-Z]');
+  static final _digitPattern = RegExp(r'[0-9]');
+  static final _specialPattern = RegExp(r'[!@#$%^&*(),.?":{}|<>]');
+
   _OnboardingStoreBase({
     required GenerateMnemonicUseCase generateMnemonicUseCase,
     required ValidateMnemonicUseCase validateMnemonicUseCase,
@@ -138,10 +144,10 @@ abstract class _OnboardingStoreBase with Store {
     if (password.length >= 12) score += 2;
     else if (password.length >= 10) score += 1;
 
-    if (password.contains(RegExp(r'[a-z]'))) score++;
-    if (password.contains(RegExp(r'[A-Z]'))) score++;
-    if (password.contains(RegExp(r'[0-9]'))) score++;
-    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) score++;
+    if (password.contains(_lowercasePattern)) score++;
+    if (password.contains(_uppercasePattern)) score++;
+    if (password.contains(_digitPattern)) score++;
+    if (password.contains(_specialPattern)) score++;
 
     if (score <= 2) return PasswordStrengthLevel.weak;
     if (score <= 4) return PasswordStrengthLevel.fair;

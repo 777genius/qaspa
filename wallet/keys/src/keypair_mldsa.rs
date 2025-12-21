@@ -8,7 +8,7 @@
 //! use kaspa_mldsa::MlDsaLevel;
 //!
 //! // Generate a new ML-DSA Level 2 keypair
-//! let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+//! let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
 //!
 //! // Get the public key
 //! let public_key = keypair.public_key();
@@ -100,11 +100,11 @@ impl MlDsaKeypair {
     /// use kaspa_wallet_keys::keypair_mldsa::MlDsaKeypair;
     /// use kaspa_mldsa::MlDsaLevel;
     ///
-    /// let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+    /// let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
     /// ```
-    pub fn random(level: MlDsaLevel) -> Self {
-        let keypair = generate_keypair(level);
-        Self::new(keypair, level)
+    pub fn random(level: MlDsaLevel) -> Result<Self, Error> {
+        let keypair = generate_keypair(level).map_err(|e| Error::custom(e.to_string()))?;
+        Ok(Self::new(keypair, level))
     }
 
     /// Get a reference to the public key.
@@ -136,7 +136,7 @@ impl MlDsaKeypair {
     /// use kaspa_addresses::Prefix;
     /// use kaspa_mldsa::MlDsaLevel;
     ///
-    /// let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+    /// let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
     /// let address = keypair.to_address(Prefix::Mainnet).unwrap();
     /// ```
     pub fn to_address(&self, prefix: Prefix) -> Result<Address, Error> {
@@ -255,7 +255,7 @@ mod tests {
     fn test_mldsa_keypair_generation() {
         // Test all three security levels
         for level in [MlDsaLevel::Level2, MlDsaLevel::Level3, MlDsaLevel::Level5] {
-            let keypair = MlDsaKeypair::random(level);
+            let keypair = MlDsaKeypair::random(level).unwrap();
 
             // Verify keypair properties
             assert_eq!(keypair.level(), level);
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn test_mldsa_address_generation() {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
 
         // Test address generation for all network types
         for prefix in [Prefix::Mainnet, Prefix::Testnet, Prefix::Simnet, Prefix::Devnet] {
@@ -296,14 +296,14 @@ mod tests {
 
     #[test]
     fn to_address_rejects_non_level2() {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level3);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level3).unwrap();
         let err = keypair.to_address(Prefix::Mainnet).expect_err("must fail");
         assert!(err.to_string().contains("only supported for Level2"));
     }
 
     #[test]
     fn test_mldsa_level2_sizes() {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
 
         // Verify Level 2 specific sizes (from NIST FIPS 204)
         assert_eq!(keypair.public_key_size(), 1312, "ML-DSA Level 2 public key should be 1312 bytes");
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_mldsa_keypair_display() {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
         let display_str = format!("{}", keypair);
 
         // Verify display format
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn anchor_matches_manual_domain_hash() {
-        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2);
+        let keypair = MlDsaKeypair::random(MlDsaLevel::Level2).unwrap();
         let anchor = keypair.anchor();
 
         let manual = compute_anchor(keypair.public_key());
@@ -459,7 +459,7 @@ mod prop_tests {
         fn prop_anchor_unique_for_random_pubkeys(samples in vec(level_strategy(), 6)) {
             let mut anchors = HashSet::new();
             for (idx, level) in samples.into_iter().enumerate() {
-                let keypair = MlDsaKeypair::random(level);
+                let keypair = MlDsaKeypair::random(level).unwrap();
                 anchors.insert((idx, keypair.anchor()));
             }
             prop_assert!(anchors.len() >= 5, "anchors should remain unique in small sample");
