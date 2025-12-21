@@ -1,0 +1,64 @@
+name: testnet_admin
+repository: https://github.com/user/qaspa
+
+packages:
+  - apps/*
+  - packages/core/*
+  - packages/features/**
+  - packages/ui/*
+
+command:
+  bootstrap:
+    runPubGetInParallel: true
+    usePubspecOverrides: false
+
+  version:
+    linkToCommits: true
+    workspaceChangelog: true
+
+scripts:
+  analyze:
+    run: melos exec -- dart analyze .
+    description: Analyze all packages
+
+  test:
+    run: melos exec -- flutter test
+    description: Run tests in all packages
+    packageFilters:
+      dirExists: test
+
+  build:runner:
+    run: melos exec -- dart run build_runner build --delete-conflicting-outputs
+    description: Run build_runner in all packages
+    packageFilters:
+      dependsOn: build_runner
+
+  watch:
+    run: dart run build_runner watch --delete-conflicting-outputs
+    description: Watch mode - auto-rebuild on file changes (run from workspace root)
+
+  gen:freezed:
+    run: melos exec -- dart run build_runner build --delete-conflicting-outputs
+    description: Generate Freezed code
+    packageFilters:
+      dependsOn: freezed
+
+  gen:mobx:
+    run: melos exec -- dart run build_runner build --delete-conflicting-outputs
+    description: Generate MobX code
+    packageFilters:
+      dependsOn: mobx_codegen
+
+  clean:
+    run: melos exec -- flutter clean
+    description: Clean all packages
+
+  format:
+    run: melos exec -- dart format .
+    description: Format all packages
+
+  build:web:
+    run: |
+      cd apps/admin
+      flutter build web --release
+    description: Build admin web app

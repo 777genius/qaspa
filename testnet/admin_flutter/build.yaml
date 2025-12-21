@@ -1,0 +1,20 @@
+targets:
+  $default:
+    sources:
+      - lib/**
+      - apps/**
+      - packages/**
+
+additional_public_assets:
+  - packages/core/admin_domain/lib/**
+  - packages/core/admin_data/lib/**
+  - packages/ui/admin_design_system/lib/**
+  - packages/features/dashboard/dashboard_domain/lib/**
+  - packages/features/dashboard/dashboard_presentation/lib/**
+  - packages/features/nodes/nodes_domain/lib/**
+  - packages/features/nodes/nodes_presentation/lib/**
+  - packages/features/miners/miners_domain/lib/**
+  - packages/features/miners/miners_presentation/lib/**
+  - packages/features/logs/logs_domain/lib/**
+  - packages/features/logs/logs_presentation/lib/**
+  - apps/admin/lib/**

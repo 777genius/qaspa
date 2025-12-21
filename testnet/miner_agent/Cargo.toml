@@ -1,0 +1,48 @@
+[package]
+name = "miner-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "miner-agent"
+path = "src/main.rs"
+
+[dependencies]
+# Kaspa internal
+kaspa-grpc-client.workspace = true
+kaspa-rpc-core.workspace = true
+kaspa-consensus-core.workspace = true
+kaspa-pow.workspace = true
+kaspa-addresses.workspace = true
+kaspa-hashes.workspace = true
+kaspa-math.workspace = true
+
+# Async runtime
+tokio = { workspace = true, features = ["full", "signal"] }
+futures = { workspace = true }
+
+# Parallel processing
+rayon = { workspace = true }
+
+# CLI
+clap = { workspace = true, features = ["derive", "env"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# HTTP API for stats
+axum = "0.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utils
+thiserror = { workspace = true }
+rand = { workspace = true }
+anyhow = "1.0"
+
+[lints]
+workspace = true

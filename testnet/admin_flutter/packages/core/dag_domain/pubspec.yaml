@@ -1,0 +1,20 @@
+name: dag_domain
+description: Domain layer for DAG visualization - entities, value objects, and repository interfaces
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.9.0
+  injectable: ^2.7.0
+  get_it: ^8.0.3
+
+dev_dependencies:
+  build_runner: ^2.4.15
+  freezed: ^3.0.6
+  json_serializable: ^6.9.4
+  injectable_generator: ^2.6.2

@@ -1,0 +1,36 @@
+name: dag_presentation
+description: DAG visualization feature presentation layer
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dag_domain:
+    path: ../../../core/dag_domain
+  dag_data:
+    path: ../../../core/dag_data
+  admin_design_system:
+    path: ../../../ui/admin_design_system
+  nodes_domain:
+    path: ../../nodes/nodes_domain
+  admin_domain:
+    path: ../../../core/admin_domain
+  mobx: ^2.4.0
+  flutter_mobx: ^2.2.1+1
+  injectable: ^2.7.0
+  get_it: ^8.0.3
+  go_router: ^15.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.15
+  mobx_codegen: ^2.6.1
+  injectable_generator: ^2.6.2
