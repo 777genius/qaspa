@@ -32,7 +32,7 @@ pub async fn get_aggregate_history(
     }
 
     // Apply limit
-    let limit = query.limit.min(10000).max(1) as u64;
+    let limit = query.limit.clamp(1, 10000) as u64;
     q = q.limit(limit);
 
     let records =
@@ -80,7 +80,7 @@ pub async fn get_node_history(
     }
 
     // Apply limit
-    let limit = query.limit.min(10000).max(1) as u64;
+    let limit = query.limit.clamp(1, 10000) as u64;
     q = q.limit(limit);
 
     let records =
@@ -126,7 +126,7 @@ pub async fn get_miner_history(
     }
 
     // Apply limit
-    let limit = query.limit.min(10000).max(1) as u64;
+    let limit = query.limit.clamp(1, 10000) as u64;
     q = q.limit(limit);
 
     let records =

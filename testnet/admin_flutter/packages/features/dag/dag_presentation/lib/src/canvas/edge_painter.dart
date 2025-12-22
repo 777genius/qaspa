@@ -32,7 +32,9 @@ class EdgePainter {
           continue;
         }
 
-        final isVirtualChain =
+        // Virtual chain: both blocks must be in chain AND edge goes to selected parent
+        final isVirtualChain = blockPos.block.isChainBlock &&
+            parentPos.block.isChainBlock &&
             blockPos.block.selectedParentHash?.value == parentHash.value;
         final isHighlighted = selectedBlockHash == blockPos.hash ||
             selectedBlockHash == parentHash.value;
@@ -51,12 +53,19 @@ class EdgePainter {
     }
 
     // Second pass: draw virtual chain edges (on top)
+    // Only for blocks that are part of the main chain (isChainBlock)
     for (final blockPos in layout.positionsList) {
+      // Skip blocks not in the main chain
+      if (!blockPos.block.isChainBlock) continue;
+
       final selectedParentHash = blockPos.block.selectedParentHash?.value;
       if (selectedParentHash == null) continue;
 
       final parentPos = layout[selectedParentHash];
       if (parentPos == null) continue;
+
+      // Parent must also be in the main chain
+      if (!parentPos.block.isChainBlock) continue;
 
       final isHighlighted = selectedBlockHash == blockPos.hash ||
           selectedBlockHash == selectedParentHash;
@@ -80,7 +89,9 @@ class EdgePainter {
           final parentPos = layout[parentHash.value];
           if (parentPos == null) continue;
 
-          final isVirtualChain =
+          // Virtual chain: both blocks in chain AND edge to selected parent
+          final isVirtualChain = selectedPos.block.isChainBlock &&
+              parentPos.block.isChainBlock &&
               selectedPos.block.selectedParentHash?.value == parentHash.value;
 
           _paintEdge(
@@ -99,7 +110,9 @@ class EdgePainter {
           final childPos = layout[childHash.value];
           if (childPos == null) continue;
 
-          final isVirtualChain =
+          // Virtual chain: both blocks in chain AND child's selected parent is this block
+          final isVirtualChain = selectedPos.block.isChainBlock &&
+              childPos.block.isChainBlock &&
               childPos.block.selectedParentHash?.value == selectedBlockHash;
 
           _paintEdge(

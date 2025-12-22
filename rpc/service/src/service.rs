@@ -1710,11 +1710,12 @@ mod tests {
     #[test]
     fn guardrail_allows_buffered_future_activation() {
         let mut params = DEVNET_PARAMS;
-        params.mldsa_master_activation = ForkActivation::new(100_000);
+        // Must be larger than buffer = bps * 86400 = 10 * 86400 = 864_000
+        params.mldsa_master_activation = ForkActivation::new(1_000_000);
         let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
         assert!(!invalid);
         assert!(!enabled);
-        assert_eq!(activation, Some(100_000));
+        assert_eq!(activation, Some(1_000_000));
     }
 
     #[test]
