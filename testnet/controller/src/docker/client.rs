@@ -243,12 +243,24 @@ impl DockerManager {
 
         let container_name = format!("qaspa_miner_{}", name.replace('-', "_"));
 
+        // Port bindings for stats port (exposed to random host port for local dev)
+        let mut port_bindings = HashMap::new();
+        port_bindings.insert(
+            format!("{}/tcp", MINER_STATS_PORT),
+            Some(vec![bollard::service::PortBinding {
+                host_ip: Some("127.0.0.1".to_string()),
+                host_port: None, // Let Docker assign a random port
+            }]),
+        );
+
         let config = Config {
             image: Some(self.config.miner_image.clone()),
             cmd: Some(cmd),
             labels: Some(labels),
+            exposed_ports: Some([(format!("{}/tcp", MINER_STATS_PORT), HashMap::new())].into_iter().collect()),
             host_config: Some(bollard::service::HostConfig {
                 network_mode: Some(self.config.network_name.clone()),
+                port_bindings: Some(port_bindings),
                 restart_policy: Some(bollard::service::RestartPolicy {
                     name: Some(bollard::service::RestartPolicyNameEnum::UNLESS_STOPPED),
                     ..Default::default()
@@ -408,7 +420,19 @@ impl ContainerInfo {
             .filter(|&p| p > 0) // 0 is invalid, use for non-node containers
             .unwrap_or(0);
 
-        let stats_port = labels.get(labels::LABEL_STATS_PORT).and_then(|s| s.parse::<u16>().ok()).filter(|&p| p > 0).unwrap_or(0);
+        // For stats port, try to get the host port from Docker port mappings first
+        // This is needed for local dev mode where we expose the stats port to a random host port
+        let container_stats_port = labels.get(labels::LABEL_STATS_PORT).and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
+        let stats_port = if container_stats_port > 0 {
+            // Try to find the host port mapping for the stats port
+            container
+                .ports
+                .as_ref()
+                .and_then(|ports| ports.iter().find(|p| p.private_port == container_stats_port).and_then(|p| p.public_port))
+                .unwrap_or(container_stats_port) // Fallback to container port (for Docker network access)
+        } else {
+            0
+        };
 
         let target_node = labels.get(labels::LABEL_TARGET_NODE).cloned().unwrap_or_default();
 

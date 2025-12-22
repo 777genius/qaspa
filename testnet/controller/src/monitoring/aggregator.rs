@@ -40,6 +40,7 @@ pub struct MonitoringAggregator {
     event_tx: broadcast::Sender<WsEvent>,
     shutdown_rx: watch::Receiver<bool>,
     metrics_writer: Option<Arc<MetricsWriter>>,
+    local_mode: bool,
 }
 
 impl MonitoringAggregator {
@@ -51,6 +52,7 @@ impl MonitoringAggregator {
         event_tx: broadcast::Sender<WsEvent>,
         shutdown_rx: watch::Receiver<bool>,
         metrics_writer: Option<Arc<MetricsWriter>>,
+        local_mode: bool,
     ) -> Self {
         Self {
             docker,
@@ -61,6 +63,7 @@ impl MonitoringAggregator {
             event_tx,
             shutdown_rx,
             metrics_writer,
+            local_mode,
         }
     }
 
@@ -134,9 +137,11 @@ impl MonitoringAggregator {
             if (container.role == "seed" || container.role == "peer") && container.status == "running" {
                 let grpc_timeout = self.grpc_timeout;
                 let container_name = container.name.clone();
+                let local_mode = self.local_mode;
                 self.monitors.entry(container.id.clone()).or_insert_with(|| {
-                    // Use Docker container name for DNS resolution within Docker network
-                    let grpc_url = format!("grpc://{}:{}", container.container_name, container.grpc_port);
+                    // Use localhost in local mode, Docker container name otherwise
+                    let host = if local_mode { "localhost" } else { container.container_name.as_str() };
+                    let grpc_url = format!("grpc://{}:{}", host, container.grpc_port);
                     debug!("Added monitor for node {} at {}", container_name, grpc_url);
                     NodeMonitor::new(container.id.clone(), grpc_url, grpc_timeout)
                 });
@@ -196,7 +201,8 @@ impl MonitoringAggregator {
 
         if let Some(client) = http_client {
             for (miner_id, container_name, stats_port) in running_miners {
-                let url = format!("http://{}:{}/stats", container_name, stats_port);
+                let host = if self.local_mode { "localhost" } else { container_name.as_str() };
+                let url = format!("http://{}:{}/stats", host, stats_port);
                 match client.get(&url).send().await {
                     Ok(response) => {
                         if let Ok(stats) = response.json::<MinerStatsResponse>().await {

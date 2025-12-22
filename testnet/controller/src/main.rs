@@ -22,6 +22,9 @@ async fn main() -> anyhow::Result<()> {
     let config = Arc::new(Config::load());
     info!("HTTP bind: {}", config.http_bind);
     info!("Static dir: {:?}", config.static_dir);
+    if config.local_mode {
+        info!("Local mode: enabled (using localhost for monitoring)");
+    }
 
     // Initialize Docker manager
     let docker = Arc::new(DockerManager::new(config.clone()).await?);
@@ -90,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
             monitoring_tx,
             shutdown_rx,
             Some(monitoring_writer),
+            monitoring_config.local_mode,
         );
         aggregator.run().await;
     });

@@ -1,7 +1,7 @@
 # Qaspa Testnet Development Makefile
 # Usage: make <target>
 
-.PHONY: help up down restart logs build-flutter build-controller build-miner dev clean
+.PHONY: help up down restart logs build-flutter build-controller build-miner dev dev-controller run-controller clean clean-chain clean-all add-miner add-miners up-dag status gen
 
 # Default target
 help:
@@ -23,12 +23,18 @@ help:
 	@echo ""
 	@echo "  Development:"
 	@echo "    make dev             - Start Flutter dev server with hot reload"
+	@echo "    make dev-controller  - Run controller locally with cargo-watch hot reload"
+	@echo "    make run-controller  - Run controller locally (no hot reload, faster)"
 	@echo "    make gen             - Run build_runner for code generation"
 	@echo "    make clean           - Clean Flutter build artifacts"
+	@echo "    make clean-chain     - Remove blockchain data (~2GB), keep postgres"
+	@echo "    make clean-all       - Remove ALL data (blockchain + postgres)"
 	@echo ""
 	@echo "  Cluster:"
 	@echo "    make status          - Show cluster status via API"
-	@echo "    make add-miner       - Add a test miner"
+	@echo "    make add-miner       - Add a single test miner"
+	@echo "    make add-miners      - Add 3 miners for DAG (or COUNT=N)"
+	@echo "    make up-dag          - Start cluster + 3 miners for DAG"
 	@echo ""
 
 # ============== Docker ==============
@@ -80,6 +86,41 @@ build-all: build-flutter build-controller build-miner
 dev:
 	cd $(FLUTTER_DIR) && flutter run -d chrome --web-port=3000
 
+# Run controller locally with hot reload (requires: cargo install cargo-watch)
+dev-controller:
+	@echo "Stopping Docker controller if running..."
+	@docker stop qaspa_controller 2>/dev/null || true
+	@pkill -f testnet-controller 2>/dev/null || true
+	@sleep 1
+	@echo "Starting controller with hot reload..."
+	@echo "Press Ctrl+C to stop"
+	cd controller && \
+	RUST_LOG=info \
+	HTTP_BIND=127.0.0.1:8081 \
+	STATIC_DIR=$(PWD)/admin_flutter/apps/admin/build/web \
+	DATABASE_URL=postgres://qaspa:qaspa_dev@localhost:5434/qaspa_testnet \
+	NETWORK_NAME=qaspa_testnet_net \
+	CLUSTER_LABEL=testnet_local \
+	SEED_GRPC_URL=grpc://localhost:16210 \
+	LOCAL_MODE=true \
+	cargo watch -x run
+
+# Run controller locally without hot reload (faster startup)
+run-controller:
+	@docker stop qaspa_controller 2>/dev/null || true
+	@pkill -f testnet-controller 2>/dev/null || true
+	@sleep 1
+	cd controller && \
+	RUST_LOG=info \
+	HTTP_BIND=127.0.0.1:8081 \
+	STATIC_DIR=$(PWD)/admin_flutter/apps/admin/build/web \
+	DATABASE_URL=postgres://qaspa:qaspa_dev@localhost:5434/qaspa_testnet \
+	NETWORK_NAME=qaspa_testnet_net \
+	CLUSTER_LABEL=testnet_local \
+	SEED_GRPC_URL=grpc://localhost:16210 \
+	LOCAL_MODE=true \
+	cargo run
+
 gen:
 	cd admin_flutter && dart run build_runner build --delete-conflicting-outputs
 
@@ -87,9 +128,30 @@ clean:
 	cd $(FLUTTER_DIR) && flutter clean
 	cd admin_flutter && dart run build_runner clean
 
+# ============== Cleanup ==============
+
+# Remove all blockchain data (stops nodes first)
+clean-chain:
+	@echo "Stopping all services..."
+	@$(COMPOSE) --profile controller down
+	@$(COMPOSE) down
+	@echo "Removing blockchain data volumes..."
+	@docker volume rm compose_seed_data compose_peer1_data compose_peer2_data 2>/dev/null || true
+	@echo "Done! Run 'make up' to start fresh."
+
+# Full cleanup - remove all data including postgres
+clean-all:
+	@echo "Stopping all services..."
+	@$(COMPOSE) --profile controller down
+	@$(COMPOSE) down -v
+	@echo "Removing all volumes..."
+	@docker volume rm compose_seed_data compose_peer1_data compose_peer2_data compose_postgres_data 2>/dev/null || true
+	@echo "Done! Run 'make up' to start fresh."
+
 # ============== Cluster ==============
 
 API_URL = http://localhost:8081/api/v1
+MINER_COUNT ?= 3
 
 status:
 	@echo "=== Nodes ===" && curl -s $(API_URL)/nodes | jq '.[] | {name, status, metrics: .metrics | {blocks: .block_count, synced: .is_synced}}'
@@ -99,3 +161,19 @@ add-miner:
 	@curl -s -X POST $(API_URL)/miners \
 		-H "Content-Type: application/json" \
 		-d '{"target_node": "$(shell curl -s $(API_URL)/nodes | jq -r '.[0].id')", "payout_address": "kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4", "threads": 2}' | jq
+
+add-miners:
+	@echo "Adding $(MINER_COUNT) miners for DAG..."
+	@for i in $$(seq 1 $(MINER_COUNT)); do \
+		echo "Starting miner $$i..."; \
+		curl -s -X POST $(API_URL)/miners \
+			-H "Content-Type: application/json" \
+			-d '{"target_node": "'$$(curl -s $(API_URL)/nodes | jq -r '.[0].id')'", "payout_address": "kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4", "threads": 2}' | jq -r '.name // .error'; \
+		sleep 1; \
+	done
+	@echo "Done! Added $(MINER_COUNT) miners"
+
+up-dag: up
+	@echo "Waiting for cluster to be ready..."
+	@sleep 10
+	@$(MAKE) add-miners

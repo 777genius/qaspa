@@ -19,6 +19,7 @@ export 'src/repositories/metrics_repository.dart';
 // Value Objects
 export 'src/value_objects/node_config.dart';
 export 'src/value_objects/miner_config.dart';
+export 'src/value_objects/network_info.dart';
 
 // Errors
 export 'src/errors/admin_exception.dart';

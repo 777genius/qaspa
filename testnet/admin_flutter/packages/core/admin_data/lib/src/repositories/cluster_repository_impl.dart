@@ -29,6 +29,27 @@ class ClusterRepositoryImpl implements ClusterRepository {
   }
 
   @override
+  Future<NetworkInfo> getNetworkInfo() async {
+    final response = await _apiClient.get('/api/v1/cluster');
+    return NetworkInfo(
+      networkType: _parseNetworkType(response['network_type'] as String?),
+      addressPrefix: response['address_prefix'] as String? ?? 'kaspadev:',
+      defaultAddress: response['default_address'] as String? ??
+          'kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4',
+    );
+  }
+
+  NetworkType _parseNetworkType(String? type) {
+    return switch (type) {
+      'mainnet' => NetworkType.mainnet,
+      'testnet' => NetworkType.testnet,
+      'devnet' => NetworkType.devnet,
+      'simnet' => NetworkType.simnet,
+      _ => NetworkType.devnet,
+    };
+  }
+
+  @override
   Future<ClusterStats> getStats() async {
     final response = await _apiClient.get('/api/v1/cluster');
     final aggregate = response['aggregate'] as Map<String, dynamic>? ?? {};

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::config::NetworkType;
 use crate::state::{AggregateMetrics, ClusterStatus, MinerState, NodeMetrics, NodeState};
 
 // ==================== Cluster ====================
@@ -7,6 +8,9 @@ use crate::state::{AggregateMetrics, ClusterStatus, MinerState, NodeMetrics, Nod
 #[derive(Debug, Serialize)]
 pub struct ClusterSummaryResponse {
     pub status: ClusterStatus,
+    pub network_type: NetworkType,
+    pub address_prefix: String,
+    pub default_address: String,
     pub nodes: Vec<NodeSummaryResponse>,
     pub miners: Vec<MinerSummaryResponse>,
     pub txgen_running: bool,

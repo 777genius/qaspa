@@ -21,9 +21,9 @@ services:
     networks:
       qaspa_testnet_net:
         ipv4_address: 172.28.0.5
-    # Port exposed only for debugging; controller connects via Docker network
-    # ports:
-    #   - "127.0.0.1:5434:5432"
+    # Port exposed for local development (controller outside Docker)
+    ports:
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:

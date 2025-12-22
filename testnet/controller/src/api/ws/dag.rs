@@ -113,7 +113,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, node_id: String) {
         }
     };
 
-    let grpc_url = format!("grpc://{}:{}", container_name, grpc_port);
+    // Use localhost in local mode, Docker container name otherwise
+    let host = if state.config.local_mode { "localhost" } else { container_name.as_str() };
+    let grpc_url = format!("grpc://{}:{}", host, grpc_port);
 
     // Connect to the node
     let client = match tokio::time::timeout(GRPC_TIMEOUT, GrpcClient::connect(grpc_url.clone())).await {

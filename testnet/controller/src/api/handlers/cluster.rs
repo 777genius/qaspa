@@ -9,6 +9,7 @@ use crate::error::Result;
 /// Returns cluster summary with all nodes and miners
 pub async fn get_cluster(State(state): State<AppState>) -> Result<Json<ClusterSummaryResponse>> {
     let cluster_state = state.cluster_state.read();
+    let network_type = state.config.network_type;
 
     let nodes: Vec<NodeSummaryResponse> = cluster_state.nodes.values().cloned().map(NodeSummaryResponse::from).collect();
 
@@ -18,6 +19,9 @@ pub async fn get_cluster(State(state): State<AppState>) -> Result<Json<ClusterSu
 
     Ok(Json(ClusterSummaryResponse {
         status: cluster_state.status,
+        network_type,
+        address_prefix: network_type.address_prefix().to_string(),
+        default_address: network_type.default_address().to_string(),
         nodes,
         miners,
         txgen_running: cluster_state.txgen_running,

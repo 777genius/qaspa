@@ -187,8 +187,9 @@ abstract class _MinersStore with Store {
     operationError = null;
 
     try {
-      final miner = await _addMinerUseCase(config);
-      miners.add(miner);
+      // Don't add locally - miner will appear via WebSocket subscription
+      // to avoid race condition duplicates
+      await _addMinerUseCase(config);
     } catch (e) {
       operationError = e.toString();
       rethrow;

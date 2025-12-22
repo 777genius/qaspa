@@ -38,8 +38,9 @@ async fn get_node_client(state: &AppState, node_id: &str) -> Result<GrpcClient> 
             .ok_or_else(|| ControllerError::NodeNotFound(node_id.to_string()))?
     };
 
-    // Use container name for DNS resolution within Docker network
-    let grpc_url = format!("grpc://{}:{}", container_name, grpc_port);
+    // Use localhost in local mode, Docker container name otherwise
+    let host = if state.config.local_mode { "localhost" } else { container_name.as_str() };
+    let grpc_url = format!("grpc://{}:{}", host, grpc_port);
     debug!("Connecting to node {} at {}", node_id, grpc_url);
 
     let client = tokio::time::timeout(GRPC_TIMEOUT, GrpcClient::connect(grpc_url.clone()))

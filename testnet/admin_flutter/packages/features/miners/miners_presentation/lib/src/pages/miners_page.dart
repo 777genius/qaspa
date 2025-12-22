@@ -303,16 +303,7 @@ class _MinersContentState extends State<_MinersContent> {
     showDialog(
       context: context,
       builder: (dialogContext) => AddMinerDialog(
-        onAdd: (config) async {
-          try {
-            await _store.addMiner(config);
-            if (dialogContext.mounted) {
-              Navigator.of(dialogContext).pop();
-            }
-          } catch (e) {
-            // Error shown via operationError reaction
-          }
-        },
+        onAdd: (config) => _store.addMiner(config),
       ),
     );
   }

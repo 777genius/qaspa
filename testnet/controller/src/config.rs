@@ -1,11 +1,59 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+
+/// Network type for the cluster
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkType {
+    Mainnet,
+    Testnet,
+    #[default]
+    Devnet,
+    Simnet,
+}
+
+impl NetworkType {
+    /// Get the address prefix for this network
+    pub fn address_prefix(&self) -> &'static str {
+        match self {
+            NetworkType::Mainnet => "kaspa:",
+            NetworkType::Testnet => "kaspatest:",
+            NetworkType::Devnet => "kaspadev:",
+            NetworkType::Simnet => "kaspasim:",
+        }
+    }
+
+    /// Get a default placeholder address for this network
+    pub fn default_address(&self) -> &'static str {
+        match self {
+            NetworkType::Mainnet => "kaspa:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e",
+            NetworkType::Testnet => "kaspatest:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqhqrxplya",
+            NetworkType::Devnet => "kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4",
+            NetworkType::Simnet => "kaspasim:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqf5cqqxej",
+        }
+    }
+
+    /// Get kaspad network flag
+    pub fn kaspad_flag(&self) -> &'static str {
+        match self {
+            NetworkType::Mainnet => "--mainnet",
+            NetworkType::Testnet => "--testnet",
+            NetworkType::Devnet => "--devnet",
+            NetworkType::Simnet => "--simnet",
+        }
+    }
+}
 
 /// Testnet Controller - manages devnet cluster via HTTP/WS API
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about)]
 pub struct Config {
+    /// Network type (devnet, testnet, mainnet, simnet)
+    #[arg(long, env = "NETWORK_TYPE", value_enum, default_value = "devnet")]
+    pub network_type: NetworkType,
+
     /// HTTP server bind address (default localhost for security)
     #[arg(long, env = "HTTP_BIND", default_value = "127.0.0.1:8080")]
     pub http_bind: SocketAddr,
@@ -69,6 +117,10 @@ pub struct Config {
     /// Starting port for gRPC connections
     #[arg(long, env = "GRPC_PORT_START", default_value = "16210")]
     pub grpc_port_start: u16,
+
+    /// Local development mode - use localhost instead of Docker hostnames for monitoring
+    #[arg(long, env = "LOCAL_MODE", default_value = "false")]
+    pub local_mode: bool,
 }
 
 impl Config {
