@@ -19,6 +19,30 @@ use workflow_wasm::{
 
 mod bech32;
 
+#[cfg(test)]
+mod qaspa_prefix_alias_tests {
+    use super::{Address, Prefix, Version};
+
+    #[test]
+    fn qaspa_prefixes_are_accepted_as_aliases() {
+        assert_eq!(Prefix::try_from("qaspa").unwrap(), Prefix::Mainnet);
+        assert_eq!(Prefix::try_from("qaspatest").unwrap(), Prefix::Testnet);
+        assert_eq!(Prefix::try_from("qaspasim").unwrap(), Prefix::Simnet);
+        assert_eq!(Prefix::try_from("qaspadev").unwrap(), Prefix::Devnet);
+    }
+
+    #[test]
+    fn to_string_qaspa_uses_qaspa_for_regular_prefixes_and_keeps_stealth() {
+        let regular = Address::new(Prefix::Mainnet, Version::PubKey, &[0u8; 32]);
+        assert!(String::from(&regular).starts_with("kaspa:"));
+        assert!(regular.to_string_qaspa().starts_with("qaspa:"));
+
+        let stealth = Address::new(Prefix::StealthMainnet, Version::Stealth, &[7u8; 64]);
+        assert!(String::from(&stealth).starts_with("qs:"));
+        assert!(stealth.to_string_qaspa().starts_with("qs:"));
+    }
+}
+
 /// Error type produced by [`Address`] operations.
 #[derive(Error, PartialEq, Eq, Debug, Clone)]
 pub enum AddressError {
@@ -150,6 +174,11 @@ impl TryFrom<&str> for Prefix {
             "kaspatest" => Ok(Prefix::Testnet),
             "kaspasim" => Ok(Prefix::Simnet),
             "kaspadev" => Ok(Prefix::Devnet),
+            // Qaspa aliases (accepted on input, canonical output remains kaspa/kaspatest/...)
+            "qaspa" => Ok(Prefix::Mainnet),
+            "qaspatest" => Ok(Prefix::Testnet),
+            "qaspasim" => Ok(Prefix::Simnet),
+            "qaspadev" => Ok(Prefix::Devnet),
             "qs" => Ok(Prefix::StealthMainnet),
             "qstest" => Ok(Prefix::StealthTestnet),
             #[cfg(test)]
@@ -282,6 +311,26 @@ impl Address {
         }
         Self { prefix, payload: PayloadVec::from_slice(payload), version }
     }
+
+    /// Convert an address to a string, using `qaspa*` aliases for regular (non-stealth) prefixes.
+    ///
+    /// This does NOT affect parsing/validation and does not change the canonical `Display` output.
+    pub fn to_string_qaspa(&self) -> String {
+        let prefix = match self.prefix {
+            Prefix::Mainnet => "qaspa",
+            Prefix::Testnet => "qaspatest",
+            Prefix::Simnet => "qaspasim",
+            Prefix::Devnet => "qaspadev",
+            // Stealth prefixes remain canonical: qs/qstest
+            Prefix::StealthMainnet => "qs",
+            Prefix::StealthTestnet => "qstest",
+            #[cfg(test)]
+            Prefix::A => "a",
+            #[cfg(test)]
+            Prefix::B => "b",
+        };
+        format!("{prefix}:{}", self.encode_payload())
+    }
 }
 
 #[wasm_bindgen]
@@ -300,6 +349,12 @@ impl Address {
     #[wasm_bindgen(js_name = toString)]
     pub fn address_to_string(&self) -> String {
         self.into()
+    }
+
+    /// Convert an address to a string, using `qaspa*` aliases for regular (non-stealth) prefixes.
+    #[wasm_bindgen(js_name = toStringQaspa)]
+    pub fn address_to_string_qaspa(&self) -> String {
+        self.to_string_qaspa()
     }
 
     #[wasm_bindgen(getter, js_name = "version")]
@@ -331,6 +386,28 @@ impl Address {
         let payload = self.encode_payload();
         let n = std::cmp::min(n, payload.len() / 4);
         format!("{}:{}....{}", self.prefix, &payload[0..n], &payload[payload.len() - n..])
+    }
+
+    /// Short form, using `qaspa*` aliases for regular (non-stealth) prefixes.
+    #[wasm_bindgen(js_name = shortQaspa)]
+    pub fn short_qaspa(&self, n: usize) -> String {
+        let payload = self.encode_payload();
+        let n = std::cmp::min(n, payload.len() / 4);
+
+        let prefix = match self.prefix {
+            Prefix::Mainnet => "qaspa",
+            Prefix::Testnet => "qaspatest",
+            Prefix::Simnet => "qaspasim",
+            Prefix::Devnet => "qaspadev",
+            Prefix::StealthMainnet => "qs",
+            Prefix::StealthTestnet => "qstest",
+            #[cfg(test)]
+            Prefix::A => "a",
+            #[cfg(test)]
+            Prefix::B => "b",
+        };
+
+        format!("{prefix}:{}....{}", &payload[0..n], &payload[payload.len() - n..])
     }
 }
 

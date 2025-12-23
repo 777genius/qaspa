@@ -30,3 +30,6 @@ package-sizes.js
 tmp/
 **/build/**
 **/test_cache/**
+
+# Local forks/clones for explorer work (kept as separate git repos, not tracked here)
+repos/

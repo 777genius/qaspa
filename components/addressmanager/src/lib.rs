@@ -362,10 +362,8 @@ mod address_store_with_cache {
             // We manage the cache ourselves on this level, so we disable the inner builtin cache
             let db_store = DbAddressesStore::new(db, CachePolicy::Empty);
             let mut addresses = HashMap::new();
-            for res in db_store.iterator() {
-                if let Ok((key, entry)) = res {
-                    addresses.insert(key, entry);
-                }
+            for (key, entry) in db_store.iterator().flatten() {
+                addresses.insert(key, entry);
             }
 
             Self { db_store, addresses }
