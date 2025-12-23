@@ -1,6 +1,5 @@
 use axum::{routing::get, Json, Router};
 use serde::Serialize;
-use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -8,7 +7,7 @@ mod config;
 mod miner;
 
 use config::Config;
-use miner::{Miner, MiningStats};
+use miner::Miner;
 
 #[derive(Serialize)]
 struct StatsResponse {
