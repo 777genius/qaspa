@@ -221,12 +221,17 @@ async fn handle_socket(socket: WebSocket, state: AppState, node_id: String) {
                     match tokio::time::timeout(GRPC_TIMEOUT, poll_client.get_block(*tip_hash, true)).await {
                         Ok(Ok(block)) => {
                             let header = &block.header;
+                            let verbose_data = block.verbose_data.as_ref();
 
-                            // New tip blocks are always considered chain blocks initially.
-                            // Virtual chain updates asynchronously, so the tip won't be in
-                            // added_chain_block_hashes immediately. If a reorg happens later,
-                            // VirtualChainChanged will update the block status.
-                            let is_chain_block = true;
+                            // Get is_chain_block from consensus via verbose_data
+                            // Fallback to true for new tips if verbose_data unavailable
+                            let is_chain_block = verbose_data.map(|v| v.is_chain_block).unwrap_or(true);
+
+                            // Get selected_parent_hash from verbose_data (correct GHOSTDAG parent)
+                            let selected_parent_hash = verbose_data.map(|v| v.selected_parent_hash.to_string());
+
+                            // Get blue_score from verbose_data
+                            let blue_score = verbose_data.map(|v| v.blue_score).unwrap_or(header.blue_score);
 
                             info!("DAG WS: new block {} - is_chain_block={}", tip_hash, is_chain_block);
 
@@ -234,18 +239,14 @@ async fn handle_socket(socket: WebSocket, state: AppState, node_id: String) {
                                 .send(DagWsMessage::BlockAdded(DagBlockMessage {
                                     hash: tip_hash.to_string(),
                                     daa_score: header.daa_score,
-                                    blue_score: header.blue_score,
+                                    blue_score,
                                     blue_work: header.blue_work.to_string(),
                                     parent_hashes: header
                                         .parents_by_level
                                         .first()
                                         .map(|p| p.iter().map(|h| h.to_string()).collect())
                                         .unwrap_or_default(),
-                                    selected_parent_hash: header
-                                        .parents_by_level
-                                        .first()
-                                        .and_then(|p| p.first())
-                                        .map(|h| h.to_string()),
+                                    selected_parent_hash,
                                     is_chain_block,
                                     timestamp: header.timestamp,
                                     block_type: "tip".to_string(),

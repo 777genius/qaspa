@@ -4,7 +4,7 @@ use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use serde::Deserialize;
 use std::time::Duration;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::api::dto::{DagBlockResponse, DagBlocksResponse, DagInfoResponse};
 use crate::api::AppState;
@@ -79,6 +79,8 @@ pub async fn get_dag_info(State(state): State<AppState>, Path(node_id): Path<Str
 
 /// GET /api/v1/nodes/:id/dag/blocks
 /// Get recent blocks from DAG
+/// Uses get_blocks RPC which returns ALL blocks (chain + off-chain/anticone)
+/// with correct is_chain_block flag from consensus
 pub async fn get_blocks(
     State(state): State<AppState>,
     Path(node_id): Path<String>,
@@ -87,71 +89,101 @@ pub async fn get_blocks(
     let limit = query.limit.min(MAX_BLOCKS);
     let client = get_node_client(&state, &node_id).await?;
 
-    // Get DAG info to find tips
+    // Get DAG info to find tips and sink
     let dag_info = tokio::time::timeout(GRPC_TIMEOUT, client.get_block_dag_info())
         .await
         .map_err(|_| ControllerError::Grpc("Timeout getting DAG info".to_string()))?
         .map_err(|e| ControllerError::Grpc(e.to_string()))?;
 
-    // Get virtual chain from pruning point
-    // TODO: In future, use from_daa_score to find a specific starting block
-    let low_hash = dag_info.pruning_point_hash;
-    let _ = query.from_daa_score; // Acknowledge unused parameter
+    // Determine starting point for block retrieval
+    let low_hash = if let Some(from_daa) = query.from_daa_score {
+        // Find a block near the requested DAA score using virtual chain
+        let chain = tokio::time::timeout(GRPC_TIMEOUT, client.get_virtual_chain_from_block(dag_info.pruning_point_hash, false, None))
+            .await
+            .map_err(|_| ControllerError::Grpc("Timeout getting virtual chain".to_string()))?
+            .map_err(|e| ControllerError::Grpc(e.to_string()))?;
 
-    let chain = tokio::time::timeout(GRPC_TIMEOUT, client.get_virtual_chain_from_block(low_hash, true, None))
-        .await
-        .map_err(|_| ControllerError::Grpc("Timeout getting virtual chain".to_string()))?
-        .map_err(|e| ControllerError::Grpc(e.to_string()))?;
-
-    // Get the most recent blocks from the chain
-    let block_hashes: Vec<_> = chain.added_chain_block_hashes.iter().rev().take(limit).cloned().collect();
-
-    let mut blocks = Vec::with_capacity(block_hashes.len());
-
-    // Fetch block details
-    for hash in block_hashes {
-        match tokio::time::timeout(GRPC_TIMEOUT, client.get_block(hash, true)).await {
-            Ok(Ok(block)) => {
-                let header = &block.header;
-
-                // Determine block type
-                let block_type = if dag_info.tip_hashes.contains(&hash) {
-                    "tip"
-                } else if hash == dag_info.sink {
-                    "sink"
-                } else {
-                    "regular"
-                };
-
-                // Check if block is in the virtual chain (chain block = blue)
-                let is_chain_block = chain.added_chain_block_hashes.contains(&hash);
-
-                blocks.push(DagBlockResponse {
-                    hash: hash.to_string(),
-                    daa_score: header.daa_score,
-                    blue_score: header.blue_score,
-                    blue_work: header.blue_work.to_string(),
-                    parent_hashes: header
-                        .parents_by_level
-                        .first()
-                        .map(|parents| parents.iter().map(|h| h.to_string()).collect())
-                        .unwrap_or_default(),
-                    children_hashes: vec![], // Children are computed by Flutter client
-                    selected_parent_hash: header.parents_by_level.first().and_then(|parents| parents.first()).map(|h| h.to_string()),
-                    merge_set_blues: vec![], // Not available from basic RPC
-                    merge_set_reds: vec![],
-                    is_chain_block,
-                    timestamp: header.timestamp,
-                    block_type: block_type.to_string(),
-                });
-            }
-            Ok(Err(e)) => {
-                warn!("Failed to get block {}: {}", hash, e);
-            }
-            Err(_) => {
-                warn!("Timeout getting block {}", hash);
+        // Find first block at or above requested DAA score
+        let mut found_hash = dag_info.pruning_point_hash;
+        for hash in chain.added_chain_block_hashes.iter() {
+            match tokio::time::timeout(GRPC_TIMEOUT, client.get_block(*hash, false)).await {
+                Ok(Ok(block)) => {
+                    if block.header.daa_score >= from_daa {
+                        found_hash = *hash;
+                        break;
+                    }
+                }
+                _ => continue,
             }
         }
+        found_hash
+    } else {
+        dag_info.pruning_point_hash
+    };
+
+    // Use get_blocks RPC - returns ALL blocks (chain + anticone/off-chain)
+    // with verbose_data containing correct is_chain_block from consensus
+    let response = tokio::time::timeout(GRPC_TIMEOUT, client.get_blocks(Some(low_hash), true, false))
+        .await
+        .map_err(|_| ControllerError::Grpc("Timeout getting blocks".to_string()))?
+        .map_err(|e| ControllerError::Grpc(e.to_string()))?;
+
+    // Process blocks - take most recent ones (reverse order and limit)
+    let mut blocks = Vec::with_capacity(limit);
+
+    for rpc_block in response.blocks.iter().rev().take(limit) {
+        let header = &rpc_block.header;
+        let hash = header.hash;
+
+        // Get verbose data which contains is_chain_block from consensus
+        let verbose_data = rpc_block.verbose_data.as_ref();
+
+        // Determine block type
+        let block_type = if dag_info.tip_hashes.contains(&hash) {
+            "tip"
+        } else if hash == dag_info.sink {
+            "sink"
+        } else {
+            "regular"
+        };
+
+        // is_chain_block comes from consensus via verbose_data
+        let is_chain_block = verbose_data.map(|v| v.is_chain_block).unwrap_or(false);
+
+        // selected_parent_hash from verbose_data (correct GHOSTDAG selected parent)
+        let selected_parent_hash = verbose_data.map(|v| v.selected_parent_hash.to_string());
+
+        // children_hashes from verbose_data
+        let children_hashes: Vec<String> =
+            verbose_data.map(|v| v.children_hashes.iter().map(|h| h.to_string()).collect()).unwrap_or_default();
+
+        // merge sets from verbose_data
+        let merge_set_blues: Vec<String> =
+            verbose_data.map(|v| v.merge_set_blues_hashes.iter().map(|h| h.to_string()).collect()).unwrap_or_default();
+        let merge_set_reds: Vec<String> =
+            verbose_data.map(|v| v.merge_set_reds_hashes.iter().map(|h| h.to_string()).collect()).unwrap_or_default();
+
+        // blue_score from verbose_data (more accurate than header)
+        let blue_score = verbose_data.map(|v| v.blue_score).unwrap_or(header.blue_score);
+
+        blocks.push(DagBlockResponse {
+            hash: hash.to_string(),
+            daa_score: header.daa_score,
+            blue_score,
+            blue_work: header.blue_work.to_string(),
+            parent_hashes: header
+                .parents_by_level
+                .first()
+                .map(|parents| parents.iter().map(|h| h.to_string()).collect())
+                .unwrap_or_default(),
+            children_hashes,
+            selected_parent_hash,
+            merge_set_blues,
+            merge_set_reds,
+            is_chain_block,
+            timestamp: header.timestamp,
+            block_type: block_type.to_string(),
+        });
     }
 
     // Disconnect client
@@ -162,6 +194,7 @@ pub async fn get_blocks(
 
 /// GET /api/v1/nodes/:id/dag/blocks/:hash
 /// Get a specific block by hash
+/// Uses verbose_data for is_chain_block from consensus
 pub async fn get_block(
     State(state): State<AppState>,
     Path((node_id, hash)): Path<(String, String)>,
@@ -178,13 +211,14 @@ pub async fn get_block(
         .map_err(|_| ControllerError::Grpc("Timeout getting DAG info".to_string()))?
         .map_err(|e| ControllerError::Grpc(e.to_string()))?;
 
-    // Get block
+    // Get block with verbose data (include_transactions=true to get verbose_data)
     let block = tokio::time::timeout(GRPC_TIMEOUT, client.get_block(block_hash, true))
         .await
         .map_err(|_| ControllerError::Grpc("Timeout getting block".to_string()))?
         .map_err(|e| ControllerError::Grpc(e.to_string()))?;
 
     let header = &block.header;
+    let verbose_data = block.verbose_data.as_ref();
 
     // Determine block type
     let block_type = if dag_info.tip_hashes.contains(&block_hash) {
@@ -195,13 +229,24 @@ pub async fn get_block(
         "regular"
     };
 
-    // Get virtual chain to check if block is chain block
-    let chain = tokio::time::timeout(GRPC_TIMEOUT, client.get_virtual_chain_from_block(dag_info.pruning_point_hash, true, None))
-        .await
-        .map_err(|_| ControllerError::Grpc("Timeout getting virtual chain".to_string()))?
-        .map_err(|e| ControllerError::Grpc(e.to_string()))?;
+    // is_chain_block comes from consensus via verbose_data
+    let is_chain_block = verbose_data.map(|v| v.is_chain_block).unwrap_or(false);
 
-    let is_chain_block = chain.added_chain_block_hashes.contains(&block_hash);
+    // selected_parent_hash from verbose_data (correct GHOSTDAG selected parent)
+    let selected_parent_hash = verbose_data.map(|v| v.selected_parent_hash.to_string());
+
+    // children_hashes from verbose_data
+    let children_hashes: Vec<String> =
+        verbose_data.map(|v| v.children_hashes.iter().map(|h| h.to_string()).collect()).unwrap_or_default();
+
+    // merge sets from verbose_data
+    let merge_set_blues: Vec<String> =
+        verbose_data.map(|v| v.merge_set_blues_hashes.iter().map(|h| h.to_string()).collect()).unwrap_or_default();
+    let merge_set_reds: Vec<String> =
+        verbose_data.map(|v| v.merge_set_reds_hashes.iter().map(|h| h.to_string()).collect()).unwrap_or_default();
+
+    // blue_score from verbose_data
+    let blue_score = verbose_data.map(|v| v.blue_score).unwrap_or(header.blue_score);
 
     // Disconnect client
     let _ = client.disconnect().await;
@@ -209,17 +254,17 @@ pub async fn get_block(
     Ok(Json(DagBlockResponse {
         hash: block_hash.to_string(),
         daa_score: header.daa_score,
-        blue_score: header.blue_score,
+        blue_score,
         blue_work: header.blue_work.to_string(),
         parent_hashes: header
             .parents_by_level
             .first()
             .map(|parents| parents.iter().map(|h| h.to_string()).collect())
             .unwrap_or_default(),
-        children_hashes: vec![],
-        selected_parent_hash: header.parents_by_level.first().and_then(|parents| parents.first()).map(|h| h.to_string()),
-        merge_set_blues: vec![],
-        merge_set_reds: vec![],
+        children_hashes,
+        selected_parent_hash,
+        merge_set_blues,
+        merge_set_reds,
         is_chain_block,
         timestamp: header.timestamp,
         block_type: block_type.to_string(),

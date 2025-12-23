@@ -160,15 +160,16 @@ status:
 add-miner:
 	@curl -s -X POST $(API_URL)/miners \
 		-H "Content-Type: application/json" \
-		-d '{"target_node": "$(shell curl -s $(API_URL)/nodes | jq -r '.[0].id')", "payout_address": "kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4", "threads": 2}' | jq
+		-d '{"target_node": "$(shell curl -s $(API_URL)/nodes | jq -r '.[] | select(.name == "seed") | .id')", "payout_address": "kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4", "threads": 2}' | jq
 
 add-miners:
-	@echo "Adding $(MINER_COUNT) miners for DAG..."
-	@for i in $$(seq 1 $(MINER_COUNT)); do \
+	@echo "Adding $(MINER_COUNT) miners for DAG on seed node..."
+	@SEED_ID=$$(curl -s $(API_URL)/nodes | jq -r '.[] | select(.name == "seed") | .id'); \
+	for i in $$(seq 1 $(MINER_COUNT)); do \
 		echo "Starting miner $$i..."; \
 		curl -s -X POST $(API_URL)/miners \
 			-H "Content-Type: application/json" \
-			-d '{"target_node": "'$$(curl -s $(API_URL)/nodes | jq -r '.[0].id')'", "payout_address": "kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4", "threads": 2}' | jq -r '.name // .error'; \
+			-d "{\"target_node\": \"$$SEED_ID\", \"payout_address\": \"kaspadev:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6cqmuuq4\", \"threads\": 2}" | jq -r '.name // .error'; \
 		sleep 1; \
 	done
 	@echo "Done! Added $(MINER_COUNT) miners"
