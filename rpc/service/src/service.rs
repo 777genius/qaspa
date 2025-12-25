@@ -100,8 +100,8 @@ fn compute_mldsa_master_status(params: &Params, virtual_daa_score: u64) -> (bool
     let mut invalid_activation = false;
 
     if let Some(activation_daa) = activation_daa {
-        let merge_depth = params.merge_depth().get(virtual_daa_score);
-        let bps = params.bps().get(virtual_daa_score); // blocks per second
+        let merge_depth = params.merge_depth();
+        let bps = params.bps_history().get(virtual_daa_score); // blocks per second
         let daa_per_day = bps.saturating_mul(86_400);
         let buffer = std::cmp::max(merge_depth.saturating_mul(3), daa_per_day);
         let min_allowed_activation = virtual_daa_score.saturating_add(buffer);
@@ -1419,8 +1419,8 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         if invalid_activation {
             static MLDSA_ACTIVATION_GUARD: OnceCell<()> = OnceCell::new();
             if let Some(activation_daa) = mldsa_master_activation_daa {
-                let merge_depth = params.merge_depth().get(virtual_daa_score);
-                let bps = params.bps().get(virtual_daa_score); // blocks per second
+                let merge_depth = params.merge_depth();
+                let bps = params.bps_history().get(virtual_daa_score); // blocks per second
                 let daa_per_day = bps.saturating_mul(86_400);
                 let buffer = std::cmp::max(merge_depth.saturating_mul(3), daa_per_day);
 
