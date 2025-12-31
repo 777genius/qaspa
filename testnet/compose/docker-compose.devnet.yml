@@ -13,6 +13,8 @@ volumes:
   peer1_data:
   peer2_data:
   postgres_data:
+  pool_db_data:
+  pool_redis_data:
 
 services:
   postgres:
@@ -61,6 +63,7 @@ services:
     ports:
       - "127.0.0.1:16210:16210"
       - "127.0.0.1:16211:16211"
+      - "127.0.0.1:17210:17210"  # wRPC Borsh (for pool)
     volumes:
       - seed_data:/app/data
     deploy:
@@ -75,6 +78,7 @@ services:
       - --devnet
       - --listen=0.0.0.0:16211
       - --rpclisten=0.0.0.0:16210
+      - --rpclisten-borsh=0.0.0.0:17210
       - --nodnsseed
       - --utxoindex
       - --enable-unsynced-mining
@@ -86,6 +90,7 @@ services:
       qaspa.name: seed
       qaspa.ports.p2p: "16211"
       qaspa.ports.grpc: "16210"
+      qaspa.ports.wrpc: "17210"
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 16210 || exit 1"]
       interval: 10s
@@ -192,8 +197,10 @@ services:
           memory: 128M
     command:
       - /app/rothschild
-      - --rpcserver=grpc://172.28.0.10:16210
+      - --rpcserver=172.28.0.10:16210
       - --tps=1
+      - --private-key=e82076224aac1803152dfb8e09ac167a773a28c12d2d44359d36f96476045d1a
+      - --burn-stealth
     labels:
       qaspa.cluster: testnet_local
       qaspa.role: txgen
@@ -256,4 +263,248 @@ services:
         condition: service_healthy
     profiles:
       - controller
+    restart: unless-stopped
+
+  miner:
+    build:
+      context: ../..
+      dockerfile: testnet/docker/Dockerfile.miner_agent
+    image: qaspa/miner-agent:latest
+    container_name: qaspa_miner
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.30
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+        reservations:
+          memory: 256M
+    environment:
+      - RUST_LOG=info
+      # Mining mode: solo (gRPC to node) or pool (Stratum)
+      - MINING_MODE=${MINING_MODE:-solo}
+      # Solo mode settings
+      - NODE_GRPC_URL=grpc://qaspa_seed:16210
+      - TARGET_BPS=10
+      # Pool mode settings
+      - STRATUM_URL=${STRATUM_URL:-172.28.0.52:3333}
+      - STRATUM_WORKER=${STRATUM_WORKER:-testnet-miner}
+      # Common settings
+      - PAYOUT_ADDRESS=${MINER_PAYOUT_ADDRESS}
+      - THREADS=2
+      - STATS_PORT=9090
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: miner
+      qaspa.name: miner
+    depends_on:
+      seed:
+        condition: service_healthy
+    profiles:
+      - miner
+    restart: unless-stopped
+
+  # ============== Pool Services (profile: pool) ==============
+
+  pool-db:
+    image: postgres:16-alpine
+    container_name: qaspa_pool_db
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.50
+    ports:
+      - "127.0.0.1:5435:5432"  # Exposed for local pool dev
+    volumes:
+      - pool_db_data:/var/lib/postgresql/data
+      - ../../repos/qaspa-pool/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      POSTGRES_USER: qaspa_pool
+      POSTGRES_PASSWORD: ${POOL_DB_PASSWORD:-pool_secret}
+      POSTGRES_DB: qaspa_pool
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: pool-database
+      qaspa.name: pool-db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qaspa_pool"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    profiles:
+      - pool
+      - pool-dev
+    restart: unless-stopped
+
+  pool-redis:
+    image: redis:7-alpine
+    container_name: qaspa_pool_redis
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.51
+    ports:
+      - "127.0.0.1:6379:6379"  # Exposed for local pool dev
+    volumes:
+      - pool_redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: pool-cache
+      qaspa.name: pool-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    profiles:
+      - pool
+      - pool-dev
+    restart: unless-stopped
+
+  pool-app:
+    build:
+      context: ../../repos/qaspa-pool
+      dockerfile: docker/Dockerfile
+    image: qaspa/pool:latest
+    container_name: qaspa_pool_app
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.52
+    ports:
+      - "3333:3333"   # VarDiff Stratum
+      - "3334:3334"   # Static 512
+      - "3335:3335"   # Static 2048
+      - "9300:9300"   # Metrics/Health
+    environment:
+      NODE_ENV: development
+      NETWORK_ID: devnet
+      QASPA_WRPC_URL: ws://172.28.0.10:17210
+      DATABASE_URL: postgres://qaspa_pool:${POOL_DB_PASSWORD:-pool_secret}@172.28.0.50:5432/qaspa_pool
+      REDIS_URL: redis://172.28.0.51:6379
+      POOL_ADDRESS: ${POOL_ADDRESS:-qdev:qr0000000000000000000000000000000000000000000000000000000000}
+      STRATUM_PORT: 3333
+      STRATUM_INITIAL_DIFFICULTY: 512
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: pool
+      qaspa.name: pool-app
+      qaspa.ports.stratum: "3333"
+      qaspa.ports.metrics: "9300"
+    depends_on:
+      seed:
+        condition: service_healthy
+      pool-db:
+        condition: service_healthy
+      pool-redis:
+        condition: service_healthy
+    profiles:
+      - pool
+    restart: unless-stopped
+
+  # ============== E2E Test Miners (profile: e2e-miners) ==============
+
+  miner-1:
+    build:
+      context: ../..
+      dockerfile: testnet/docker/Dockerfile.miner_agent
+    image: qaspa/miner-agent:latest
+    container_name: qaspa_miner_1
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.31
+    environment:
+      - RUST_LOG=info
+      - MINING_MODE=pool
+      - STRATUM_URL=172.28.0.52:3333
+      - STRATUM_WORKER=e2e-worker-1
+      - PAYOUT_ADDRESS=kaspadev:qztest1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpw4f86
+      - THREADS=2
+      - STATS_PORT=9091
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: e2e-miner
+      qaspa.name: miner-1
+    depends_on:
+      pool-app:
+        condition: service_started
+    profiles:
+      - e2e-miners
+    restart: unless-stopped
+
+  miner-2:
+    build:
+      context: ../..
+      dockerfile: testnet/docker/Dockerfile.miner_agent
+    image: qaspa/miner-agent:latest
+    container_name: qaspa_miner_2
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.32
+    environment:
+      - RUST_LOG=info
+      - MINING_MODE=pool
+      - STRATUM_URL=172.28.0.52:3333
+      - STRATUM_WORKER=e2e-worker-2
+      - PAYOUT_ADDRESS=kaspadev:qztest2qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpw4f87
+      - THREADS=2
+      - STATS_PORT=9092
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: e2e-miner
+      qaspa.name: miner-2
+    depends_on:
+      pool-app:
+        condition: service_started
+    profiles:
+      - e2e-miners
+    restart: unless-stopped
+
+  miner-3:
+    build:
+      context: ../..
+      dockerfile: testnet/docker/Dockerfile.miner_agent
+    image: qaspa/miner-agent:latest
+    container_name: qaspa_miner_3
+    networks:
+      qaspa_testnet_net:
+        ipv4_address: 172.28.0.33
+    environment:
+      - RUST_LOG=info
+      - MINING_MODE=pool
+      - STRATUM_URL=172.28.0.52:3333
+      - STRATUM_WORKER=e2e-worker-3
+      - PAYOUT_ADDRESS=kaspadev:qztest3qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpw4f88
+      - THREADS=2
+      - STATS_PORT=9093
+    labels:
+      qaspa.cluster: testnet_local
+      qaspa.role: e2e-miner
+      qaspa.name: miner-3
+    depends_on:
+      pool-app:
+        condition: service_started
+    profiles:
+      - e2e-miners
     restart: unless-stopped

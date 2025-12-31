@@ -6,16 +6,21 @@ import '../../tokens/spacing.dart';
 
 /// Pending balance indicator for the balance card.
 class BalanceCardPending extends StatelessWidget {
-  final String formattedPendingBalance;
-
   const BalanceCardPending({
     super.key,
     required this.formattedPendingBalance,
+    this.currency,
+    this.label = 'pending',
   });
+
+  final String formattedPendingBalance;
+  final String? currency;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final currencySuffix = currency != null ? ' $currency' : '';
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -36,7 +41,7 @@ class BalanceCardPending extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            '+$formattedPendingBalance KAS pending',
+            '+$formattedPendingBalance$currencySuffix $label',
             style: theme.textTheme.labelSmall?.copyWith(
               color: AppColors.warning,
             ),

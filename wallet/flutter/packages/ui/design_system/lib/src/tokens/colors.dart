@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
-/// Kaspa brand colors and color tokens.
+/// Brand colors and color tokens.
 abstract final class AppColors {
-  // === Kaspa Brand Colors ===
+  // === Brand Colors ===
 
-  /// Primary Kaspa green
-  static const Color kaspaGreen = Color(0xFF49EACB);
+  /// Primary brand color (green)
+  static const Color brandPrimary = Color(0xFF49EACB);
 
-  /// Secondary Kaspa teal
-  static const Color kaspaTeal = Color(0xFF1AA68D);
+  /// Secondary brand color (teal)
+  static const Color brandSecondary = Color(0xFF1AA68D);
 
-  /// Dark background
-  static const Color kaspaDark = Color(0xFF0D1117);
+  /// Dark brand color (background)
+  static const Color brandDark = Color(0xFF0D1117);
 
   // === Primary Palette (Green) ===
 

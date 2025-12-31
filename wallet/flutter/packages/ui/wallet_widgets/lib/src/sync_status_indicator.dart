@@ -1,8 +1,6 @@
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:wallet_domain/wallet_domain.dart';
-
-import '../../tokens/colors.dart';
-import '../../tokens/spacing.dart';
 
 /// Sync status indicator with progress.
 class SyncStatusIndicator extends StatelessWidget {

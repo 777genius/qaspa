@@ -14,7 +14,8 @@ use kaspa_core::{info, kaspad_env::version, time::unix_now, warn};
 use kaspa_grpc_client::{ClientPool, GrpcClient};
 use kaspa_notify::subscription::context::SubscriptionContext;
 use kaspa_rpc_core::{api::rpc::RpcApi, notify::mode::NotificationMode, RpcUtxoEntry};
-use kaspa_txscript::pay_to_address_script;
+use kaspa_stealth::{try_create_stealth_output, StealthAddress, StealthSecretKey};
+use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use parking_lot::Mutex;
 use rand::RngCore;
 use rayon::prelude::*;
@@ -27,7 +28,7 @@ use tokio::time::{interval, Instant, MissedTickBehavior};
 const DEFAULT_SEND_AMOUNT: u64 = 10 * SOMPI_PER_KASPA;
 const FEE_RATE: u64 = 10;
 const MILLIS_PER_TICK: u64 = 10;
-const ADDRESS_PREFIX: Prefix = Prefix::Testnet;
+const ADDRESS_PREFIX: Prefix = Prefix::Devnet;
 const ADDRESS_VERSION: Version = Version::PubKey;
 
 struct Stats {
@@ -48,6 +49,7 @@ pub struct Args {
     pub priority_fee: u64,
     pub randomize_fee: bool,
     pub payload_size: usize,
+    pub burn_stealth: bool,
 }
 
 impl Args {
@@ -63,6 +65,7 @@ impl Args {
             priority_fee: m.get_one::<u64>("priority-fee").cloned().unwrap_or(0),
             randomize_fee: m.get_one::<bool>("randomize-fee").cloned().unwrap_or(false),
             payload_size: m.get_one::<usize>("payload-size").cloned().unwrap_or(0),
+            burn_stealth: m.get_one::<bool>("burn-stealth").cloned().unwrap_or(false),
         }
     }
 }
@@ -126,6 +129,12 @@ pub fn cli() -> Command {
                 .value_parser(clap::value_parser!(usize))
                 .help("Randomized payload size"),
         )
+        .arg(
+            Arg::new("burn-stealth")
+                .long("burn-stealth")
+                .action(ArgAction::SetTrue)
+                .help("Generate stealth outputs (coins are burned, not recoverable). Required for Crescendo-enabled networks."),
+        )
 }
 
 async fn new_rpc_client(subscription_context: &SubscriptionContext, address: &str) -> GrpcClient {
@@ -156,12 +165,19 @@ struct TxConfig {
     priority_fee: u64,
     randomize_fee: bool,
     payload_size: usize,
+    burn_stealth_addr: Option<StealthAddress>,
 }
 
 #[tokio::main]
 async fn main() {
     kaspa_core::log::init_logger(None, "");
     let args = Args::parse();
+
+    if args.burn_stealth && args.addr.is_some() {
+        eprintln!("Error: --burn-stealth and --to-addr are mutually exclusive. In burn-stealth mode, outputs are sent to generated stealth addresses.");
+        std::process::exit(1);
+    }
+
     let stats = Arc::new(Mutex::new(Stats { num_txs: 0, since: unix_now(), num_utxos: 0, utxos_amount: 0, num_outs: 0 }));
     let subscription_context = SubscriptionContext::new();
     let rpc_client = GrpcClient::connect_with_args(
@@ -199,11 +215,23 @@ async fn main() {
 
     let kaspa_addr = Address::new(ADDRESS_PREFIX, ADDRESS_VERSION, &schnorr_key.x_only_public_key().0.serialize());
 
+    let burn_stealth_addr: Option<StealthAddress> = if args.burn_stealth {
+        let stealth_sk = StealthSecretKey::generate().expect("Failed to generate stealth secret key");
+        Some(stealth_sk.to_address())
+    } else {
+        None
+    };
+
     let kaspa_to_addr = args.addr.as_ref().map_or_else(|| kaspa_addr.clone(), |addr_str| Address::try_from(addr_str.clone()).unwrap());
 
     (args.payload_size <= 20000).then_some(()).expect("payload-size can be max 20000");
 
-    let tx_config = TxConfig { priority_fee: args.priority_fee, randomize_fee: args.randomize_fee, payload_size: args.payload_size };
+    let tx_config = TxConfig {
+        priority_fee: args.priority_fee,
+        randomize_fee: args.randomize_fee,
+        payload_size: args.payload_size,
+        burn_stealth_addr: burn_stealth_addr.clone(),
+    };
 
     rayon::ThreadPoolBuilder::new().num_threads(args.threads as usize).build_global().unwrap();
 
@@ -227,13 +255,20 @@ async fn main() {
     if args.payload_size != 0 {
         log_message.push_str(&format!("\n\tpayload size: {} random bytes", tx_config.payload_size,));
     }
+    if burn_stealth_addr.is_some() {
+        log_message.push_str("\n\tmode: burn-stealth (outputs are not recoverable)");
+    }
     info!("{}", log_message);
 
     let info = rpc_client.get_block_dag_info().await.expect("Failed to get block dag info.");
 
-    let coinbase_maturity = match info.network.suffix {
-        Some(11) => panic!("TN11 is not supported on this version"),
-        None | Some(_) => TESTNET_PARAMS.coinbase_maturity().after(),
+    let coinbase_maturity = match info.network.network_type {
+        kaspa_consensus_core::network::NetworkType::Devnet => 100,
+        kaspa_consensus_core::network::NetworkType::Simnet => 100,
+        _ => match info.network.suffix {
+            Some(11) => panic!("TN11 is not supported on this version"),
+            None | Some(_) => TESTNET_PARAMS.coinbase_maturity().after(),
+        },
     };
     info!(
         "Node block-DAG info: \n\tNetwork: {}, \n\tBlock count: {}, \n\tHeader count: {}, \n\tDifficulty: {},
@@ -483,7 +518,7 @@ async fn maybe_send_tx(
         .into_par_iter()
         .map(|utxo_option| {
             if let Some((selected_utxos, selected_amount)) = utxo_option {
-                let tx = generate_tx(schnorr_key, &selected_utxos, selected_amount, num_outs, &kaspa_addr, tx_config.payload_size);
+                let tx = generate_tx(schnorr_key, &selected_utxos, selected_amount, num_outs, &kaspa_addr, tx_config);
 
                 return Some((tx, selected_utxos.len(), selected_utxos.into_iter().map(|(_, entry)| entry.amount).sum::<u64>()));
             }
@@ -514,12 +549,13 @@ fn clean_old_pending_outpoints(pending: &mut HashMap<TransactionOutpoint, Instan
     pending.retain(|_, &mut time| now.duration_since(time) <= Duration::from_secs(3600));
 }
 
-fn required_fee(num_utxos: usize, num_outs: u64) -> u64 {
-    FEE_RATE * estimated_mass(num_utxos, num_outs)
+fn required_fee(num_utxos: usize, num_outs: u64, is_stealth: bool) -> u64 {
+    FEE_RATE * estimated_mass(num_utxos, num_outs, is_stealth)
 }
 
-fn estimated_mass(num_utxos: usize, num_outs: u64) -> u64 {
-    200 + 34 * num_outs + 1000 * (num_utxos as u64)
+fn estimated_mass(num_utxos: usize, num_outs: u64, is_stealth: bool) -> u64 {
+    let output_script_size: u64 = if is_stealth { 66 } else { 34 };
+    200 + output_script_size * num_outs + 1000 * (num_utxos as u64)
 }
 
 fn generate_tx(
@@ -528,18 +564,29 @@ fn generate_tx(
     send_amount: u64,
     num_outs: u64,
     kaspa_addr: &Address,
-    payload_size: usize,
+    tx_config: &TxConfig,
 ) -> Transaction {
-    let script_public_key = pay_to_address_script(kaspa_addr).expect("valid address");
     let inputs = utxos
         .iter()
         .map(|(op, _)| TransactionInput { previous_outpoint: *op, signature_script: vec![], sequence: 0, sig_op_count: 1 })
         .collect_vec();
 
-    let outputs = (0..num_outs)
-        .map(|_| TransactionOutput { value: send_amount / num_outs, script_public_key: script_public_key.clone() })
-        .collect_vec();
-    let mut data = vec![0u8; payload_size];
+    let outputs: Vec<TransactionOutput> = if let Some(ref stealth_addr) = tx_config.burn_stealth_addr {
+        (0..num_outs)
+            .map(|_| {
+                let ephemeral_output = try_create_stealth_output(stealth_addr).expect("stealth output creation failed");
+                let script_public_key = pay_to_stealth(&ephemeral_output);
+                TransactionOutput { value: send_amount / num_outs, script_public_key }
+            })
+            .collect_vec()
+    } else {
+        let script_public_key = pay_to_address_script(kaspa_addr).expect("valid address");
+        (0..num_outs)
+            .map(|_| TransactionOutput { value: send_amount / num_outs, script_public_key: script_public_key.clone() })
+            .collect_vec()
+    };
+
+    let mut data = vec![0u8; tx_config.payload_size];
     rand::thread_rng().fill_bytes(&mut data);
     let unsigned_tx = Transaction::new_non_finalized(TX_VERSION, inputs, outputs, 0, SUBNETWORK_ID_NATIVE, 0, data);
     let signed_tx =
@@ -565,7 +612,7 @@ fn select_utxos(
         selected_amount += entry.amount;
         selected.push((outpoint, entry));
 
-        let fee = required_fee(selected.len(), num_outs);
+        let fee = required_fee(selected.len(), num_outs, tx_config.burn_stealth_addr.is_some());
         let priority_fee = if tx_config.randomize_fee && tx_config.priority_fee > 0 {
             rng.gen_range(0..tx_config.priority_fee)
         } else {
@@ -584,4 +631,50 @@ fn select_utxos(
     }
 
     (vec![], 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_estimated_mass_regular_outputs() {
+        // Regular outputs use 34-byte scripts
+        let mass = estimated_mass(1, 2, false);
+        // 200 + 34*2 + 1000*1 = 200 + 68 + 1000 = 1268
+        assert_eq!(mass, 1268);
+    }
+
+    #[test]
+    fn test_estimated_mass_stealth_outputs() {
+        // Stealth outputs use 66-byte scripts
+        let mass = estimated_mass(1, 2, true);
+        // 200 + 66*2 + 1000*1 = 200 + 132 + 1000 = 1332
+        assert_eq!(mass, 1332);
+    }
+
+    #[test]
+    fn test_stealth_mass_greater_than_regular() {
+        for num_utxos in 1..5 {
+            for num_outs in 1..5 {
+                let regular_mass = estimated_mass(num_utxos, num_outs, false);
+                let stealth_mass = estimated_mass(num_utxos, num_outs, true);
+                assert!(
+                    stealth_mass > regular_mass,
+                    "Stealth mass ({}) should be greater than regular mass ({}) for {} UTXOs and {} outputs",
+                    stealth_mass,
+                    regular_mass,
+                    num_utxos,
+                    num_outs
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_required_fee_stealth_greater() {
+        let regular_fee = required_fee(2, 2, false);
+        let stealth_fee = required_fee(2, 2, true);
+        assert!(stealth_fee > regular_fee, "Stealth fee should be higher due to larger output scripts");
+    }
 }

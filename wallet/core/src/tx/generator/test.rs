@@ -444,6 +444,7 @@ where
         fee_rate,
         final_transaction_priority_fee: final_priority_fee,
         final_transaction_destination,
+        final_transaction_outputs: None,
         final_transaction_payload,
         stealth_change_creator: None,
         random_fee_settings: RandomFeeSettings::default(),
@@ -475,6 +476,7 @@ fn make_generator_with_randomization(random_fee_settings: RandomFeeSettings, pri
         fee_rate: None,
         final_transaction_priority_fee: priority_fee,
         final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+        final_transaction_outputs: None,
         final_transaction_payload: None,
         stealth_change_creator: None,
         random_fee_settings,
@@ -508,6 +510,7 @@ fn test_generator_include_delegation_id_toggle() -> Result<()> {
             fee_rate: None,
             final_transaction_priority_fee: Fees::SenderPays(0),
             final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+            final_transaction_outputs: None,
             final_transaction_payload: None,
             stealth_change_creator: None,
             random_fee_settings: RandomFeeSettings::default(),
@@ -775,6 +778,7 @@ fn test_generator_receiver_pays_requires_at_least_one_output() -> Result<()> {
         fee_rate: None,
         final_transaction_priority_fee: Fees::ReceiverPays(0),
         final_transaction_destination: PaymentDestination::PaymentOutputs(PaymentOutputs { outputs: vec![] }),
+        final_transaction_outputs: None,
         final_transaction_payload: None,
         stealth_change_creator: None,
         random_fee_settings: RandomFeeSettings::default(),
@@ -786,6 +790,61 @@ fn test_generator_receiver_pays_requires_at_least_one_output() -> Result<()> {
         Err(err) => err,
     };
     assert!(matches!(err, Error::GeneratorIncludeFeesRequiresOneOutput));
+    Ok(())
+}
+
+#[test]
+fn test_generator_final_transaction_outputs_override_supports_raw_outputs() -> Result<()> {
+    use kaspa_consensus_core::tx::{ScriptPublicKey, ScriptVec};
+    use kaspa_txscript::STEALTH_SCRIPT_VERSION;
+
+    let network_id = test_network_id();
+    let network_type = NetworkType::from(network_id);
+    let change_address = change_address(network_type);
+
+    // Provide enough funds for the two outputs + fees.
+    let utxo_entries = vec![UtxoEntryReference::simulated(kaspa_to_sompi(10.0))];
+    let utxo_iterator: Box<dyn Iterator<Item = UtxoEntryReference> + Send + Sync + 'static> = Box::new(utxo_entries.into_iter());
+
+    // Regular output (version 0 script).
+    let regular_address = output_address(network_type);
+    let regular_spk = kaspa_txscript::pay_to_address_script(&regular_address).map_err(|e| Error::Custom(e.to_string()))?;
+    let regular_output = kaspa_consensus_core::tx::TransactionOutput::new(kaspa_to_sompi(1.0), regular_spk);
+
+    // Stealth-like raw output (version 16 + 66-byte script).
+    let stealth_spk = ScriptPublicKey::new(STEALTH_SCRIPT_VERSION, ScriptVec::from_slice(&[0u8; 66]));
+    let stealth_output = kaspa_consensus_core::tx::TransactionOutput::new(kaspa_to_sompi(2.0), stealth_spk);
+
+    let settings = GeneratorSettings {
+        network_id,
+        multiplexer: None,
+        sig_op_count: 1,
+        minimum_signatures: 1,
+        change_address,
+        utxo_iterator,
+        source_utxo_context: None,
+        priority_utxo_entries: None,
+        destination_utxo_context: None,
+        fee_rate: None,
+        final_transaction_priority_fee: Fees::SenderPays(0),
+        // Destination is ignored when final_transaction_outputs is set.
+        final_transaction_destination: PaymentDestination::PaymentOutputs(PaymentOutputs { outputs: vec![] }),
+        final_transaction_outputs: Some(vec![regular_output, stealth_output]),
+        final_transaction_payload: None,
+        stealth_change_creator: None,
+        random_fee_settings: RandomFeeSettings::default(),
+        include_delegation_id: true,
+    };
+
+    let generator = Generator::try_new(settings, None, None)?;
+    let pending_tx = generator.generate_transaction()?.expect("transaction expected");
+    assert!(pending_tx.is_final());
+
+    let tx = pending_tx.transaction();
+    let versions: Vec<u16> = tx.outputs.iter().map(|o| o.script_public_key.version()).collect();
+    assert!(versions.contains(&0), "must contain a regular scriptPublicKey version 0 output");
+    assert!(versions.contains(&STEALTH_SCRIPT_VERSION), "must contain a stealth scriptPublicKey version 16 output");
+
     Ok(())
 }
 
@@ -950,6 +1009,7 @@ fn test_generator_requires_stealth_change_creator() {
         fee_rate: None,
         final_transaction_priority_fee: Fees::SenderPays(0),
         final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+        final_transaction_outputs: None,
         final_transaction_payload: None,
         stealth_change_creator: None,
         random_fee_settings: RandomFeeSettings::default(),
@@ -988,6 +1048,7 @@ fn test_generator_produces_stealth_change_metadata() -> Result<()> {
         fee_rate: None,
         final_transaction_priority_fee: Fees::SenderPays(0),
         final_transaction_destination: PaymentDestination::PaymentOutputs(outputs),
+        final_transaction_outputs: None,
         final_transaction_payload: None,
         stealth_change_creator: Some(creator),
         random_fee_settings: RandomFeeSettings::default(),

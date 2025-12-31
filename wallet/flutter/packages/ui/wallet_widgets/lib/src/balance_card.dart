@@ -1,27 +1,15 @@
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:wallet_domain/wallet_domain.dart';
-
-import '../../tokens/spacing.dart';
-import '../../tokens/radii.dart';
-import 'balance_card_fiat_value.dart';
-import 'balance_card_label.dart';
-import 'balance_card_main_balance.dart';
-import 'balance_card_pending.dart';
 
 /// Large balance card for home screen.
 ///
 /// Composes smaller widgets for each section:
 /// - [BalanceCardLabel] - "Total Balance" label
-/// - [BalanceCardMainBalance] - Main KAS amount
+/// - [BalanceCardMainBalance] - Main amount
 /// - [BalanceCardFiatValue] - Optional fiat equivalent
 /// - [BalanceCardPending] - Pending balance indicator
 class BalanceCard extends StatelessWidget {
-  final Balance balance;
-  final bool isLoading;
-  final bool showPending;
-  final String? fiatValue;
-  final VoidCallback? onTap;
-
   const BalanceCard({
     super.key,
     required this.balance,
@@ -31,6 +19,14 @@ class BalanceCard extends StatelessWidget {
     this.onTap,
   });
 
+  final Balance balance;
+  final bool isLoading;
+  final bool showPending;
+  final String? fiatValue;
+  final VoidCallback? onTap;
+
+  static const _currency = 'KAS';
+
   @override
   Widget build(BuildContext context) {
     final formattedBalance = _formatBalance(balance.availableKas);
@@ -38,9 +34,9 @@ class BalanceCard extends StatelessWidget {
 
     final balanceLabel = isLoading
         ? 'Balance loading'
-        : 'Total balance: $formattedBalance KAS';
+        : 'Total balance: $formattedBalance $_currency';
     final pendingLabel = showPending && balance.pending > BigInt.zero
-        ? ', $formattedPending KAS pending'
+        ? ', $formattedPending $_currency pending'
         : '';
 
     return Semantics(
@@ -59,6 +55,7 @@ class BalanceCard extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 BalanceCardMainBalance(
                   formattedBalance: formattedBalance,
+                  currency: _currency,
                   isLoading: isLoading,
                 ),
                 if (fiatValue != null) ...[
@@ -69,6 +66,7 @@ class BalanceCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.sm),
                   BalanceCardPending(
                     formattedPendingBalance: formattedPending,
+                    currency: _currency,
                   ),
                 ],
               ],

@@ -377,6 +377,7 @@ impl Generator {
             fee_rate,
             final_transaction_priority_fee,
             final_transaction_destination,
+            final_transaction_outputs: final_transaction_outputs_override,
             final_transaction_payload,
             destination_utxo_context,
             stealth_change_creator,
@@ -388,53 +389,69 @@ impl Generator {
         let network_params = NetworkParams::from(network_id);
         let mass_calculator = MassCalculator::new(&network_id.into());
 
-        let (final_transaction_outputs, final_transaction_amount) = match final_transaction_destination {
-            PaymentDestination::Change => {
-                if !final_transaction_priority_fee.is_none() {
-                    return Err(Error::GeneratorFeesInSweepTransaction);
-                }
-
-                (vec![], None)
+        let (final_transaction_outputs, final_transaction_amount) = if let Some(outputs) = final_transaction_outputs_override {
+            // sanity checks
+            if final_transaction_priority_fee.is_none() {
+                return Err(Error::GeneratorNoFeesForFinalTransaction);
             }
-            PaymentDestination::PaymentOutputs(outputs) => {
-                // sanity checks
-                if final_transaction_priority_fee.is_none() {
-                    return Err(Error::GeneratorNoFeesForFinalTransaction);
-                }
 
-                for output in outputs.iter() {
-                    let output_network = NetworkType::try_from(output.address.prefix)?;
-                    // Allow StealthTestnet prefix for all test networks (testnet, simnet, devnet)
-                    let is_stealth_on_test_network = output.address.prefix.is_stealth()
-                        && matches!(network_type, NetworkType::Testnet | NetworkType::Simnet | NetworkType::Devnet)
-                        && matches!(output_network, NetworkType::Testnet);
-                    if output_network != network_type && !is_stealth_on_test_network {
-                        return Err(Error::GeneratorPaymentOutputNetworkTypeMismatch);
+            for output in outputs.iter() {
+                if output.value == 0 {
+                    return Err(Error::GeneratorPaymentOutputZeroAmount);
+                }
+            }
+
+            let amount = outputs.iter().map(|output| output.value).sum();
+            (outputs, Some(amount))
+        } else {
+            match final_transaction_destination {
+                PaymentDestination::Change => {
+                    if !final_transaction_priority_fee.is_none() {
+                        return Err(Error::GeneratorFeesInSweepTransaction);
                     }
-                    if output.amount == 0 {
-                        return Err(Error::GeneratorPaymentOutputZeroAmount);
+
+                    (vec![], None)
+                }
+                PaymentDestination::PaymentOutputs(outputs) => {
+                    // sanity checks
+                    if final_transaction_priority_fee.is_none() {
+                        return Err(Error::GeneratorNoFeesForFinalTransaction);
                     }
-                }
 
-                // Convert payment outputs to transaction outputs
-                // Stealth addresses require special handling with ephemeral key generation
-                let mut tx_outputs = Vec::with_capacity(outputs.outputs.len());
-                for output in outputs.outputs.iter() {
-                    let script = if output.address.version == Version::Stealth {
-                        // For stealth addresses, extract StealthAddress from payload
-                        // and generate ephemeral output with random ephemeral key
-                        let stealth_addr = StealthAddress::try_from_slice(&output.address.payload)
-                            .map_err(|_| Error::Custom("Invalid stealth address payload".to_string()))?;
-                        let ephemeral_output = kaspa_stealth::try_create_stealth_output(&stealth_addr)
-                            .map_err(|e| Error::Custom(format!("Failed to create stealth output: {}", e)))?;
-                        pay_to_stealth(&ephemeral_output)
-                    } else {
-                        pay_to_address_script(&output.address).map_err(|e| Error::Custom(e.to_string()))?
-                    };
-                    tx_outputs.push(TransactionOutput::new(output.amount, script));
-                }
+                    for output in outputs.iter() {
+                        let output_network = NetworkType::try_from(output.address.prefix)?;
+                        // Allow StealthTestnet prefix for all test networks (testnet, simnet, devnet)
+                        let is_stealth_on_test_network = output.address.prefix.is_stealth()
+                            && matches!(network_type, NetworkType::Testnet | NetworkType::Simnet | NetworkType::Devnet)
+                            && matches!(output_network, NetworkType::Testnet);
+                        if output_network != network_type && !is_stealth_on_test_network {
+                            return Err(Error::GeneratorPaymentOutputNetworkTypeMismatch);
+                        }
+                        if output.amount == 0 {
+                            return Err(Error::GeneratorPaymentOutputZeroAmount);
+                        }
+                    }
 
-                (tx_outputs, Some(outputs.outputs.iter().map(|output| output.amount).sum()))
+                    // Convert payment outputs to transaction outputs
+                    // Stealth addresses require special handling with ephemeral key generation
+                    let mut tx_outputs = Vec::with_capacity(outputs.outputs.len());
+                    for output in outputs.outputs.iter() {
+                        let script = if output.address.version == Version::Stealth {
+                            // For stealth addresses, extract StealthAddress from payload
+                            // and generate ephemeral output with random ephemeral key
+                            let stealth_addr = StealthAddress::try_from_slice(&output.address.payload)
+                                .map_err(|_| Error::Custom("Invalid stealth address payload".to_string()))?;
+                            let ephemeral_output = kaspa_stealth::try_create_stealth_output(&stealth_addr)
+                                .map_err(|e| Error::Custom(format!("Failed to create stealth output: {}", e)))?;
+                            pay_to_stealth(&ephemeral_output)
+                        } else {
+                            pay_to_address_script(&output.address).map_err(|e| Error::Custom(e.to_string()))?
+                        };
+                        tx_outputs.push(TransactionOutput::new(output.amount, script));
+                    }
+
+                    (tx_outputs, Some(outputs.outputs.iter().map(|output| output.amount).sum()))
+                }
             }
         };
 

@@ -10,6 +10,7 @@ use crate::tx::generator::stealth_change::DynStealthChangeCreator;
 use crate::tx::{Fees, PaymentDestination, RandomFeeSettings};
 use crate::utxo::{UtxoContext, UtxoEntryReference, UtxoIterator};
 use kaspa_addresses::Address;
+use kaspa_consensus_core::tx::TransactionOutput;
 use workflow_core::channel::Multiplexer;
 
 pub struct GeneratorSettings {
@@ -35,6 +36,12 @@ pub struct GeneratorSettings {
     pub final_transaction_priority_fee: Fees,
     // final transaction outputs
     pub final_transaction_destination: PaymentDestination,
+    /// Optional override for final transaction outputs (raw ScriptPublicKey-based outputs).
+    ///
+    /// When set, the generator will use these outputs directly instead of deriving them from
+    /// [`PaymentDestination::PaymentOutputs`]. This is useful for advanced cases such as
+    /// stealth payouts where the caller already constructed an output script (e.g. version 16).
+    pub final_transaction_outputs: Option<Vec<TransactionOutput>>,
     // payload
     pub final_transaction_payload: Option<Vec<u8>>,
     // transaction is a transfer between accounts
@@ -100,6 +107,7 @@ impl GeneratorSettings {
             fee_rate,
             final_transaction_priority_fee: final_priority_fee,
             final_transaction_destination,
+            final_transaction_outputs: None,
             final_transaction_payload,
             destination_utxo_context: None,
             stealth_change_creator: None,
@@ -141,6 +149,7 @@ impl GeneratorSettings {
             fee_rate,
             final_transaction_priority_fee: final_priority_fee,
             final_transaction_destination,
+            final_transaction_outputs: None,
             final_transaction_payload,
             destination_utxo_context: None,
             stealth_change_creator: None,
@@ -182,6 +191,7 @@ impl GeneratorSettings {
             fee_rate,
             final_transaction_priority_fee: final_priority_fee,
             final_transaction_destination,
+            final_transaction_outputs: None,
             final_transaction_payload,
             destination_utxo_context: None,
             stealth_change_creator: None,
@@ -190,6 +200,15 @@ impl GeneratorSettings {
         };
 
         Ok(settings)
+    }
+
+    /// Overrides final transaction outputs with a raw list of transaction outputs.
+    ///
+    /// This is intended for advanced callers that need to supply a pre-built
+    /// `ScriptPublicKey` (for example, stealth scripts with version 16).
+    pub fn with_final_transaction_outputs(mut self, outputs: Vec<TransactionOutput>) -> Self {
+        self.final_transaction_outputs = Some(outputs);
+        self
     }
 
     /// Sets the stealth change creator for creating change outputs to stealth addresses.

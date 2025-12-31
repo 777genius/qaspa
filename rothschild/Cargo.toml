@@ -16,6 +16,7 @@ kaspa-core.workspace = true
 kaspa-grpc-client.workspace = true
 kaspa-notify.workspace = true
 kaspa-rpc-core.workspace = true
+kaspa-stealth.workspace = true
 kaspa-txscript.workspace = true
 kaspa-utils.workspace = true
 

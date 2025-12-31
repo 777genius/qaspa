@@ -6,9 +6,11 @@ use tracing_subscriber::EnvFilter;
 
 mod config;
 mod miner;
+mod stratum;
 
-use config::Config;
+use config::{Config, MiningMode};
 use miner::{Miner, MiningStats};
+use stratum::StratumMiner;
 
 #[derive(Serialize)]
 struct StatsResponse {
@@ -83,15 +85,7 @@ async fn main() -> anyhow::Result<()> {
         anyhow::bail!("PAYOUT_ADDRESS cannot be empty. Please provide a valid address.");
     }
 
-    // Validate gRPC URL to prevent SSRF attacks
-    // Only allow localhost or valid Docker container names
-    validate_grpc_url(&config.node_url)?;
-
-    // Mask node URL for logging (hide port details)
-    let masked_url = mask_grpc_url(&config.node_url);
-    info!("Node URL: {}", masked_url);
     // Mask payout address for security (show only first 8 and last 4 chars)
-    // Use .chars() to safely handle UTF-8 multi-byte characters
     let addr = &config.payout_address;
     let addr_chars: Vec<char> = addr.chars().collect();
     let masked_addr = if addr_chars.len() > 16 {
@@ -103,24 +97,86 @@ async fn main() -> anyhow::Result<()> {
     };
     info!("Payout address: {}", masked_addr);
     info!("Threads: {}", config.threads);
-    if let Some(bps) = config.target_bps {
-        info!("Target BPS: {}", bps);
-    }
+    info!("Mining mode: {:?}", config.mining_mode);
 
     let stats_port = config.stats_port;
 
-    // Create and run miner
-    let miner = Miner::new(config).await?;
-    let stats = miner.stats_arc();
+    match config.mining_mode {
+        MiningMode::Solo => {
+            // Solo mining via gRPC
+            validate_grpc_url(&config.node_url)?;
+            let masked_url = mask_grpc_url(&config.node_url);
+            info!("Node URL: {}", masked_url);
+            if let Some(bps) = config.target_bps {
+                info!("Target BPS: {}", bps);
+            }
 
-    // Start stats HTTP server if port is configured
+            let miner = Miner::new(config).await?;
+            let stats = miner.stats_arc();
+
+            start_stats_server(stats_port, stats.clone());
+
+            let miner_ref = &miner;
+            tokio::select! {
+                result = miner.run() => {
+                    if let Err(e) = result {
+                        tracing::error!("Miner error: {}", e);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    info!("Received Ctrl+C, stopping miner...");
+                    miner_ref.stop();
+                }
+            }
+
+            info!(
+                "Mining stopped. Blocks found: {}, Hashrate: {:.2} H/s",
+                stats.blocks_found.load(std::sync::atomic::Ordering::Relaxed),
+                stats.hashrate()
+            );
+        }
+        MiningMode::Pool => {
+            // Pool mining via Stratum
+            info!("Stratum URL: {}", config.stratum_url);
+            info!("Worker: {}", config.stratum_worker);
+
+            let stratum_miner = StratumMiner::new(config);
+            let stats = stratum_miner.stats_arc();
+
+            start_stats_server(stats_port, stats.clone());
+
+            let miner_ref = &stratum_miner;
+            tokio::select! {
+                result = stratum_miner.run() => {
+                    if let Err(e) = result {
+                        tracing::error!("Stratum miner error: {}", e);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    info!("Received Ctrl+C, stopping miner...");
+                    miner_ref.stop();
+                }
+            }
+
+            info!(
+                "Mining stopped. Shares found: {}, Hashrate: {:.2} H/s",
+                stats.blocks_found.load(std::sync::atomic::Ordering::Relaxed),
+                stats.hashrate()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Start the stats HTTP server
+fn start_stats_server(stats_port: u16, stats: Arc<MiningStats>) {
     if stats_port > 0 {
-        let stats_clone = stats.clone();
         tokio::spawn(async move {
             let app = Router::new().route(
                 "/stats",
                 get(move || {
-                    let stats = stats_clone.clone();
+                    let stats = stats.clone();
                     async move {
                         Json(StatsResponse {
                             blocks_found: stats.blocks_found.load(std::sync::atomic::Ordering::Relaxed),
@@ -136,26 +192,4 @@ async fn main() -> anyhow::Result<()> {
             axum::serve(listener, app).await.unwrap();
         });
     }
-
-    // Handle shutdown signals
-    let miner_ref = &miner;
-    tokio::select! {
-        result = miner.run() => {
-            if let Err(e) = result {
-                tracing::error!("Miner error: {}", e);
-            }
-        }
-        _ = tokio::signal::ctrl_c() => {
-            info!("Received Ctrl+C, stopping miner...");
-            miner_ref.stop();
-        }
-    }
-
-    info!(
-        "Mining stopped. Blocks found: {}, Hashrate: {:.2} H/s",
-        stats.blocks_found.load(std::sync::atomic::Ordering::Relaxed),
-        stats.hashrate()
-    );
-
-    Ok(())
 }

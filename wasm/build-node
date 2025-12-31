@@ -24,3 +24,12 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 wasm-pack build --weak-refs --target nodejs --out-name kaspa --out-dir nodejs/kaspa --features wasm32-sdk
+
+# Patch for Node.js 22+ compatibility
+# wasm-bindgen generates incorrect code for WebSocket onmessage callback:
+# MessageEvent is not added to heap, causing getObject(idx).data to fail.
+# This patches __wasm_bindgen_func_elem_19576 to use addHeapObject(arg2)
+echo "Patching kaspa.js for Node.js 22+ WebSocket compatibility..."
+sed -i.bak 's/wasm\.__wasm_bindgen_func_elem_19576(arg0, arg1, arg2);/wasm.__wasm_bindgen_func_elem_19576(arg0, arg1, addHeapObject(arg2));/' nodejs/kaspa/kaspa.js
+rm -f nodejs/kaspa/kaspa.js.bak
+echo "Patch applied successfully"

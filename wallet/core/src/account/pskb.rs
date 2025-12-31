@@ -371,6 +371,7 @@ pub fn pskt_to_pending_transaction(
         fee_rate: None,
         final_transaction_priority_fee: fee_u.into(),
         final_transaction_destination,
+        final_transaction_outputs: None,
         final_transaction_payload: None,
         stealth_change_creator: None,
         random_fee_settings: RandomFeeSettings::default(),

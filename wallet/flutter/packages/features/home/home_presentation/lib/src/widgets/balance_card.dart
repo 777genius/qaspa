@@ -18,7 +18,7 @@ class BalanceCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.kaspaGreen, AppColors.kaspaTeal],
+          colors: [AppColors.brandPrimary, AppColors.brandSecondary],
         ),
         borderRadius: AppRadii.borderRadiusLg,
       ),

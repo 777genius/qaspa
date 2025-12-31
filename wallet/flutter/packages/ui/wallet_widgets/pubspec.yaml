@@ -1,5 +1,5 @@
-name: design_system
-description: Shared Material 3 design system with brand color scheme
+name: wallet_widgets
+description: Wallet-specific UI widgets
 version: 0.1.0
 publish_to: none
 
@@ -12,6 +12,9 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
+  design_system:
+  wallet_domain:
+  qr_flutter: ^4.1.0
 
 flutter:
   uses-material-design: true

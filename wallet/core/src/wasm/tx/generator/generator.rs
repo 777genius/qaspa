@@ -1,13 +1,16 @@
 use crate::imports::*;
 use crate::result::Result;
-use crate::tx::{generator as native, Fees, PaymentDestination, PaymentOutputs, RandomFeeSettings};
+use crate::tx::{generator as native, Fees, PaymentDestination, PaymentOutput, PaymentOutputs, RandomFeeSettings};
 use crate::utxo::{TryIntoUtxoEntryReferences, UtxoEntryReference};
 use crate::wasm::tx::generator::*;
 use crate::wasm::tx::IFees;
 // use crate::wasm::wallet::Account;
 use crate::wasm::UtxoContext;
+use kaspa_addresses::Version;
+use kaspa_consensus_core::tx::TransactionOutput;
+use kaspa_stealth::{try_create_stealth_output, StealthAddress};
+use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 
-// TODO-WASM fix outputs
 #[wasm_bindgen(typescript_custom_section)]
 const TS_GENERATOR_SETTINGS_OBJECT: &'static str = r#"
 /**
@@ -31,13 +34,39 @@ const TS_GENERATOR_SETTINGS_OBJECT: &'static str = r#"
  *      {@link estimateTransactions}
  * @category Wallet SDK
  */
+type IGeneratorOutput = IPaymentOutput | IScriptPublicKeyOutput;
+
+/**
+ * Output destination specified directly by a {@link ScriptPublicKey}.
+ *
+ * This is useful for advanced use-cases such as stealth payouts where the caller
+ * already constructed the full script (version 16 + 66 bytes), or for custom scripts.
+ */
+interface IScriptPublicKeyOutput {
+    /**
+     * Script public key.
+     *
+     * Can be provided as:
+     * - {@link ScriptPublicKey} instance
+     * - {@link IScriptPublicKey} object: `{ version, script }`
+     * - HexString representing the full ScriptPublicKey encoding (version + script)
+     */
+    scriptPublicKey: ScriptPublicKey | IScriptPublicKey | HexString;
+    /**
+     * Output amount in SOMPI.
+     */
+    amount: bigint;
+}
+
 interface IGeneratorSettingsObject {
     /** 
      * Final transaction outputs (do not supply change transaction).
      * 
-     * Typical usage: { address: "kaspa:...", amount: 1000n }
+     * Typical usage:
+     * - { address: "kaspa:...", amount: 1000n }
+     * - { scriptPublicKey: { version: 16, script: "..." }, amount: 1000n }
      */
-    outputs: PaymentOutput | IPaymentOutput[];
+    outputs: IGeneratorOutput | IGeneratorOutput[];
     /** 
      * Address to be used for change, if any. 
      */
@@ -175,6 +204,7 @@ impl Generator {
             priority_utxo_entries,
             multiplexer,
             final_transaction_destination,
+            final_transaction_outputs,
             change_address,
             fee_rate,
             final_priority_fee,
@@ -230,6 +260,9 @@ impl Generator {
               // }
         };
 
+        let settings =
+            if let Some(outputs) = final_transaction_outputs { settings.with_final_transaction_outputs(outputs) } else { settings };
+
         let abortable = Abortable::default();
         let generator = native::Generator::try_new(settings, None, Some(&abortable))?;
 
@@ -281,6 +314,7 @@ struct GeneratorSettings {
     pub priority_utxo_entries: Option<Vec<UtxoEntryReference>>,
     pub multiplexer: Option<Multiplexer<Box<Events>>>,
     pub final_transaction_destination: PaymentDestination,
+    pub final_transaction_outputs: Option<Vec<TransactionOutput>>,
     pub change_address: Option<Address>,
     pub fee_rate: Option<f64>,
     pub final_priority_fee: Fees,
@@ -297,8 +331,14 @@ impl TryFrom<IGeneratorSettingsObject> for GeneratorSettings {
 
         // lack of outputs results in a sweep transaction compounding utxos into the change address
         let outputs = args.get_value("outputs")?;
-        let final_transaction_destination: PaymentDestination =
-            if outputs.is_undefined() { PaymentDestination::Change } else { PaymentOutputs::try_owned_from(outputs)?.into() };
+        let (final_transaction_destination, final_transaction_outputs) = if outputs.is_undefined() {
+            (PaymentDestination::Change, None)
+        } else if let Ok(payment_outputs) = PaymentOutputs::try_owned_from(outputs.clone()) {
+            (payment_outputs.into(), None)
+        } else {
+            let tx_outputs = generator_outputs_to_transaction_outputs(outputs)?;
+            (PaymentDestination::PaymentOutputs(PaymentOutputs { outputs: vec![] }), Some(tx_outputs))
+        };
 
         let change_address = args.try_cast_into::<Address>("changeAddress")?;
 
@@ -345,6 +385,7 @@ impl TryFrom<IGeneratorSettingsObject> for GeneratorSettings {
             priority_utxo_entries,
             multiplexer: None,
             final_transaction_destination,
+            final_transaction_outputs,
             change_address,
             fee_rate,
             final_priority_fee,
@@ -356,6 +397,58 @@ impl TryFrom<IGeneratorSettingsObject> for GeneratorSettings {
 
         Ok(settings)
     }
+}
+
+fn generator_outputs_to_transaction_outputs(outputs: JsValue) -> Result<Vec<TransactionOutput>> {
+    let mut tx_outputs = Vec::new();
+
+    let iter = js_sys::try_iter(&outputs)?;
+    if let Some(iter) = iter {
+        for item in iter {
+            let value = item?;
+            tx_outputs.push(generator_output_to_transaction_output(value)?);
+        }
+    } else {
+        // `outputs` may be a single output object instead of an array.
+        tx_outputs.push(generator_output_to_transaction_output(outputs)?);
+    }
+
+    Ok(tx_outputs)
+}
+
+fn generator_output_to_transaction_output(value: JsValue) -> Result<TransactionOutput> {
+    // Prefer address-based outputs for backwards compatibility.
+    if let Ok(output) = PaymentOutput::try_owned_from(value.clone()) {
+        let script_public_key = if output.address.version == Version::Stealth {
+            let stealth_addr = StealthAddress::try_from_slice(&output.address.payload)
+                .map_err(|_| Error::custom("Invalid stealth address payload"))?;
+            let ephemeral_output = try_create_stealth_output(&stealth_addr)
+                .map_err(|e| Error::custom(format!("Failed to create stealth output: {e}")))?;
+            pay_to_stealth(&ephemeral_output)
+        } else {
+            pay_to_address_script(&output.address).map_err(|e| Error::custom(e.to_string()))?
+        };
+        return Ok(TransactionOutput::new(output.amount, script_public_key));
+    }
+
+    let object = Object::try_from(&value).ok_or_else(|| Error::custom("Invalid output: expected an object"))?;
+
+    let spk_value = object.get_value("scriptPublicKey")?;
+    if spk_value.is_null() || spk_value.is_undefined() {
+        return Err(Error::custom("Invalid output: missing 'address' or 'scriptPublicKey'"));
+    }
+
+    let script_public_key = ScriptPublicKey::try_owned_from(spk_value)?;
+
+    let amount_value = object.get_value("amount")?;
+    let amount = if amount_value.is_null() || amount_value.is_undefined() {
+        let value_value = object.get_value("value")?;
+        js_value_to_optional_u64(value_value, "value")?.ok_or_else(|| Error::InvalidArgument("value is required".into()))?
+    } else {
+        js_value_to_optional_u64(amount_value, "amount")?.ok_or_else(|| Error::InvalidArgument("amount is required".into()))?
+    };
+
+    Ok(TransactionOutput::new(amount, script_public_key))
 }
 
 const JS_MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0; // 2^53 - 1

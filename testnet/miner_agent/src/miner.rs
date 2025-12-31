@@ -197,6 +197,7 @@ impl Miner {
     }
 
     /// Get mining statistics
+    #[allow(dead_code)]
     pub fn stats(&self) -> &MiningStats {
         &self.stats
     }

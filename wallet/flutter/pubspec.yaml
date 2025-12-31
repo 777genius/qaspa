@@ -17,6 +17,7 @@ workspace:
   - packages/core/wallet_rust_bridge
   # UI
   - packages/ui/design_system
+  - packages/ui/wallet_widgets
   # Features - Onboarding
   - packages/features/onboarding/onboarding_domain
   - packages/features/onboarding/onboarding_data

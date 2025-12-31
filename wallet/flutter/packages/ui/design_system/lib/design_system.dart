@@ -1,7 +1,7 @@
-/// Shared Material 3 design system with green color scheme.
+/// Shared Material 3 design system with brand color scheme.
 ///
 /// This package provides:
-/// - Color tokens (Kaspa green theme)
+/// - Color tokens (brand theme)
 /// - Typography tokens
 /// - Spacing constants
 /// - Light and dark themes
@@ -32,9 +32,6 @@ export 'src/widgets/inputs/amount_input.dart';
 export 'src/widgets/inputs/search_field.dart';
 
 // Widgets - Cards
-// Note: balance_card.dart is in display/ folder
-export 'src/widgets/cards/transaction_card.dart';
-export 'src/widgets/cards/account_card.dart';
 export 'src/widgets/cards/info_card.dart';
 
 // Widgets - Feedback
@@ -47,10 +44,11 @@ export 'src/widgets/feedback/empty_state.dart';
 export 'src/widgets/display/mnemonic_word_chip.dart';
 export 'src/widgets/display/mnemonic_grid.dart';
 export 'src/widgets/display/address_display.dart';
-export 'src/widgets/display/qr_display.dart';
 export 'src/widgets/display/amount_display.dart';
-export 'src/widgets/display/sync_status_indicator.dart';
-export 'src/widgets/display/balance_card.dart';
+export 'src/widgets/display/balance_card_label.dart';
+export 'src/widgets/display/balance_card_main_balance.dart';
+export 'src/widgets/display/balance_card_fiat_value.dart';
+export 'src/widgets/display/balance_card_pending.dart';
 
 // Widgets - Layout
 export 'src/widgets/layout/screen_container.dart';

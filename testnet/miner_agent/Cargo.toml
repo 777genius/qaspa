@@ -43,6 +43,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
 anyhow = "1.0"
+hex = "0.4"
 
 [lints]
 workspace = true

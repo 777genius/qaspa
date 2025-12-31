@@ -1,9 +1,6 @@
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-
-import '../../tokens/colors.dart';
-import '../../tokens/spacing.dart';
-import '../../tokens/radii.dart';
 
 /// QR code display widget for addresses.
 class QrDisplay extends StatelessWidget {
@@ -42,11 +39,11 @@ class QrDisplay extends StatelessWidget {
             backgroundColor: AppColors.white,
             eyeStyle: QrEyeStyle(
               eyeShape: QrEyeShape.square,
-              color: foregroundColor ?? AppColors.kaspaDark,
+              color: foregroundColor ?? AppColors.brandDark,
             ),
             dataModuleStyle: QrDataModuleStyle(
               dataModuleShape: QrDataModuleShape.square,
-              color: foregroundColor ?? AppColors.kaspaDark,
+              color: foregroundColor ?? AppColors.brandDark,
             ),
           ),
         ),

@@ -65,8 +65,8 @@ class WelcomeHeader extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                AppColors.kaspaGreen,
-                AppColors.kaspaTeal,
+                AppColors.brandPrimary,
+                AppColors.brandSecondary,
               ],
             ),
             borderRadius: BorderRadius.circular(24),

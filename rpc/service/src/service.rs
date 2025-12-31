@@ -69,7 +69,10 @@ use kaspa_rpc_core::{
     notify::connection::ChannelConnection,
     Notification, RpcError, RpcResult,
 };
-use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, pay_to_address_script, STEALTH_SCRIPT_VERSION};
+use kaspa_stealth::{try_create_stealth_output, StealthAddress};
+use kaspa_txscript::{
+    extract_script_pub_key_address, extract_stealth_output, pay_to_address_script, pay_to_stealth, STEALTH_SCRIPT_VERSION,
+};
 use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
 use kaspa_utils::{expiring_cache::ExpiringCache, hex::ToHex};
@@ -490,7 +493,10 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         }
 
         // Make sure the pay address prefix matches the config network type
-        if request.pay_address.prefix != self.config.prefix() {
+        // Support both regular and stealth prefixes
+        let is_stealth = request.pay_address.prefix.is_stealth();
+        let expected_prefix = if is_stealth { self.config.prefix().to_stealth() } else { Some(self.config.prefix()) };
+        if expected_prefix != Some(request.pay_address.prefix) {
             return Err(kaspa_addresses::AddressError::InvalidPrefix(request.pay_address.prefix.to_string()))?;
         }
 
@@ -501,7 +507,31 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         if session.async_is_consensus_in_transitional_ibd_state().await {
             return Err(RpcError::ConsensusInTransitionalIbdState);
         }
-        let script_public_key = self.pay_to_address_script_checked(&request.pay_address)?;
+
+        // Generate script_public_key based on address type
+        let script_public_key = if is_stealth {
+            // Parse StealthAddress from payload (64 bytes: 32B scan + 32B spend)
+            let payload = &request.pay_address.payload;
+            if payload.len() != 64 {
+                return Err(RpcError::General(format!(
+                    "Invalid stealth address payload length: expected 64 bytes, got {}",
+                    payload.len()
+                )));
+            }
+            let mut scan = [0u8; 32];
+            let mut spend = [0u8; 32];
+            scan.copy_from_slice(&payload[0..32]);
+            spend.copy_from_slice(&payload[32..64]);
+            let stealth_addr =
+                StealthAddress::from_bytes(scan, spend).map_err(|e| RpcError::General(format!("Invalid stealth address: {}", e)))?;
+
+            // Generate ephemeral output and create stealth ScriptPublicKey
+            let ephemeral = try_create_stealth_output(&stealth_addr)
+                .map_err(|e| RpcError::General(format!("Failed to create stealth output: {}", e)))?;
+            pay_to_stealth(&ephemeral)
+        } else {
+            self.pay_to_address_script_checked(&request.pay_address)?
+        };
         let extra_data = version().as_bytes().iter().chain(once(&(b'/'))).chain(&request.extra_data).cloned().collect::<Vec<_>>();
         let miner_data: MinerData = MinerData::new(script_public_key, extra_data);
         let block_template = self.mining_manager.clone().get_block_template(&session, miner_data).await?;

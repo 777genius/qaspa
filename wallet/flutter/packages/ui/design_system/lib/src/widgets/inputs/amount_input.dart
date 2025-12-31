@@ -4,24 +4,61 @@ import 'package:flutter/services.dart';
 import '../../tokens/spacing.dart';
 import '../../tokens/typography.dart';
 
-/// Amount input field for KAS values.
+/// Universal amount input field.
+///
+/// A text field optimized for numeric amount input with optional
+/// currency display and max button.
+///
+/// Example:
+/// ```dart
+/// AmountInput(
+///   currency: 'KAS',
+///   availableAmount: '1,234.56',
+///   onChanged: (value) => print(value),
+/// )
+/// ```
 class AmountInput extends StatefulWidget {
-  final TextEditingController? controller;
-  final ValueChanged<double>? onChanged;
-  final double? maxAmount;
-  final String? errorText;
-  final bool enabled;
-  final VoidCallback? onMaxPressed;
-
   const AmountInput({
     super.key,
     this.controller,
     this.onChanged,
-    this.maxAmount,
+    this.currency,
+    this.availableAmount,
+    this.maxValue,
     this.errorText,
+    this.helperText,
     this.enabled = true,
     this.onMaxPressed,
+    this.decimalPlaces = 8,
   });
+
+  final TextEditingController? controller;
+
+  /// Called when value changes, returns raw string input
+  final ValueChanged<String>? onChanged;
+
+  /// Currency symbol to display (e.g., "KAS", "USD")
+  final String? currency;
+
+  /// Available amount to display as helper text (pre-formatted)
+  final String? availableAmount;
+
+  /// Max value to set when MAX button is pressed (pre-formatted)
+  final String? maxValue;
+
+  /// Error message to display
+  final String? errorText;
+
+  /// Custom helper text (overrides auto-generated from availableAmount)
+  final String? helperText;
+
+  final bool enabled;
+
+  /// Called when MAX button is pressed
+  final VoidCallback? onMaxPressed;
+
+  /// Number of decimal places allowed
+  final int decimalPlaces;
 
   @override
   State<AmountInput> createState() => _AmountInputState();
@@ -45,14 +82,12 @@ class _AmountInputState extends State<AmountInput> {
   }
 
   void _onChanged(String value) {
-    final amount = double.tryParse(value) ?? 0;
-    widget.onChanged?.call(amount);
+    widget.onChanged?.call(value);
   }
 
   void _onMaxPressed() {
-    final maxAmount = widget.maxAmount;
-    if (maxAmount != null) {
-      _controller.text = maxAmount.toStringAsFixed(8);
+    if (widget.maxValue != null) {
+      _controller.text = widget.maxValue!;
       _onChanged(_controller.text);
     }
     widget.onMaxPressed?.call();
@@ -62,14 +97,18 @@ class _AmountInputState extends State<AmountInput> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentValue = _controller.text.isEmpty ? '0' : _controller.text;
-    final maxAmount = widget.maxAmount;
-    final availableText = maxAmount != null
-        ? 'Available: ${maxAmount.toStringAsFixed(2)} KAS'
-        : null;
+    final currency = widget.currency ?? '';
+
+    final effectiveHelperText = widget.helperText ??
+        (widget.availableAmount != null
+            ? 'Available: ${widget.availableAmount}${currency.isNotEmpty ? ' $currency' : ''}'
+            : null);
+
+    final decimalPattern = r'^\d*\.?\d{0,' + widget.decimalPlaces.toString() + r'}';
 
     return Semantics(
-      label: 'Amount input: $currentValue KAS',
-      hint: availableText,
+      label: 'Amount input: $currentValue${currency.isNotEmpty ? ' $currency' : ''}',
+      hint: effectiveHelperText,
       textField: true,
       enabled: widget.enabled,
       child: Column(
@@ -80,7 +119,7 @@ class _AmountInputState extends State<AmountInput> {
             enabled: widget.enabled,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,8}')),
+              FilteringTextInputFormatter.allow(RegExp(decimalPattern)),
             ],
             style: AppTypography.monoLarge,
             textAlign: TextAlign.center,
@@ -89,7 +128,7 @@ class _AmountInputState extends State<AmountInput> {
               hintStyle: AppTypography.monoLarge.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-              suffixIcon: widget.maxAmount != null
+              suffixIcon: widget.maxValue != null
                   ? Semantics(
                       button: true,
                       label: 'Use maximum amount',
@@ -103,23 +142,25 @@ class _AmountInputState extends State<AmountInput> {
             ),
             onChanged: _onChanged,
           ),
-          const SizedBox(height: AppSpacing.xxxs),
-          Center(
-            child: ExcludeSemantics(
-              child: Text(
-                'KAS',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          if (widget.currency != null) ...[
+            const SizedBox(height: AppSpacing.xxxs),
+            Center(
+              child: ExcludeSemantics(
+                child: Text(
+                  widget.currency!,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
-          ),
-          if (widget.maxAmount != null) ...[
+          ],
+          if (effectiveHelperText != null) ...[
             const SizedBox(height: AppSpacing.xxs),
             Center(
               child: ExcludeSemantics(
                 child: Text(
-                  availableText!,
+                  effectiveHelperText,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

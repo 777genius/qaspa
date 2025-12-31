@@ -1,21 +1,17 @@
+import 'package:design_system/design_system.dart';
 import 'package:flutter/material.dart';
 import 'package:wallet_domain/wallet_domain.dart';
 
-import '../../tokens/colors.dart';
-import '../../tokens/spacing.dart';
-import '../../tokens/radii.dart';
-import '../display/amount_display.dart';
-
 /// Transaction list item card.
 class TransactionCard extends StatelessWidget {
-  final Transaction transaction;
-  final VoidCallback? onTap;
-
   const TransactionCard({
     super.key,
     required this.transaction,
     this.onTap,
   });
+
+  final Transaction transaction;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -52,9 +48,10 @@ class TransactionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     AmountDisplay(
-                      amount: transaction.amountKas,
+                      value: transaction.formatAmount(),
+                      currency: 'KAS',
                       showSign: true,
-                      isIncoming: isIncoming,
+                      isPositive: isIncoming,
                     ),
                     if (!transaction.isConfirmed)
                       Text(
@@ -89,10 +86,10 @@ class TransactionCard extends StatelessWidget {
 }
 
 class _TransactionIcon extends StatelessWidget {
+  const _TransactionIcon({required this.isIncoming, required this.kind});
+
   final bool isIncoming;
   final TransactionKind kind;
-
-  const _TransactionIcon({required this.isIncoming, required this.kind});
 
   @override
   Widget build(BuildContext context) {
@@ -126,9 +123,9 @@ class _TransactionIcon extends StatelessWidget {
 }
 
 class _TransactionTitle extends StatelessWidget {
-  final TransactionKind kind;
-
   const _TransactionTitle({required this.kind});
+
+  final TransactionKind kind;
 
   @override
   Widget build(BuildContext context) {
@@ -156,9 +153,9 @@ class _TransactionTitle extends StatelessWidget {
 }
 
 class _TransactionSubtitle extends StatelessWidget {
-  final Transaction transaction;
-
   const _TransactionSubtitle({required this.transaction});
+
+  final Transaction transaction;
 
   @override
   Widget build(BuildContext context) {

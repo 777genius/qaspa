@@ -4,16 +4,18 @@ import '../../tokens/radii.dart';
 import '../../tokens/spacing.dart';
 import '../../tokens/typography.dart';
 
-/// Main balance display widget showing the KAS amount.
+/// Main balance display widget showing the formatted amount.
 class BalanceCardMainBalance extends StatelessWidget {
-  final String formattedBalance;
-  final bool isLoading;
-
   const BalanceCardMainBalance({
     super.key,
     required this.formattedBalance,
+    this.currency,
     this.isLoading = false,
   });
+
+  final String formattedBalance;
+  final String? currency;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -42,13 +44,15 @@ class BalanceCardMainBalance extends StatelessWidget {
             color: theme.colorScheme.onSurface,
           ),
         ),
-        const SizedBox(width: AppSpacing.xxs),
-        Text(
-          'KAS',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        if (currency != null) ...[
+          const SizedBox(width: AppSpacing.xxs),
+          Text(
+            currency!,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
