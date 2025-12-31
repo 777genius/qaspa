@@ -134,7 +134,7 @@ impl StealthTestEnv {
         wallet.utxo_processor().bind_rpc(Some(rpc)).await.expect("Failed to bind RPC");
 
         let wallet_secret = Secret::new(b"test-wallet-secret-12345".to_vec());
-        let coinbase_maturity = SIMNET_PARAMS.coinbase_maturity().before();
+        let coinbase_maturity = SIMNET_PARAMS.coinbase_maturity();
 
         // Initialize wallet storage once
         let wallet_create_args =

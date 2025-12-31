@@ -4,7 +4,7 @@ use clap::{Arg, ArgAction, Command};
 use itertools::Itertools;
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::{
-    config::params::TESTNET_PARAMS,
+    config::params::{DEVNET_PARAMS, MAINNET_PARAMS, SIMNET_PARAMS, TESTNET_PARAMS},
     constants::{SOMPI_PER_KASPA, TX_VERSION},
     sign::sign,
     subnets::SUBNETWORK_ID_NATIVE,
@@ -263,11 +263,12 @@ async fn main() {
     let info = rpc_client.get_block_dag_info().await.expect("Failed to get block dag info.");
 
     let coinbase_maturity = match info.network.network_type {
-        kaspa_consensus_core::network::NetworkType::Devnet => 100,
-        kaspa_consensus_core::network::NetworkType::Simnet => 100,
-        _ => match info.network.suffix {
+        kaspa_consensus_core::network::NetworkType::Mainnet => MAINNET_PARAMS.coinbase_maturity(),
+        kaspa_consensus_core::network::NetworkType::Devnet => DEVNET_PARAMS.coinbase_maturity(),
+        kaspa_consensus_core::network::NetworkType::Simnet => SIMNET_PARAMS.coinbase_maturity(),
+        kaspa_consensus_core::network::NetworkType::Testnet => match info.network.suffix {
             Some(11) => panic!("TN11 is not supported on this version"),
-            None | Some(_) => TESTNET_PARAMS.coinbase_maturity().after(),
+            None | Some(_) => TESTNET_PARAMS.coinbase_maturity(),
         },
     };
     info!(
