@@ -1740,11 +1740,14 @@ mod tests {
     #[test]
     fn guardrail_allows_buffered_future_activation() {
         let mut params = DEVNET_PARAMS;
-        params.mldsa_master_activation = ForkActivation::new(100_000);
+        // Buffer = max(merge_depth * 3, daa_per_day) where daa_per_day = bps * 86_400
+        // For devnet post-crescendo: bps = 10, so buffer ≈ 864_000
+        // activation_daa must be > virtual_daa_score + buffer
+        params.mldsa_master_activation = ForkActivation::new(1_000_000);
         let (enabled, activation, invalid) = compute_mldsa_master_status(&params, 10);
         assert!(!invalid);
         assert!(!enabled);
-        assert_eq!(activation, Some(100_000));
+        assert_eq!(activation, Some(1_000_000));
     }
 
     #[test]

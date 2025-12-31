@@ -73,7 +73,7 @@ pub async fn create_miner(
         if !bps.is_finite() {
             return Err(ControllerError::InvalidConfig("Target BPS must be a finite number".to_string()));
         }
-        if bps < MIN_TARGET_BPS || bps > MAX_TARGET_BPS {
+        if !(MIN_TARGET_BPS..=MAX_TARGET_BPS).contains(&bps) {
             return Err(ControllerError::InvalidConfig(format!(
                 "Target BPS must be between {} and {}",
                 MIN_TARGET_BPS, MAX_TARGET_BPS

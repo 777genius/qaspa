@@ -70,6 +70,10 @@ impl MasterMachine {
 
         match cmd {
             Command::Create(seed) => {
+                // Cannot create a new master if already revoked
+                if self.status == Status::Revoked {
+                    return;
+                }
                 let level = Self::choose_level(seed);
                 self.anchor = Some(Self::new_anchor(level));
                 self.level = Some(level);
