@@ -89,7 +89,7 @@ impl Miner {
             }
 
             // Get block template
-            let template = match self.client.get_block_template(self.payout_address.clone().into(), extra_data.clone()).await {
+            let template = match self.client.get_block_template(self.payout_address.clone(), extra_data.clone()).await {
                 Ok(t) => t,
                 Err(e) => {
                     error!("Failed to get block template: {}", e);
