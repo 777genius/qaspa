@@ -341,12 +341,17 @@ impl ConsensusFactory for Factory {
                 // the global FD budget guard might be partially acquired by other DB instances.
                 // We retry with a reduced limit based on remaining OS-level FD budget.
                 let remainder = (err.limit - err.acquired).max(1);
-                let fallback_files_limit = (remainder / 2).max(128).min(desired_files_limit);
+                let fallback_files_limit = desired_files_limit.min((remainder / 2).max(1));
                 warn!(
                     "Failed to acquire FD budget for consensus DB (desired_files_limit={}, acquired={}, limit={}), retrying with files_limit={}",
                     desired_files_limit, err.acquired, err.limit, fallback_files_limit
                 );
-                build_db(fallback_files_limit).unwrap()
+                build_db(fallback_files_limit).unwrap_or_else(|err2| {
+                    panic!(
+                        "Failed to acquire FD budget for consensus DB even after retry (desired_files_limit={}, retry_files_limit={}, acquired={}, limit={}). Error: {err2}",
+                        desired_files_limit, fallback_files_limit, err2.acquired, err2.limit
+                    )
+                })
             }
         };
 
@@ -393,12 +398,17 @@ impl ConsensusFactory for Factory {
             Ok(db) => db,
             Err(err) => {
                 let remainder = (err.limit - err.acquired).max(1);
-                let fallback_files_limit = (remainder / 2).max(128).min(desired_files_limit);
+                let fallback_files_limit = desired_files_limit.min((remainder / 2).max(1));
                 warn!(
                     "Failed to acquire FD budget for staging consensus DB (desired_files_limit={}, acquired={}, limit={}), retrying with files_limit={}",
                     desired_files_limit, err.acquired, err.limit, fallback_files_limit
                 );
-                build_db(fallback_files_limit).unwrap()
+                build_db(fallback_files_limit).unwrap_or_else(|err2| {
+                    panic!(
+                        "Failed to acquire FD budget for staging consensus DB even after retry (desired_files_limit={}, retry_files_limit={}, acquired={}, limit={}). Error: {err2}",
+                        desired_files_limit, fallback_files_limit, err2.acquired, err2.limit
+                    )
+                })
             }
         };
 
