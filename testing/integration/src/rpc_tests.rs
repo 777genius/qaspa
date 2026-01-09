@@ -1,14 +1,15 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
 use crate::common::{client_notify::ChannelNotify, daemon::Daemon};
 use futures_util::future::try_join_all;
 use kaspa_addresses::{Address, Prefix, Version};
-use kaspa_consensus::params::SIMNET_GENESIS;
+use kaspa_consensus::params::{ForkActivation, OverrideParams, Params, SIMNET_GENESIS};
 use kaspa_consensus_core::{
     constants::{MAX_SOMPI, TX_VERSION},
     hashing::sighash::{calc_schnorr_signature_hash, SigHashReusedValuesUnsync},
     hashing::sighash_type::SIG_HASH_ALL,
     header::Header,
+    network::NetworkType,
     subnets::{SubnetworkId, SUBNETWORK_ID_NATIVE},
     tx::{MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry},
 };
@@ -31,6 +32,20 @@ use kaspa_utils::{fd_budget, networking::ContextualNetAddress};
 use kaspad_lib::args::Args;
 use secp256k1::{Keypair, Message, SECP256K1};
 use tokio::task::JoinHandle;
+
+fn write_override_params_file(filename: &str, overrides: OverrideParams) -> PathBuf {
+    let json = serde_json::to_string(&overrides).expect("Failed to serialize override params");
+    let path = std::env::temp_dir().join(filename);
+    std::fs::write(&path, json).expect("Failed to write override params file");
+    path
+}
+
+fn simnet_overrides_with_k(filename: &str, ghostdag_k: u64, crescendo_activation: ForkActivation) -> PathBuf {
+    let mut overrides: OverrideParams = Params::from(NetworkType::Simnet).into();
+    overrides.crescendo_activation = Some(crescendo_activation);
+    overrides.blockrate.as_mut().expect("OverrideParams from Params should include blockrate").ghostdag_k = ghostdag_k as _;
+    write_override_params_file(filename, overrides)
+}
 
 #[macro_export]
 macro_rules! tst {
@@ -1187,13 +1202,8 @@ async fn test_get_block_template_stealth_red_reward() {
     kaspa_core::log::try_init_logger("info");
     kaspa_core::panic::configure_panic();
 
-    // Create temp file with override params: k=3 instead of default k=124
-    // With k=3, we only need 4 competing blocks to create at least 1 red
-    // Also disable crescendo (set activation to never = u64::MAX) so prior_ghostdag_k is used
-    let override_params = r#"{"prior_ghostdag_k": 3, "crescendo_activation": 18446744073709551615}"#;
-    let temp_dir = std::env::temp_dir();
-    let override_file = temp_dir.join("test_stealth_red_reward_params.json");
-    std::fs::write(&override_file, override_params).expect("Failed to write override params file");
+    // Override simnet params for test: set small k to force red blocks and disable crescendo.
+    let override_file = simnet_overrides_with_k("test_stealth_red_reward_params.json", 3, ForkActivation::never());
 
     let override_path = override_file.to_string_lossy().to_string();
     println!("Override params file: {}", override_path);
@@ -1318,11 +1328,8 @@ async fn test_get_block_template_mixed_stealth_regular_blues() {
     kaspa_core::log::try_init_logger("info");
     kaspa_core::panic::configure_panic();
 
-    // Override k=3, disable crescendo
-    let override_params = r#"{"prior_ghostdag_k": 3, "crescendo_activation": 18446744073709551615}"#;
-    let temp_dir = std::env::temp_dir();
-    let override_file = temp_dir.join("test_mixed_blues_params.json");
-    std::fs::write(&override_file, override_params).expect("Failed to write override params file");
+    // Override simnet params for test: k=3 and disable crescendo.
+    let override_file = simnet_overrides_with_k("test_mixed_blues_params.json", 3, ForkActivation::never());
 
     let args = Args {
         simnet: true,
@@ -1422,11 +1429,8 @@ async fn test_get_block_template_multiple_red_aggregation() {
     kaspa_core::log::try_init_logger("info");
     kaspa_core::panic::configure_panic();
 
-    // Override k=2 for more red blocks, disable crescendo
-    let override_params = r#"{"prior_ghostdag_k": 2, "crescendo_activation": 18446744073709551615}"#;
-    let temp_dir = std::env::temp_dir();
-    let override_file = temp_dir.join("test_multiple_red_params.json");
-    std::fs::write(&override_file, override_params).expect("Failed to write override params file");
+    // Override simnet params for test: k=2 to force red blocks and disable crescendo.
+    let override_file = simnet_overrides_with_k("test_multiple_red_params.json", 2, ForkActivation::never());
 
     let args = Args {
         simnet: true,
@@ -1525,14 +1529,16 @@ async fn test_get_block_template_non_daa_red_blocks() {
     kaspa_core::panic::configure_panic();
 
     // Override params:
-    // - prior_difficulty_window_size=5 (small window for non-DAA condition)
-    // - prior_ghostdag_k=2 (to create red blocks)
-    // - crescendo_activation=0 (always active - non-DAA reds get fees only, not filtered)
-    let override_params =
-        r#"{"prior_difficulty_window_size": 5, "min_difficulty_window_size": 5, "prior_ghostdag_k": 2, "crescendo_activation": 0}"#;
-    let temp_dir = std::env::temp_dir();
-    let override_file = temp_dir.join("test_non_daa_params.json");
-    std::fs::write(&override_file, override_params).expect("Failed to write override params file");
+    // - difficulty_window_size=5 (small window for non-DAA condition)
+    // - min_difficulty_window_size=5
+    // - ghostdag_k=2 (to create red blocks)
+    // - crescendo_activation=always (non-DAA reds get fees only)
+    let mut overrides: OverrideParams = Params::from(NetworkType::Simnet).into();
+    overrides.difficulty_window_size = Some(5);
+    overrides.min_difficulty_window_size = Some(5);
+    overrides.crescendo_activation = Some(ForkActivation::always());
+    overrides.blockrate.as_mut().expect("OverrideParams from Params should include blockrate").ghostdag_k = 2;
+    let override_file = write_override_params_file("test_non_daa_params.json", overrides);
 
     let args = Args {
         simnet: true,
