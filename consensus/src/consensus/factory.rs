@@ -323,15 +323,32 @@ impl ConsensusFactory for Factory {
         };
 
         let dir = self.db_root_dir.join(entry.directory_name.clone());
-        let db = kaspa_database::prelude::ConnBuilder::default()
-            .with_db_path(dir)
-            .with_parallelism(self.db_parallelism)
-            .with_files_limit(self.fd_budget / 2) // active and staging consensuses should have equal budgets
-            .with_preset(self.rocksdb_preset)
-            .with_wal_dir(self.wal_dir.clone())
-            .with_cache_budget(self.cache_budget)
-            .build()
-            .unwrap();
+        let desired_files_limit = (self.fd_budget / 2).max(1); // active and staging consensuses should have equal budgets
+        let build_db = |files_limit: i32| {
+            kaspa_database::prelude::ConnBuilder::default()
+                .with_db_path(dir.clone())
+                .with_parallelism(self.db_parallelism)
+                .with_files_limit(files_limit)
+                .with_preset(self.rocksdb_preset)
+                .with_wal_dir(self.wal_dir.clone())
+                .with_cache_budget(self.cache_budget)
+                .build()
+        };
+        let db = match build_db(desired_files_limit) {
+            Ok(db) => db,
+            Err(err) => {
+                // In some environments (notably integration tests running multiple daemons in-process),
+                // the global FD budget guard might be partially acquired by other DB instances.
+                // We retry with a reduced limit based on remaining OS-level FD budget.
+                let remainder = (err.limit - err.acquired).max(1);
+                let fallback_files_limit = (remainder / 2).max(128).min(desired_files_limit);
+                warn!(
+                    "Failed to acquire FD budget for consensus DB (desired_files_limit={}, acquired={}, limit={}), retrying with files_limit={}",
+                    desired_files_limit, err.acquired, err.limit, fallback_files_limit
+                );
+                build_db(fallback_files_limit).unwrap()
+            }
+        };
 
         let session_lock = SessionLock::new();
         let consensus = Arc::new(Consensus::new(
@@ -361,15 +378,29 @@ impl ConsensusFactory for Factory {
 
         let entry = self.management_store.write().new_staging_consensus_entry().unwrap();
         let dir = self.db_root_dir.join(entry.directory_name);
-        let db = kaspa_database::prelude::ConnBuilder::default()
-            .with_db_path(dir)
-            .with_parallelism(self.db_parallelism)
-            .with_files_limit(self.fd_budget / 2) // active and staging consensuses should have equal budgets
-            .with_preset(self.rocksdb_preset)
-            .with_wal_dir(self.wal_dir.clone())
-            .with_cache_budget(self.cache_budget)
-            .build()
-            .unwrap();
+        let desired_files_limit = (self.fd_budget / 2).max(1); // active and staging consensuses should have equal budgets
+        let build_db = |files_limit: i32| {
+            kaspa_database::prelude::ConnBuilder::default()
+                .with_db_path(dir.clone())
+                .with_parallelism(self.db_parallelism)
+                .with_files_limit(files_limit)
+                .with_preset(self.rocksdb_preset)
+                .with_wal_dir(self.wal_dir.clone())
+                .with_cache_budget(self.cache_budget)
+                .build()
+        };
+        let db = match build_db(desired_files_limit) {
+            Ok(db) => db,
+            Err(err) => {
+                let remainder = (err.limit - err.acquired).max(1);
+                let fallback_files_limit = (remainder / 2).max(128).min(desired_files_limit);
+                warn!(
+                    "Failed to acquire FD budget for staging consensus DB (desired_files_limit={}, acquired={}, limit={}), retrying with files_limit={}",
+                    desired_files_limit, err.acquired, err.limit, fallback_files_limit
+                );
+                build_db(fallback_files_limit).unwrap()
+            }
+        };
 
         let session_lock = SessionLock::new();
         let consensus = Arc::new(Consensus::new(
