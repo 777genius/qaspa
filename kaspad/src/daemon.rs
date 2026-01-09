@@ -8,7 +8,7 @@ use kaspa_consensus_core::{
     mining_rules::MiningRules,
 };
 use kaspa_consensus_notify::{root::ConsensusNotificationRoot, service::NotifyService};
-use kaspa_core::{core::Core, debug, info};
+use kaspa_core::{core::Core, debug, info, warn};
 use kaspa_core::{kaspad_env::version, task::tick::TickService};
 use kaspa_database::{
     prelude::{CachePolicy, DbWriter, DirectDbWriter, RocksDbPreset},
@@ -607,14 +607,33 @@ Do you confirm? (y/n)";
     let notify_service = Arc::new(NotifyService::new(notification_root.clone(), notification_recv, subscription_context.clone()));
     let index_service: Option<Arc<IndexService>> = if args.utxoindex {
         // Use only a single thread for none-consensus databases
-        let utxoindex_db = kaspa_database::prelude::ConnBuilder::default()
-            .with_db_path(utxoindex_db_dir)
-            .with_files_limit(utxo_files_limit)
-            .with_preset(rocksdb_preset)
-            .with_wal_dir(wal_dir.clone())
-            .with_cache_budget(cache_budget)
-            .build()
-            .unwrap();
+        let desired_files_limit = utxo_files_limit.max(1);
+        let build_db = |files_limit: i32| {
+            kaspa_database::prelude::ConnBuilder::default()
+                .with_db_path(utxoindex_db_dir.clone())
+                .with_files_limit(files_limit)
+                .with_preset(rocksdb_preset)
+                .with_wal_dir(wal_dir.clone())
+                .with_cache_budget(cache_budget)
+                .build()
+        };
+        let utxoindex_db = match build_db(desired_files_limit) {
+            Ok(db) => db,
+            Err(err) => {
+                let remainder = (err.limit - err.acquired).max(1);
+                let fallback_files_limit = desired_files_limit.min((remainder / 2).max(1));
+                warn!(
+                    "Failed to acquire FD budget for utxoindex DB (desired_files_limit={}, acquired={}, limit={}), retrying with files_limit={}",
+                    desired_files_limit, err.acquired, err.limit, fallback_files_limit
+                );
+                build_db(fallback_files_limit).unwrap_or_else(|err2| {
+                    panic!(
+                        "Failed to acquire FD budget for utxoindex DB even after retry (desired_files_limit={}, retry_files_limit={}, acquired={}, limit={}). Error: {err2}",
+                        desired_files_limit, fallback_files_limit, err2.acquired, err2.limit
+                    )
+                })
+            }
+        };
         let utxoindex = UtxoIndexProxy::new(UtxoIndex::new(consensus_manager.clone(), utxoindex_db).unwrap());
         let index_service = Arc::new(IndexService::new(&notify_service.notifier(), subscription_context.clone(), Some(utxoindex)));
         Some(index_service)
