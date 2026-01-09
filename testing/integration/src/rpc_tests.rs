@@ -1664,12 +1664,12 @@ async fn test_stealth_coinbase_can_be_spent() {
     kaspa_core::log::try_init_logger("info");
     kaspa_core::panic::configure_panic();
 
-    // Create override params file with low coinbase maturity for faster test
-    // Also disable crescendo so prior_coinbase_maturity is used
-    let override_params = r#"{"prior_coinbase_maturity": 10, "crescendo_activation": 18446744073709551615}"#;
-    let temp_dir = std::env::temp_dir();
-    let override_file = temp_dir.join("test_stealth_coinbase_spend_params.json");
-    std::fs::write(&override_file, override_params).expect("Failed to write override params file");
+    // Create override params file with low coinbase maturity for faster test.
+    // (OverrideParams no longer supports `prior_*` fields; we override `blockrate.coinbase_maturity` directly.)
+    let mut overrides: OverrideParams = Params::from(NetworkType::Simnet).into();
+    overrides.crescendo_activation = Some(ForkActivation::never());
+    overrides.blockrate.as_mut().expect("OverrideParams from Params should include blockrate").coinbase_maturity = 10;
+    let override_file = write_override_params_file("test_stealth_coinbase_spend_params.json", overrides);
 
     let args = Args {
         simnet: true,
@@ -1721,8 +1721,7 @@ async fn test_stealth_coinbase_can_be_spent() {
     client.submit_block(merging_template.block.clone(), false).await.unwrap();
     println!("Submitted merging block");
 
-    // 4. Mine COINBASE_MATURITY blocks for the UTXO to mature
-    // Using override params: prior_coinbase_maturity = 10
+    // 4. Mine COINBASE_MATURITY blocks for the UTXO to mature (overridden to 10)
     const COINBASE_MATURITY: u64 = 10;
     for i in 0..COINBASE_MATURITY + 5 {
         let template = client.get_block_template(regular_address.clone(), vec![]).await.unwrap();
