@@ -32,7 +32,7 @@ fn try_generate_secret_key() -> Result<SecretKey> {
 
     for _ in 0..MAX_ATTEMPTS {
         let mut bytes = [0u8; 32];
-        getrandom::getrandom(&mut bytes).map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
+        getrandom::fill(&mut bytes).map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
 
         let secret = match SecretKey::from_slice(&bytes) {
             Ok(sk) => {
