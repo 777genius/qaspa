@@ -2,7 +2,7 @@ use std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
 use crate::common::{client_notify::ChannelNotify, daemon::Daemon};
 use futures_util::future::try_join_all;
-use kaspa_addresses::{Address, Prefix, Version};
+use kaspa_addresses::{Address, PayloadVec, Prefix, Version};
 use kaspa_consensus::params::{ForkActivation, OverrideParams, Params, SIMNET_GENESIS};
 use kaspa_consensus_core::{
     constants::{MAX_SOMPI, TX_VERSION},
@@ -1063,7 +1063,9 @@ async fn test_get_block_template_stealth_invalid_payload() {
     let client = daemon.start().await;
 
     // 1. Wrong payload length (32 instead of 64 bytes)
-    let bad_address = Address::new(Prefix::StealthTestnet, Version::Stealth, &[1u8; 32]);
+    // Bypass `Address::new` debug assertions: we explicitly want to test RPC/service validation on malformed addresses.
+    let bad_address =
+        Address { prefix: Prefix::StealthTestnet, version: Version::Stealth, payload: PayloadVec::from_slice(&[1u8; 32]) };
     let result = client.get_block_template_call(None, GetBlockTemplateRequest { pay_address: bad_address, extra_data: vec![] }).await;
 
     assert!(result.is_err(), "Should fail with wrong payload length");
