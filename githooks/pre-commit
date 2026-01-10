@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Загружаем cargo в PATH (git hooks не наследуют shell profile)
+if [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+fi
+
 echo "🔧 Running cargo fmt..."
 cargo fmt --all
 
