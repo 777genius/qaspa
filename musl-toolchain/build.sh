@@ -73,8 +73,58 @@ export CXX_x86_64_unknown_linux_musl=$CXX
 export AR_x86_64_unknown_linux_musl=$AR
 export LD_x86_64_unknown_linux_musl=$LD
 
-# Set environment variables for static linking
+# Build OpenSSL for musl target
+OPENSSL_VERSION="3.2.1"
+OPENSSL_DIR="$HOME/openssl-musl"
+
+if [ ! -d "$OPENSSL_DIR" ]; then
+  echo "Building OpenSSL $OPENSSL_VERSION for musl..."
+
+  # Ensure curl is available
+  sudo apt-get install -y curl
+
+  cd /tmp
+  curl -LO "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
+  tar xzf "openssl-${OPENSSL_VERSION}.tar.gz"
+  cd "openssl-${OPENSSL_VERSION}"
+
+  # Configure OpenSSL for musl cross-compilation
+  ./Configure linux-x86_64 \
+    --prefix="$OPENSSL_DIR" \
+    --openssldir="$OPENSSL_DIR" \
+    no-shared \
+    no-async \
+    CC="$CC" \
+    AR="$AR" \
+    RANLIB="$HOME/x-tools/$CTNG_PRESET/bin/$CTNG_PRESET-ranlib"
+
+  make -j$(nproc)
+  make install_sw
+
+  echo "OpenSSL built successfully at $OPENSSL_DIR"
+  cd $GITHUB_WORKSPACE/musl-toolchain
+fi
+
+# Determine OpenSSL lib directory (lib or lib64)
+if [ -d "$OPENSSL_DIR/lib64" ]; then
+  OPENSSL_LIB_PATH="$OPENSSL_DIR/lib64"
+else
+  OPENSSL_LIB_PATH="$OPENSSL_DIR/lib"
+fi
+
+# Set OpenSSL environment variables for Rust
+export OPENSSL_DIR="$OPENSSL_DIR"
+export OPENSSL_LIB_DIR="$OPENSSL_LIB_PATH"
+export OPENSSL_INCLUDE_DIR="$OPENSSL_DIR/include"
 export OPENSSL_STATIC=true
+
+# Also set for the specific target
+export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_DIR="$OPENSSL_DIR"
+export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_LIB_DIR="$OPENSSL_LIB_PATH"
+export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_INCLUDE_DIR="$OPENSSL_DIR/include"
+export X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_STATIC=1
+
+# Set environment variables for static linking
 export RUSTFLAGS="-C link-arg=-static"
 
 # We specify the compiler that will invoke linker
