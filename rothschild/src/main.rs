@@ -230,7 +230,7 @@ async fn main() {
         priority_fee: args.priority_fee,
         randomize_fee: args.randomize_fee,
         payload_size: args.payload_size,
-        burn_stealth_addr: burn_stealth_addr.clone(),
+        burn_stealth_addr,
     };
 
     rayon::ThreadPoolBuilder::new().num_threads(args.threads as usize).build_global().unwrap();
