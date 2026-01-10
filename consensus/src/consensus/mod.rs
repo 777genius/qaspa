@@ -1426,7 +1426,14 @@ impl ConsensusApi for Consensus {
     }
 
     fn get_n_last_pruning_points(&self, n: usize) -> Vec<Hash> {
-        let (_pruning_point, pruning_index) = self.pruning_point_store.read().pruning_point_and_index().unwrap();
-        (0..=pruning_index).rev().take(n).map(|ind| self.past_pruning_points_store.get(ind).unwrap()).collect_vec()
+        if n == 0 {
+            return vec![];
+        }
+
+        let (pruning_point, pruning_index) = self.pruning_point_store.read().pruning_point_and_index().unwrap();
+        std::iter::once(pruning_point)
+            .chain((0..pruning_index).rev().map(|ind| self.past_pruning_points_store.get(ind).unwrap()))
+            .take(n)
+            .collect_vec()
     }
 }

@@ -137,19 +137,17 @@ macro_rules! default_opts {
         // Configure WAL directory if specified (for RAM cache / tmpfs)
         // Auto-generate unique subdirectory from database path to avoid conflicts
         if let Some(ref wal_base) = $self.wal_dir {
-            let db_name = $self
-                .db_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .expect(&format!("Invalid database path: {}", $self.db_path.display()));
-            let wal_subdir = wal_base.join(db_name);
+            use std::hash::{Hash, Hasher};
+
+            let db_name = $self.db_path.file_name().and_then(|n| n.to_str()).unwrap_or("db");
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            $self.db_path.to_string_lossy().hash(&mut hasher);
+
+            let wal_subdir = wal_base.join(format!("{}-{:016x}", db_name, hasher.finish()));
 
             // Create subdirectory if needed (each DB gets its own WAL space)
-            std::fs::create_dir_all(&wal_subdir).expect(&format!(
-                "Failed to create WAL subdirectory {}: {}",
-                wal_subdir.display(),
-                "error"
-            ));
+            std::fs::create_dir_all(&wal_subdir)
+                .unwrap_or_else(|e| panic!("Failed to create WAL subdirectory {}: {}", wal_subdir.display(), e));
 
             opts.set_wal_dir(&wal_subdir);
         }

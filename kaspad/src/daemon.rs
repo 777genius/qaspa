@@ -476,7 +476,7 @@ Do you confirm? (y/n)";
 
                     let mut writer = DirectDbWriter::new(&consensus_db);
 
-                    let end_level: u8 = config.max_block_level + 1;
+                    let end_level: u8 = config.max_block_level.saturating_add(1);
                     let end_level_bytes = end_level.to_le_bytes();
 
                     let start_parents_prefix_vec: Vec<_> =

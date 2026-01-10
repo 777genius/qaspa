@@ -54,7 +54,11 @@ try_from!(item: &protowire::RpcOptionalHeader, kaspa_rpc_core::RpcOptionalHeader
     Self {
         version: item.version.map(|x| x as u16),
         hash: item.hash.as_ref().map(|x| RpcHash::from_str(x)).transpose()?,
-        parents_by_level: Some(compressed_parents_from_protowire(&item.parents_by_level)?),
+        parents_by_level: if item.parents_by_level.is_empty() {
+            None
+        } else {
+            Some(compressed_parents_from_protowire(&item.parents_by_level)?)
+        },
         hash_merkle_root: item.hash_merkle_root.as_ref().map(|x| RpcHash::from_str(x)).transpose()?,
         accepted_id_merkle_root: item.accepted_id_merkle_root.as_ref().map(|x| RpcHash::from_str(x)).transpose()?,
         utxo_commitment: item.utxo_commitment.as_ref().map(|x| RpcHash::from_str(x)).transpose()?,
