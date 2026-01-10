@@ -338,6 +338,40 @@ jobs:
     name: Build Linux Release
     runs-on: ubuntu-latest
     steps:
+      # Clean unnecessary files to save disk space
+      - name: Clean unnecessary files to save space
+        run: |
+          if [ "$(docker images -q)" ]; then
+            docker rmi $(docker images -q)
+          fi
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/sudo apt/sources.list.d
+          sudo apt -y autoremove --purge
+          sudo apt -y autoclean
+          sudo apt clean
+          rm --recursive --force "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+          # remove large packages manually (all but llvm)
+          sudo apt-get remove -y '^aspnetcore-.*' || echo "::warning::Failed to remove aspnetcore. Proceeding..."
+          sudo apt-get remove -y '^dotnet-.*' --fix-missing || echo "::warning::Failed to remove dotnet. Proceeding..."
+          sudo apt-get remove -y 'php.*' --fix-missing || echo "::warning::Failed to remove php. Proceeding..."
+          sudo apt-get remove -y '^mongodb-.*' --fix-missing || echo "::warning::Failed to remove mongodb. Proceeding..."
+          sudo apt-get remove -y '^mysql-.*' --fix-missing || echo "::warning::Failed to remove mysql. Proceeding..."
+          sudo apt-get remove -y azure-cli google-chrome-stable firefox powershell mono-devel libgl1-mesa-dri --fix-missing || echo "::warning::Failed to remove large packages. Proceeding..."
+          sudo apt-get remove -y google-cloud-sdk --fix-missing || echo "::debug::Failed to remove google-cloud-sdk. Proceeding..."
+          sudo apt-get remove -y google-cloud-cli --fix-missing || echo "::debug::Failed to remove google-cloud-cli. Proceeding..."
+          sudo apt-get autoremove -y || echo "::warning::autoremove failed. Proceeding..."
+          sudo apt-get clean || echo "::warning::apt clean failed. Proceeding..."
+          df -h
+
+      # Free up disk space on Ubuntu
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          large-packages: false
+          swap-storage: true
+
       - name: Checkout sources
         uses: actions/checkout@v4
 
