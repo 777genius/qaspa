@@ -362,7 +362,7 @@ impl StratumMiner {
                 // Step 2: Apply kHeavyHash (matrix multiplication + cSHAKE256 "HeavyHash")
                 let pow_hash = matrix.heavy_hash(hash);
                 // Convert to Uint256 for proper comparison (little-endian)
-                let pow_value = Uint256::from_le_bytes(*pow_hash.as_bytes());
+                let pow_value = Uint256::from_le_bytes(pow_hash.as_bytes());
                 pow_value <= target
             });
 
@@ -372,7 +372,7 @@ impl StratumMiner {
                 // Debug: recompute hash for logging
                 let hash = base_hasher.clone().finalize_with_nonce(nonce);
                 let pow_hash = matrix.heavy_hash(hash);
-                let _pow_value = Uint256::from_le_bytes(*pow_hash.as_bytes());
+                let _pow_value = Uint256::from_le_bytes(pow_hash.as_bytes());
                 debug!("Share details: nonce={:016x}, hash_le={}, target={}", nonce, hex::encode(pow_hash.as_bytes()), target);
 
                 stats.blocks_found.fetch_add(1, Ordering::Release);
