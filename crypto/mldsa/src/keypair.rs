@@ -225,7 +225,7 @@ impl MlDsaKeypair {
 pub fn try_generate_keypair(level: MlDsaLevel) -> Result<MlDsaKeypair> {
     // Generate 32 bytes of randomness using getrandom
     let mut seed = [0u8; 32];
-    getrandom::getrandom(&mut seed).map_err(|e| MlDsaError::KeyGenerationFailed(format!("getrandom failed: {e}")))?;
+    getrandom::fill(&mut seed).map_err(|e| MlDsaError::KeyGenerationFailed(format!("getrandom failed: {e}")))?;
     let keypair = keypair_from_seed_bytes(&seed, level);
     seed.zeroize();
     Ok(keypair)

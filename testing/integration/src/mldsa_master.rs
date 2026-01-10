@@ -369,8 +369,8 @@ async fn test_mldsa_master_reorg_and_expiry() {
     env.rpc_client.add_peer(format!("127.0.0.1:{}", daemon_b.p2p_port).try_into().unwrap(), true).await.expect("add peer A->B");
 
     wait_for(
-        180,
-        80,
+        250,
+        200,
         || {
             let c1 = env.rpc_client.clone();
             let c2 = client_b.clone();

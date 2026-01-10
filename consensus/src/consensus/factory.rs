@@ -8,7 +8,10 @@ use kaspa_consensus_notify::root::ConsensusNotificationRoot;
 use kaspa_consensusmanager::{ConsensusFactory, ConsensusInstance, DynConsensusCtl, SessionLock};
 use kaspa_core::{debug, time::unix_now, warn};
 use kaspa_database::{
-    prelude::{BatchDbWriter, CachePolicy, CachedDbAccess, CachedDbItem, DirectDbWriter, StoreError, StoreResult, StoreResultExt, DB},
+    prelude::{
+        BatchDbWriter, CachePolicy, CachedDbAccess, CachedDbItem, DirectDbWriter, RocksDbPreset, StoreError, StoreResult,
+        StoreResultExt, DB,
+    },
     registry::DatabaseStorePrefixes,
 };
 
@@ -57,7 +60,7 @@ pub struct MultiConsensusMetadata {
     version: u32,
 }
 
-pub const LATEST_DB_VERSION: u32 = 5;
+pub const LATEST_DB_VERSION: u32 = 6;
 impl Default for MultiConsensusMetadata {
     fn default() -> Self {
         Self {
@@ -253,9 +256,13 @@ pub struct Factory {
     tx_script_cache_counters: Arc<TxScriptCacheCounters>,
     fd_budget: i32,
     mining_rules: Arc<MiningRules>,
+    rocksdb_preset: RocksDbPreset,
+    wal_dir: Option<PathBuf>,
+    cache_budget: Option<usize>,
 }
 
 impl Factory {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         management_db: Arc<DB>,
         config: &Config,
@@ -266,6 +273,9 @@ impl Factory {
         tx_script_cache_counters: Arc<TxScriptCacheCounters>,
         fd_budget: i32,
         mining_rules: Arc<MiningRules>,
+        rocksdb_preset: RocksDbPreset,
+        wal_dir: Option<PathBuf>,
+        cache_budget: Option<usize>,
     ) -> Self {
         assert!(fd_budget > 0, "fd_budget has to be positive");
         let mut config = config.clone();
@@ -284,6 +294,9 @@ impl Factory {
             tx_script_cache_counters,
             fd_budget,
             mining_rules,
+            rocksdb_preset,
+            wal_dir,
+            cache_budget,
         };
         factory.delete_inactive_consensus_entries();
         factory
@@ -310,12 +323,37 @@ impl ConsensusFactory for Factory {
         };
 
         let dir = self.db_root_dir.join(entry.directory_name.clone());
-        let db = kaspa_database::prelude::ConnBuilder::default()
-            .with_db_path(dir)
-            .with_parallelism(self.db_parallelism)
-            .with_files_limit(self.fd_budget / 2) // active and staging consensuses should have equal budgets
-            .build()
-            .unwrap();
+        let desired_files_limit = (self.fd_budget / 2).max(1); // active and staging consensuses should have equal budgets
+        let build_db = |files_limit: i32| {
+            kaspa_database::prelude::ConnBuilder::default()
+                .with_db_path(dir.clone())
+                .with_parallelism(self.db_parallelism)
+                .with_files_limit(files_limit)
+                .with_preset(self.rocksdb_preset)
+                .with_wal_dir(self.wal_dir.clone())
+                .with_cache_budget(self.cache_budget)
+                .build()
+        };
+        let db = match build_db(desired_files_limit) {
+            Ok(db) => db,
+            Err(err) => {
+                // In some environments (notably integration tests running multiple daemons in-process),
+                // the global FD budget guard might be partially acquired by other DB instances.
+                // We retry with a reduced limit based on remaining OS-level FD budget.
+                let remainder = (err.limit - err.acquired).max(1);
+                let fallback_files_limit = desired_files_limit.min((remainder / 2).max(1));
+                warn!(
+                    "Failed to acquire FD budget for consensus DB (desired_files_limit={}, acquired={}, limit={}), retrying with files_limit={}",
+                    desired_files_limit, err.acquired, err.limit, fallback_files_limit
+                );
+                build_db(fallback_files_limit).unwrap_or_else(|err2| {
+                    panic!(
+                        "Failed to acquire FD budget for consensus DB even after retry (desired_files_limit={}, retry_files_limit={}, acquired={}, limit={}). Error: {err2}",
+                        desired_files_limit, fallback_files_limit, err2.acquired, err2.limit
+                    )
+                })
+            }
+        };
 
         let session_lock = SessionLock::new();
         let consensus = Arc::new(Consensus::new(
@@ -345,12 +383,34 @@ impl ConsensusFactory for Factory {
 
         let entry = self.management_store.write().new_staging_consensus_entry().unwrap();
         let dir = self.db_root_dir.join(entry.directory_name);
-        let db = kaspa_database::prelude::ConnBuilder::default()
-            .with_db_path(dir)
-            .with_parallelism(self.db_parallelism)
-            .with_files_limit(self.fd_budget / 2) // active and staging consensuses should have equal budgets
-            .build()
-            .unwrap();
+        let desired_files_limit = (self.fd_budget / 2).max(1); // active and staging consensuses should have equal budgets
+        let build_db = |files_limit: i32| {
+            kaspa_database::prelude::ConnBuilder::default()
+                .with_db_path(dir.clone())
+                .with_parallelism(self.db_parallelism)
+                .with_files_limit(files_limit)
+                .with_preset(self.rocksdb_preset)
+                .with_wal_dir(self.wal_dir.clone())
+                .with_cache_budget(self.cache_budget)
+                .build()
+        };
+        let db = match build_db(desired_files_limit) {
+            Ok(db) => db,
+            Err(err) => {
+                let remainder = (err.limit - err.acquired).max(1);
+                let fallback_files_limit = desired_files_limit.min((remainder / 2).max(1));
+                warn!(
+                    "Failed to acquire FD budget for staging consensus DB (desired_files_limit={}, acquired={}, limit={}), retrying with files_limit={}",
+                    desired_files_limit, err.acquired, err.limit, fallback_files_limit
+                );
+                build_db(fallback_files_limit).unwrap_or_else(|err2| {
+                    panic!(
+                        "Failed to acquire FD budget for staging consensus DB even after retry (desired_files_limit={}, retry_files_limit={}, acquired={}, limit={}). Error: {err2}",
+                        desired_files_limit, fallback_files_limit, err2.acquired, err2.limit
+                    )
+                })
+            }
+        };
 
         let session_lock = SessionLock::new();
         let consensus = Arc::new(Consensus::new(
