@@ -12,12 +12,12 @@ use kaspa_notify::{
     scope::{Scope, StealthUtxosChangedScope, UtxosChangedScope, VirtualDaaScoreChangedScope},
 };
 use kaspa_rpc_core::{
+    GetServerInfoResponse, RpcFeeEstimate,
     api::{
         ctl::{RpcCtl, RpcState},
         ops::{RPC_API_REVISION, RPC_API_VERSION},
     },
     message::{StealthUtxosChangedNotification, UtxosChangedNotification},
-    GetServerInfoResponse, RpcFeeEstimate,
 };
 use kaspa_txscript::STEALTH_SCRIPT_VERSION;
 use kaspa_wrpc_client::KaspaRpcClient;
@@ -33,8 +33,8 @@ use crate::utxo::{Maturity, OutgoingTransaction, PendingUtxoEntryReference, Sync
 use crate::wallet::WalletBusMessage;
 use kaspa_consensus_core::tx::TransactionOutpoint;
 use kaspa_rpc_core::{
-    notify::connection::{ChannelConnection, ChannelType},
     Notification,
+    notify::connection::{ChannelConnection, ChannelType},
 };
 
 /// Stealth handler storage - separate struct to avoid lifetime issues with DashMap in async contexts

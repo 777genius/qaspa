@@ -26,8 +26,8 @@ use blake2b_simd::Params as Blake2bParams;
 use hkdf::Hkdf;
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_mldsa::{
-    derive_keypair_from_master_seed, generate_keypair, MasterSeed, MlDsaKeypair as CryptoMlDsaKeypair, MlDsaLevel, PublicKey,
-    SecretKey, MASTER_SEED_LEN,
+    MASTER_SEED_LEN, MasterSeed, MlDsaKeypair as CryptoMlDsaKeypair, MlDsaLevel, PublicKey, SecretKey,
+    derive_keypair_from_master_seed, generate_keypair,
 };
 use kaspa_utils::hex::ToHex;
 use sha3::Sha3_512;

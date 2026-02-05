@@ -5,7 +5,7 @@ use kaspa_wallet_core::api::message::{MasterDelegationApplyRequest, MasterDelega
 use kaspa_wallet_core::message::{MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1};
 use kaspa_wallet_core::storage::PrvKeyDataId;
 #[cfg(not(target_arch = "wasm32"))]
-use qrcode::{render::unicode, QrCode};
+use qrcode::{QrCode, render::unicode};
 use serde_json::json;
 use std::str::FromStr;
 use zeroize::Zeroize;
@@ -558,11 +558,7 @@ impl Wallet {
     }
 
     fn ensure_wallet_open(ctx: &Arc<KaspaCli>) -> Result<()> {
-        if ctx.wallet().is_open() {
-            Ok(())
-        } else {
-            Err(Error::WalletIsNotOpen)
-        }
+        if ctx.wallet().is_open() { Ok(()) } else { Err(Error::WalletIsNotOpen) }
     }
 
     fn is_master_enabled(ctx: &Arc<KaspaCli>) -> bool {

@@ -100,10 +100,10 @@ pub mod sender;
 pub use error::{Result, StealthError};
 pub use hash::{BlindingFactorHash, ViewTagHash};
 pub use keys::{
-    EphemeralOutput, StealthAddress, StealthSecretKey, COMPRESSED_PUBKEY_SIZE, EPHEMERAL_OUTPUT_SIZE, SECRET_KEY_SIZE,
-    STEALTH_ADDRESS_SIZE, XONLY_PUBKEY_SIZE,
+    COMPRESSED_PUBKEY_SIZE, EPHEMERAL_OUTPUT_SIZE, EphemeralOutput, SECRET_KEY_SIZE, STEALTH_ADDRESS_SIZE, StealthAddress,
+    StealthSecretKey, XONLY_PUBKEY_SIZE,
 };
-pub use receiver::{check_view_tag, derive_spending_key, scan_output, try_scan_output, verify_derived_key, ScanResult};
+pub use receiver::{ScanResult, check_view_tag, derive_spending_key, scan_output, try_scan_output, verify_derived_key};
 pub use sender::{
     create_stealth_output, create_stealth_output_with_blinding, create_stealth_outputs_batch, try_create_stealth_output,
     try_create_stealth_output_with_blinding,

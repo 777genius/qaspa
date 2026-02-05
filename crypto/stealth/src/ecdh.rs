@@ -8,7 +8,7 @@
 //!
 //! Both computations yield the same shared secret due to ECDH properties.
 
-use secp256k1::{PublicKey, Scalar, SecretKey, XOnlyPublicKey, SECP256K1};
+use secp256k1::{PublicKey, SECP256K1, Scalar, SecretKey, XOnlyPublicKey};
 
 /// Computes ECDH shared secret between a secret key and a public key.
 ///

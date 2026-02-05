@@ -471,7 +471,7 @@ impl UtxoEntryReference {
         use kaspa_consensus_core::tx::ScriptVec;
         use kaspa_txscript::STEALTH_SCRIPT_VERSION;
         use rand::RngCore;
-        use secp256k1::{PublicKey, SecretKey, SECP256K1};
+        use secp256k1::{PublicKey, SECP256K1, SecretKey};
 
         let outpoint = TransactionOutpoint::simulated();
         let script_public_key = match address.version {

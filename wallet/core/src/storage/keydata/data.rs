@@ -3,7 +3,7 @@
 //!
 
 use crate::derivation::create_xpub_from_xprv;
-use crate::encryption::{decrypt_xchacha20poly1305, encrypt_xchacha20poly1305, Decrypted};
+use crate::encryption::{Decrypted, decrypt_xchacha20poly1305, encrypt_xchacha20poly1305};
 use crate::imports::*;
 use kaspa_bip32::{ExtendedPrivateKey, ExtendedPublicKey, Language, Mnemonic};
 use kaspa_mldsa::MlDsaLevel;
@@ -477,7 +477,7 @@ impl PrvKeyData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::encryption::{encrypt_xchacha20poly1305, EncryptionKind};
+    use crate::encryption::{EncryptionKind, encrypt_xchacha20poly1305};
     use crate::tests::*;
     use kaspa_mldsa::MlDsaLevel;
 

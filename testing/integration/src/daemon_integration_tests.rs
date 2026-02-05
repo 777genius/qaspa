@@ -12,7 +12,7 @@ use kaspa_consensusmanager::ConsensusManager;
 use kaspa_core::{task::runtime::AsyncRuntime, trace};
 use kaspa_grpc_client::GrpcClient;
 use kaspa_notify::scope::{BlockAddedScope, UtxosChangedScope, VirtualDaaScoreChangedScope};
-use kaspa_rpc_core::{api::rpc::RpcApi, Notification, RpcTransactionId};
+use kaspa_rpc_core::{Notification, RpcTransactionId, api::rpc::RpcApi};
 use kaspa_txscript::pay_to_address_script;
 use kaspad_lib::args::Args;
 use rand::thread_rng;
@@ -132,7 +132,9 @@ async fn daemon_utxos_propagation_test() {
         "INFO,kaspa_testing_integration=trace,kaspa_notify=debug,kaspa_rpc_core=debug,kaspa_grpc_client=debug",
     );
     // Disable stealth-only mempool policy for legacy UTXO propagation test
-    std::env::set_var("KASPA_DISABLE_STEALTH_POLICY", "1");
+    unsafe {
+        std::env::set_var("KASPA_DISABLE_STEALTH_POLICY", "1");
+    }
 
     let args = Args {
         simnet: true,

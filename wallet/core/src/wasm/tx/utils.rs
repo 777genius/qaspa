@@ -5,7 +5,7 @@ use crate::wasm::tx::generator::*;
 use kaspa_addresses::Version;
 use kaspa_consensus_client::*;
 use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
-use kaspa_stealth::{try_create_stealth_output, StealthAddress};
+use kaspa_stealth::{StealthAddress, try_create_stealth_output};
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use kaspa_wallet_macros::declare_typescript_wasm_interface as declare;
 use kaspa_wasm_core::types::BinaryT;

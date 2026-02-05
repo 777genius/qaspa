@@ -20,7 +20,7 @@ use kaspa_consensus_core::tx::{
     MutableTransaction, ScriptPublicKey, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry,
 };
 use kaspa_hashes::Hash;
-use kaspa_mldsa::{generate_keypair, sign, MlDsaKeypair, MlDsaLevel};
+use kaspa_mldsa::{MlDsaKeypair, MlDsaLevel, generate_keypair, sign};
 use kaspa_txscript::pay_to_address_script;
 use kaspa_txscript::script_builder::ScriptBuilder;
 use serde_json::Value;

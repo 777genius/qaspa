@@ -61,8 +61,8 @@ use crate::imports::*;
 use crate::result::Result;
 use crate::tx::generator::stealth_change::DynStealthChangeCreator;
 use crate::tx::{
-    mass::*, Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, PendingTransactionIterator,
-    PendingTransactionStream, RandomFeeSettings,
+    Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, PendingTransaction, PendingTransactionIterator,
+    PendingTransactionStream, RandomFeeSettings, mass::*,
 };
 use crate::utxo::{NetworkParams, UtxoContext, UtxoEntryReference};
 use kaspa_addresses::Version;
@@ -72,7 +72,7 @@ use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
 use kaspa_consensus_core::tx::{Transaction, TransactionInput, TransactionOutpoint, TransactionOutput};
 use kaspa_stealth::StealthAddress;
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
-use rand::{rngs::OsRng, Rng};
+use rand::{Rng, rngs::OsRng};
 use std::collections::VecDeque;
 
 use super::SignerT;
@@ -651,7 +651,7 @@ impl Generator {
     /// transaction for each stream item request. NOTE: transactions
     /// are generated only when each stream item is polled.
     #[inline(always)]
-    pub fn stream(&self) -> impl Stream<Item = Result<PendingTransaction>> {
+    pub fn stream(&self) -> impl Stream<Item = Result<PendingTransaction>> + 'static {
         Box::pin(PendingTransactionStream::new(self))
     }
 
@@ -674,18 +674,20 @@ impl Generator {
             .pop_front()
             .or_else(|| stage.utxo_iterator.as_mut().and_then(|utxo_stage_iterator| utxo_stage_iterator.next()))
             .or_else(|| context.priority_utxo_entries.as_mut().and_then(|entries| entries.pop_front()))
-            .or_else(|| loop {
-                let utxo_entry = context.utxo_source_iterator.next()?;
+            .or_else(|| {
+                loop {
+                    let utxo_entry = context.utxo_source_iterator.next()?;
 
-                if let Some(filter) = context.priority_utxo_entry_filter.as_ref() {
-                    if filter.contains(&utxo_entry) {
-                        // skip the entry from the iterator intake
-                        // if it has been supplied as a priority entry
-                        continue;
+                    if let Some(filter) = context.priority_utxo_entry_filter.as_ref() {
+                        if filter.contains(&utxo_entry) {
+                            // skip the entry from the iterator intake
+                            // if it has been supplied as a priority entry
+                            continue;
+                        }
                     }
-                }
 
-                break Some(utxo_entry);
+                    break Some(utxo_entry);
+                }
             })
     }
 

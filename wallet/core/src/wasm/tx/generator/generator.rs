@@ -1,14 +1,14 @@
 use crate::imports::*;
 use crate::result::Result;
-use crate::tx::{generator as native, Fees, PaymentDestination, PaymentOutput, PaymentOutputs, RandomFeeSettings};
+use crate::tx::{Fees, PaymentDestination, PaymentOutput, PaymentOutputs, RandomFeeSettings, generator as native};
 use crate::utxo::{TryIntoUtxoEntryReferences, UtxoEntryReference};
-use crate::wasm::tx::generator::*;
 use crate::wasm::tx::IFees;
+use crate::wasm::tx::generator::*;
 // use crate::wasm::wallet::Account;
 use crate::wasm::UtxoContext;
 use kaspa_addresses::Version;
 use kaspa_consensus_core::tx::TransactionOutput;
-use kaspa_stealth::{try_create_stealth_output, StealthAddress};
+use kaspa_stealth::{StealthAddress, try_create_stealth_output};
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 
 #[wasm_bindgen(typescript_custom_section)]

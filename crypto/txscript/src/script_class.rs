@@ -1,4 +1,4 @@
-use crate::{opcodes, STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION};
+use crate::{STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION, opcodes};
 use borsh::{BorshDeserialize, BorshSerialize};
 use kaspa_addresses::Version;
 use kaspa_consensus_core::tx::{ScriptPublicKey, ScriptPublicKeyVersion};

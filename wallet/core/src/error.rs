@@ -281,7 +281,9 @@ pub enum Error {
     #[error("Stealth change creator is required for stealth change address")]
     StealthChangeCreatorRequired,
 
-    #[error("Stealth change address cannot be used for batch transactions (too many UTXOs). Please use a regular P2PK change address or consolidate UTXOs first.")]
+    #[error(
+        "Stealth change address cannot be used for batch transactions (too many UTXOs). Please use a regular P2PK change address or consolidate UTXOs first."
+    )]
     StealthChangeBatchNotSupported,
 
     #[error("Mixed stealth and legacy inputs are not allowed in a single transaction")]

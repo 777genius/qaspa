@@ -22,7 +22,7 @@ use crate::ecdh::compute_shared_secret;
 use crate::error::{Result, StealthError};
 use crate::hash::{BlindingFactorHash, ViewTagHash};
 use crate::keys::EphemeralOutput;
-use secp256k1::{PublicKey, Scalar, SecretKey, XOnlyPublicKey, SECP256K1};
+use secp256k1::{PublicKey, SECP256K1, Scalar, SecretKey, XOnlyPublicKey};
 
 /// Result of successfully scanning an output that belongs to us.
 #[derive(Clone, Copy, Debug)]

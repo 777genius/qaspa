@@ -34,3 +34,6 @@ tmp/
 # Local forks/clones for explorer work (kept as separate git repos, not tracked here)
 repos/
 .tmp/
+
+# Stratum bridge logs
+rustbridge_*.log

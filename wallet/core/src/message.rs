@@ -9,7 +9,7 @@ use kaspa_hashes::{Hash, PersonalMessageSigningHash};
 use secp256k1::{Error as SecpError, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 
-use crate::account::delegation::{delegation_message_hash, DelegationRecordV1, DelegationStatus};
+use crate::account::delegation::{DelegationRecordV1, DelegationStatus, delegation_message_hash};
 use crate::deterministic::AccountId;
 use crate::error::Error;
 use crate::result::Result;
@@ -101,7 +101,7 @@ pub(crate) mod serde_hex_array_32 {
 }
 
 pub(crate) mod serde_base64_bytes {
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::{Engine as _, engine::general_purpose};
     use serde::de::{Error as DeError, SeqAccess, Visitor};
     use serde::{Deserializer, Serializer};
     use std::fmt;
@@ -338,8 +338,8 @@ pub fn calc_request_id(body: &MasterDelegationRequestBodyV1) -> Result<[u8; 32]>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::account::delegation::{sign_with_master, DelegationStatus};
-    use base64::{engine::general_purpose, Engine as _};
+    use crate::account::delegation::{DelegationStatus, sign_with_master};
+    use base64::{Engine as _, engine::general_purpose};
     use kaspa_consensus_core::network::NetworkType;
     use kaspa_hashes::Hash;
     use kaspa_mldsa::MlDsaLevel;

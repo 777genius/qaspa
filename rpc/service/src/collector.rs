@@ -14,8 +14,8 @@ use kaspa_txscript::STEALTH_SCRIPT_VERSION;
 use kaspa_utils::hex::FromHex;
 use kaspa_utils::triggers::SingleTrigger;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 
 type LastEmittedMap = std::collections::HashMap<([u8; 32], u64), u64>;

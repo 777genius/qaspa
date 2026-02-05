@@ -13,17 +13,17 @@ use kaspa_consensus_core::{
 use kaspa_core::{info, kaspad_env::version, time::unix_now, warn};
 use kaspa_grpc_client::{ClientPool, GrpcClient};
 use kaspa_notify::subscription::context::SubscriptionContext;
-use kaspa_rpc_core::{api::rpc::RpcApi, notify::mode::NotificationMode, RpcUtxoEntry};
-use kaspa_stealth::{try_create_stealth_output, StealthAddress, StealthSecretKey};
+use kaspa_rpc_core::{RpcUtxoEntry, api::rpc::RpcApi, notify::mode::NotificationMode};
+use kaspa_stealth::{StealthAddress, StealthSecretKey, try_create_stealth_output};
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use parking_lot::Mutex;
 use rand::RngCore;
 use rayon::prelude::*;
 use secp256k1::{
-    rand::{thread_rng, Rng},
     Keypair,
+    rand::{Rng, thread_rng},
 };
-use tokio::time::{interval, Instant, MissedTickBehavior};
+use tokio::time::{Instant, MissedTickBehavior, interval};
 
 const DEFAULT_SEND_AMOUNT: u64 = 10 * SOMPI_PER_KASPA;
 const FEE_RATE: u64 = 10;
@@ -174,7 +174,9 @@ async fn main() {
     let args = Args::parse();
 
     if args.burn_stealth && args.addr.is_some() {
-        eprintln!("Error: --burn-stealth and --to-addr are mutually exclusive. In burn-stealth mode, outputs are sent to generated stealth addresses.");
+        eprintln!(
+            "Error: --burn-stealth and --to-addr are mutually exclusive. In burn-stealth mode, outputs are sent to generated stealth addresses."
+        );
         std::process::exit(1);
     }
 

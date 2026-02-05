@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn test_pending_stealth_change_debug_redacts_secrets() {
-        use kaspa_stealth::{derive_spending_key, try_create_stealth_output_with_blinding, StealthSecretKey};
+        use kaspa_stealth::{StealthSecretKey, derive_spending_key, try_create_stealth_output_with_blinding};
 
         let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_stealth_change_creator_impl() {
-        use kaspa_stealth::{verify_derived_key, StealthSecretKey, STEALTH_SCRIPT_VERSION};
+        use kaspa_stealth::{STEALTH_SCRIPT_VERSION, StealthSecretKey, verify_derived_key};
 
         let keys = StealthSecretKey::generate().unwrap();
         let address = keys.to_address();

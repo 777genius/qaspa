@@ -1,7 +1,7 @@
-use axum::extract::DefaultBodyLimit;
-use axum::http::{header, Method};
-use axum::routing::{delete, get, post};
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
+use axum::http::{Method, header};
+use axum::routing::{delete, get, post};
 use std::path::PathBuf;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
@@ -10,9 +10,9 @@ use tower_http::trace::TraceLayer;
 /// Maximum request body size (1 MB) - prevents OOM from large payloads
 const MAX_REQUEST_SIZE: usize = 1024 * 1024;
 
+use super::AppState;
 use super::handlers::{cluster, dag, metrics_history, miners, nodes, txgen};
 use super::ws;
-use super::AppState;
 
 /// Create the main API router
 pub fn create_router(state: AppState, static_dir: PathBuf) -> Router {

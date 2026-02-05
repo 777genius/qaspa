@@ -3,7 +3,7 @@ use tokio::sync::{broadcast, watch};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use testnet_controller::api::{create_router, AppState};
+use testnet_controller::api::{AppState, create_router};
 use testnet_controller::config::Config;
 use testnet_controller::db::{self, MetricsWriter};
 use testnet_controller::docker::DockerManager;

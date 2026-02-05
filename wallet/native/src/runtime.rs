@@ -27,7 +27,7 @@ pub async fn collect_master_anchor_infos(wallet: &Wallet) -> kaspa_wallet_core::
 /// # Safety
 /// Callers must pass valid non-null pointers for JSON buffer and output summary;
 /// buffers must remain valid for the duration of the call.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_request_summary(
     json_ptr: *const u8,
     json_len: usize,
@@ -36,7 +36,7 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_request_summary(
     if json_ptr.is_null() || out_summary.is_null() || json_len == 0 {
         return false;
     }
-    let json = slice::from_raw_parts(json_ptr, json_len);
+    let json = unsafe { slice::from_raw_parts(json_ptr, json_len) };
     match serde_json::from_slice::<MasterDelegationRequestBodyV1>(json) {
         Ok(req) => {
             let summary = KaspaMasterDelegationSummary {
@@ -46,7 +46,9 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_request_summary(
                 delegations: req.delegations.len() as u32,
                 ..Default::default()
             };
-            ptr::write(out_summary, summary);
+            unsafe {
+                ptr::write(out_summary, summary);
+            }
             true
         }
         Err(_) => false,
@@ -57,7 +59,7 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_request_summary(
 ///
 /// # Safety
 /// Pointers must be valid and owned by the caller; wallet_ptr must reference a live `Wallet`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_sign(
     wallet_ptr: *mut Wallet,
     wallet_secret_ptr: *const u8,
@@ -67,23 +69,25 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_sign(
     out_json_ptr: *mut *mut u8,
     out_json_len: *mut usize,
 ) -> bool {
-    kaspa_wallet_mldsa_delegation_sign_ex(
-        wallet_ptr,
-        wallet_secret_ptr,
-        wallet_secret_len,
-        json_ptr,
-        json_len,
-        false,
-        out_json_ptr,
-        out_json_len,
-    )
+    unsafe {
+        kaspa_wallet_mldsa_delegation_sign_ex(
+            wallet_ptr,
+            wallet_secret_ptr,
+            wallet_secret_len,
+            json_ptr,
+            json_len,
+            false,
+            out_json_ptr,
+            out_json_len,
+        )
+    }
 }
 
 /// Sign delegation request JSON using an opened wallet instance with optional network mismatch override.
 ///
 /// # Safety
 /// Pointers must be valid and owned by the caller; wallet_ptr must reference a live `Wallet`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_sign_ex(
     wallet_ptr: *mut Wallet,
     wallet_secret_ptr: *const u8,
@@ -106,10 +110,12 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_sign_ex(
     }
 
     // Borrow Arc without leaking the original strong ref passed from the caller.
-    Arc::increment_strong_count(wallet_ptr as *const Wallet);
-    let wallet = Arc::from_raw(wallet_ptr);
-    let wallet_secret = slice::from_raw_parts(wallet_secret_ptr, wallet_secret_len).to_vec().into();
-    let json = slice::from_raw_parts(json_ptr, json_len);
+    unsafe {
+        Arc::increment_strong_count(wallet_ptr as *const Wallet);
+    }
+    let wallet = unsafe { Arc::from_raw(wallet_ptr) };
+    let wallet_secret = unsafe { slice::from_raw_parts(wallet_secret_ptr, wallet_secret_len) }.to_vec().into();
+    let json = unsafe { slice::from_raw_parts(json_ptr, json_len) };
 
     let request: MasterDelegationRequestBodyV1 = match serde_json::from_slice(json) {
         Ok(v) => v,
@@ -138,8 +144,10 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_sign_ex(
     let boxed = out_json.into_boxed_slice();
     let len = boxed.len();
     let ptr = Box::into_raw(boxed) as *mut u8;
-    *out_json_ptr = ptr;
-    *out_json_len = len;
+    unsafe {
+        *out_json_ptr = ptr;
+        *out_json_len = len;
+    }
     true
 }
 
@@ -148,19 +156,19 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_sign_ex(
 /// # Safety
 /// The pointer/length pair must come from a Kaspa wallet FFI function that
 /// allocated the buffer. Passing arbitrary pointers leads to undefined behavior.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_mldsa_buffer_free(ptr: *mut u8, len: usize) {
     if ptr.is_null() || len == 0 {
         return;
     }
-    let _ = Vec::from_raw_parts(ptr, len, len);
+    let _ = unsafe { Vec::from_raw_parts(ptr, len, len) };
 }
 
 /// Apply delegation response JSON to the provided wallet instance (legacy wrapper, no force flag).
 ///
 /// # Safety
 /// Pointers must be valid; wallet_ptr must reference a live `Wallet` instance; JSON buffers must contain valid UTF-8.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply(
     wallet_ptr: *mut Wallet,
     wallet_secret_ptr: *const u8,
@@ -172,25 +180,27 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply(
     out_applied: *mut u64,
     out_skipped: *mut u64,
 ) -> bool {
-    kaspa_wallet_mldsa_delegation_apply_ex(
-        wallet_ptr,
-        wallet_secret_ptr,
-        wallet_secret_len,
-        request_json_ptr,
-        request_json_len,
-        response_json_ptr,
-        response_json_len,
-        false,
-        out_applied,
-        out_skipped,
-    )
+    unsafe {
+        kaspa_wallet_mldsa_delegation_apply_ex(
+            wallet_ptr,
+            wallet_secret_ptr,
+            wallet_secret_len,
+            request_json_ptr,
+            request_json_len,
+            response_json_ptr,
+            response_json_len,
+            false,
+            out_applied,
+            out_skipped,
+        )
+    }
 }
 
 /// Apply delegation response JSON to the provided wallet instance with optional network mismatch override.
 ///
 /// # Safety
 /// Pointers must be valid; wallet_ptr must reference a live `Wallet` instance; JSON buffers must contain valid UTF-8.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply_ex(
     wallet_ptr: *mut Wallet,
     wallet_secret_ptr: *const u8,
@@ -217,17 +227,19 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply_ex(
     }
 
     // Borrow Arc without leaking the original strong ref passed from the caller.
-    Arc::increment_strong_count(wallet_ptr as *const Wallet);
-    let wallet = Arc::from_raw(wallet_ptr);
-    let wallet_secret = slice::from_raw_parts(wallet_secret_ptr, wallet_secret_len).to_vec().into();
+    unsafe {
+        Arc::increment_strong_count(wallet_ptr as *const Wallet);
+    }
+    let wallet = unsafe { Arc::from_raw(wallet_ptr) };
+    let wallet_secret = unsafe { slice::from_raw_parts(wallet_secret_ptr, wallet_secret_len) }.to_vec().into();
 
     let request: MasterDelegationRequestBodyV1 =
-        match serde_json::from_slice(slice::from_raw_parts(request_json_ptr, request_json_len)) {
+        match serde_json::from_slice(unsafe { slice::from_raw_parts(request_json_ptr, request_json_len) }) {
             Ok(v) => v,
             Err(_) => return false,
         };
     let response: MasterDelegationResponseBodyV1 =
-        match serde_json::from_slice(slice::from_raw_parts(response_json_ptr, response_json_len)) {
+        match serde_json::from_slice(unsafe { slice::from_raw_parts(response_json_ptr, response_json_len) }) {
             Ok(v) => v,
             Err(_) => return false,
         };
@@ -247,8 +259,10 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply_ex(
         Err(_) => return false,
     };
 
-    *out_applied = result.applied as u64;
-    *out_skipped = result.skipped as u64;
+    unsafe {
+        *out_applied = result.applied as u64;
+        *out_skipped = result.skipped as u64;
+    }
     true
 }
 
@@ -256,7 +270,7 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_apply_ex(
 ///
 /// # Safety
 /// Callers must pass valid non-null pointers for JSON buffer and output summary; buffers must stay valid during the call.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_response_summary(
     json_ptr: *const u8,
     json_len: usize,
@@ -265,7 +279,7 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_response_summary(
     if json_ptr.is_null() || out_summary.is_null() || json_len == 0 {
         return false;
     }
-    let json = slice::from_raw_parts(json_ptr, json_len);
+    let json = unsafe { slice::from_raw_parts(json_ptr, json_len) };
     match serde_json::from_slice::<MasterDelegationResponseBodyV1>(json) {
         Ok(resp) => {
             let summary = KaspaMasterDelegationSummary {
@@ -275,7 +289,9 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_response_summary(
                 delegations: resp.delegations.len() as u32,
                 ..Default::default()
             };
-            ptr::write(out_summary, summary);
+            unsafe {
+                ptr::write(out_summary, summary);
+            }
             true
         }
         Err(_) => false,
@@ -294,7 +310,7 @@ pub unsafe extern "C" fn kaspa_wallet_mldsa_delegation_response_summary(
 /// If the caller-provided buffer is too small, the slice is truncated but the
 /// returned `written` count still reflects the total number of anchors so the
 /// caller can reallocate and retry.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn kaspa_wallet_master_anchor_list(
     json_ptr: *const u8,
     json_len: usize,

@@ -4,20 +4,20 @@ use kaspa_bip32::{Language, Mnemonic, WordCount};
 use kaspa_consensus_core::network::{NetworkId, NetworkType};
 use kaspa_mldsa::MlDsaLevel;
 use kaspa_utils::hex::ToHex;
-use kaspa_wallet_core::account::variants::stealth::StealthAccount;
 use kaspa_wallet_core::account::Account;
+use kaspa_wallet_core::account::variants::stealth::StealthAccount;
 use kaspa_wallet_core::api::message::MasterDelegationTarget;
 use kaspa_wallet_core::api::traits::WalletApi;
-use kaspa_wallet_core::encryption::{encrypt_xchacha20poly1305, EncryptionKind};
-use kaspa_wallet_core::message::{calc_request_id, MasterDelegationRequestBodyV1};
+use kaspa_wallet_core::encryption::{EncryptionKind, encrypt_xchacha20poly1305};
+use kaspa_wallet_core::message::{MasterDelegationRequestBodyV1, calc_request_id};
 use kaspa_wallet_core::rpc::RpcApi;
 use kaspa_wallet_core::storage::{self, keydata::data::MlDsaMasterPayload};
-use kaspa_wallet_core::wallet::args::WalletCreateArgs;
 use kaspa_wallet_core::wallet::Wallet;
+use kaspa_wallet_core::wallet::args::WalletCreateArgs;
 use kaspa_wallet_keys::keypair_mldsa::MlDsaKeypair;
 use kaspa_wallet_keys::secret::Secret;
 use std::sync::Arc;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_airgap_delegation_offline_sign_and_apply() {

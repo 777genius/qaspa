@@ -1,10 +1,10 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::api::dto::{CreateNodeRequest, CreateNodeResponse, NodePortsResponse, NodeSummaryResponse, SuccessResponse};
 use crate::api::AppState;
+use crate::api::dto::{CreateNodeRequest, CreateNodeResponse, NodePortsResponse, NodeSummaryResponse, SuccessResponse};
 use crate::error::{ControllerError, Result};
 
 const MAX_NAME_LENGTH: usize = 64;
@@ -149,10 +149,8 @@ pub async fn delete_node(State(state): State<AppState>, Path(node_id): Path<Stri
     };
 
     // Release ports if container no longer exists
-    if let Some(ports) = ports_to_release {
-        if should_remove_from_state {
-            state.port_allocator.release(ports);
-        }
+    if let Some(ports) = ports_to_release.filter(|_| should_remove_from_state) {
+        state.port_allocator.release(ports);
     }
 
     // Update cluster state to prevent stale nodes in UI

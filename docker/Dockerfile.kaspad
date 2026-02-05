@@ -43,16 +43,15 @@ RUN apk --no-cache add \
   libstdc++ \
   tini \
   ca-certificates \
-  netcat-openbsd
+  netcat-openbsd \
+  && addgroup -S kaspa \
+  && adduser -S -G kaspa -h /home/kaspa -s /sbin/nologin kaspa \
+  && mkdir -p /home/kaspa /app /app/data \
+  && chown -R kaspa:kaspa /home/kaspa /app
 
-# Create non-root user for security
-RUN addgroup -g 1000 app && adduser -u 1000 -G app -h /app -D app
+COPY --from=builder --chown=kaspa:kaspa /app/kaspad .
 
-COPY --from=builder /app/kaspad .
-
-# Create data directory with proper permissions
-RUN mkdir -p /app/data && chown -R app:app /app
-
-USER app
+ENV HOME=/home/kaspa
+USER kaspa
 ENTRYPOINT [ "/sbin/tini", "--" ]
 CMD [ "/app/kaspad" ]

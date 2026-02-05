@@ -2,7 +2,7 @@ use crate::model::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 use kaspa_consensus_core::api::stats::BlockCount;
 use kaspa_core::debug;
-use kaspa_notify::subscription::{context::SubscriptionContext, single::UtxosChangedSubscription, Command};
+use kaspa_notify::subscription::{Command, context::SubscriptionContext, single::UtxosChangedSubscription};
 use kaspa_utils::hex::ToHex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -3376,11 +3376,7 @@ impl Deserializer for BlockAddedNotification {
         let block = deserialize!(RpcBlock, reader)?;
         let stealth_outputs = if version >= 2 {
             let has_stealth = load!(bool, reader)?;
-            if has_stealth {
-                Some(load!(Vec<RpcStealthOutputInfo>, reader)?)
-            } else {
-                None
-            }
+            if has_stealth { Some(load!(Vec<RpcStealthOutputInfo>, reader)?) } else { None }
         } else {
             None
         };

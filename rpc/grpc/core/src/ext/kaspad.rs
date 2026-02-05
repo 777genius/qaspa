@@ -2,10 +2,10 @@ use kaspa_notify::{scope::Scope, subscription::Command};
 use kaspa_rpc_core::RpcError;
 
 use crate::protowire::{
-    kaspad_request, kaspad_response, KaspadRequest, KaspadResponse, NotifyBlockAddedRequestMessage,
-    NotifyFinalityConflictRequestMessage, NotifyNewBlockTemplateRequestMessage, NotifyPruningPointUtxoSetOverrideRequestMessage,
-    NotifySinkBlueScoreChangedRequestMessage, NotifyUtxosChangedRequestMessage, NotifyVirtualChainChangedRequestMessage,
-    NotifyVirtualDaaScoreChangedRequestMessage, PingRequestMessage,
+    KaspadRequest, KaspadResponse, NotifyBlockAddedRequestMessage, NotifyFinalityConflictRequestMessage,
+    NotifyNewBlockTemplateRequestMessage, NotifyPruningPointUtxoSetOverrideRequestMessage, NotifySinkBlueScoreChangedRequestMessage,
+    NotifyUtxosChangedRequestMessage, NotifyVirtualChainChangedRequestMessage, NotifyVirtualDaaScoreChangedRequestMessage,
+    PingRequestMessage, kaspad_request, kaspad_response,
 };
 
 impl KaspadRequest {
@@ -34,7 +34,7 @@ impl kaspad_request::Payload {
 
     pub fn try_from_notification_type(scope: &Scope, command: Command) -> Result<Self, RpcError> {
         Ok(match scope {
-            Scope::BlockAdded(ref scope) => kaspad_request::Payload::NotifyBlockAddedRequest(NotifyBlockAddedRequestMessage {
+            Scope::BlockAdded(scope) => kaspad_request::Payload::NotifyBlockAddedRequest(NotifyBlockAddedRequestMessage {
                 command: command.into(),
                 include_stealth_outputs: scope.include_stealth_outputs,
             }),
@@ -44,7 +44,7 @@ impl kaspad_request::Payload {
                 })
             }
 
-            Scope::VirtualChainChanged(ref scope) => {
+            Scope::VirtualChainChanged(scope) => {
                 kaspad_request::Payload::NotifyVirtualChainChangedRequest(NotifyVirtualChainChangedRequestMessage {
                     command: command.into(),
                     include_accepted_transaction_ids: scope.include_accepted_transaction_ids,
@@ -55,7 +55,7 @@ impl kaspad_request::Payload {
                     command: command.into(),
                 })
             }
-            Scope::UtxosChanged(ref scope) => kaspad_request::Payload::NotifyUtxosChangedRequest(NotifyUtxosChangedRequestMessage {
+            Scope::UtxosChanged(scope) => kaspad_request::Payload::NotifyUtxosChangedRequest(NotifyUtxosChangedRequestMessage {
                 addresses: scope.addresses.iter().map(|x| x.into()).collect::<Vec<String>>(),
                 command: command.into(),
             }),
