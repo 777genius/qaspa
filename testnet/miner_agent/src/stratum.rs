@@ -377,7 +377,7 @@ impl StratumMiner {
             start_nonce = end_nonce;
 
             // Yield periodically
-            if start_nonce.is_multiple_of(batch_size * 10) {
+            if start_nonce % (batch_size * 10) == 0 {
                 tokio::task::yield_now().await;
             }
         }
