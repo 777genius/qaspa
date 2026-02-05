@@ -141,10 +141,7 @@ impl Miner {
             }
 
             // Rate limiting (skip if target_bps is invalid to avoid division issues)
-            if let Some(target_bps) = self.config.target_bps
-                && target_bps > 0.0
-                && target_bps.is_finite()
-            {
+            if let Some(target_bps) = self.config.target_bps.filter(|bps| *bps > 0.0 && bps.is_finite()) {
                 // Clamp to safe range: 0.001..1000 BPS to prevent Duration overflow
                 let safe_bps = target_bps.clamp(0.001, 1000.0);
                 let delay = Duration::from_secs_f64(1.0 / safe_bps);

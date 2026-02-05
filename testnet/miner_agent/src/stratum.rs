@@ -195,8 +195,7 @@ impl StratumMiner {
                         if let Ok(msg) = serde_json::from_str::<JsonRpcMessage>(&buf) {
                             match msg.method.as_deref() {
                                 Some("mining.set_difficulty") => {
-                                    if let Some(params) = msg.params
-                                        && let Some(diff) = params.first().and_then(|v| v.as_f64())
+                                    if let Some(diff) = msg.params.as_ref().and_then(|params| params.first()).and_then(|v| v.as_f64())
                                     {
                                         let diff_u64 = diff as u64;
                                         difficulty_clone.store(diff_u64, Ordering::Release);
@@ -204,9 +203,7 @@ impl StratumMiner {
                                     }
                                 }
                                 Some("mining.notify") => {
-                                    if let Some(params) = msg.params
-                                        && let Some(job) = parse_notify_params(&params)
-                                    {
+                                    if let Some(job) = msg.params.as_deref().and_then(parse_notify_params) {
                                         debug!("New job: {}", job.job_id);
                                         let _ = job_tx.try_send(job);
                                     }
@@ -342,11 +339,12 @@ impl StratumMiner {
             }
 
             // Check for new jobs
-            if let Ok(new_job) = job_rx.try_recv()
-                && (new_job.clean_jobs || new_job.job_id != job.job_id)
-            {
-                debug!("New job received, abandoning current work");
-                return None;
+            match job_rx.try_recv() {
+                Ok(new_job) if new_job.clean_jobs || new_job.job_id != job.job_id => {
+                    debug!("New job received, abandoning current work");
+                    return None;
+                }
+                Ok(_) | Err(_) => {}
             }
 
             let end_nonce = start_nonce.wrapping_add(batch_size);

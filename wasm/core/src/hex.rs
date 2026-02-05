@@ -37,9 +37,7 @@ impl HexViewConfig {
             builder = builder.row_width(width);
         }
 
-        if let Some(colors) = self.colors
-            && !colors.is_empty()
-        {
+        if let Some(colors) = self.colors.filter(|colors| !colors.is_empty()) {
             builder = builder.add_colors(colors);
         }
 

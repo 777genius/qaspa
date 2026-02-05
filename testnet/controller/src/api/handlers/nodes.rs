@@ -149,10 +149,10 @@ pub async fn delete_node(State(state): State<AppState>, Path(node_id): Path<Stri
     };
 
     // Release ports if container no longer exists
-    if let Some(ports) = ports_to_release
-        && should_remove_from_state
-    {
-        state.port_allocator.release(ports);
+    if should_remove_from_state {
+        if let Some(ports) = ports_to_release {
+            state.port_allocator.release(ports);
+        }
     }
 
     // Update cluster state to prevent stale nodes in UI
