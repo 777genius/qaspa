@@ -1,11 +1,11 @@
-use axum::extract::{Path, State};
 use axum::Json;
+use axum::extract::{Path, State};
 use kaspa_addresses::Address;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::api::dto::{CreateMinerRequest, CreateMinerResponse, MinerSummaryResponse, SuccessResponse};
 use crate::api::AppState;
+use crate::api::dto::{CreateMinerRequest, CreateMinerResponse, MinerSummaryResponse, SuccessResponse};
 use crate::error::{ControllerError, Result};
 
 const MAX_NAME_LENGTH: usize = 64;

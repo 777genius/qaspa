@@ -1,13 +1,13 @@
-use axum::extract::{Path, Query, State};
 use axum::Json;
+use axum::extract::{Path, Query, State};
 use kaspa_grpc_client::GrpcClient;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use serde::Deserialize;
 use std::time::Duration;
 use tracing::debug;
 
-use crate::api::dto::{DagBlockResponse, DagBlocksResponse, DagInfoResponse};
 use crate::api::AppState;
+use crate::api::dto::{DagBlockResponse, DagBlocksResponse, DagInfoResponse};
 use crate::error::{ControllerError, Result};
 
 /// Query parameters for getting blocks

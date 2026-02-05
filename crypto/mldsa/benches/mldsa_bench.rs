@@ -1,7 +1,7 @@
 //! Benchmarks for ML-DSA operations
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use kaspa_mldsa::{generate_keypair, sign, verify, MlDsaLevel};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use kaspa_mldsa::{MlDsaLevel, generate_keypair, sign, verify};
 
 fn bench_keygen(c: &mut Criterion) {
     let mut group = c.benchmark_group("keygen");

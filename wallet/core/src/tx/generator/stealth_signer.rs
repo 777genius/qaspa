@@ -8,12 +8,12 @@ use crate::error::Error;
 use crate::result::Result;
 use crate::storage::EphemeralKeyData;
 use async_trait::async_trait;
-use kaspa_consensus_core::hashing::sighash::{calc_schnorr_signature_hash, SigHashReusedValuesUnsync};
+use kaspa_consensus_core::hashing::sighash::{SigHashReusedValuesUnsync, calc_schnorr_signature_hash};
 use kaspa_consensus_core::hashing::sighash_type::SIG_HASH_ALL;
 use kaspa_consensus_core::sign::Signed;
 use kaspa_consensus_core::tx::{SignableTransaction, TransactionOutpoint};
 use kaspa_txscript::STEALTH_SCRIPT_VERSION;
-use secp256k1::{Keypair, Message, SecretKey, SECP256K1};
+use secp256k1::{Keypair, Message, SECP256K1, SecretKey};
 use std::sync::Arc;
 
 // ============================================================================
@@ -137,11 +137,7 @@ impl StealthSigner {
             return Err(Error::MixedStealthAndLegacyInputsNotAllowed);
         }
 
-        if additional_signatures_required {
-            Ok(Signed::Partially(tx))
-        } else {
-            Ok(Signed::Fully(tx))
-        }
+        if additional_signatures_required { Ok(Signed::Partially(tx)) } else { Ok(Signed::Fully(tx)) }
     }
 }
 
@@ -157,7 +153,7 @@ mod tests {
     use kaspa_consensus_core::subnets::SUBNETWORK_ID_NATIVE;
     use kaspa_consensus_core::tx::{ScriptPublicKey, Transaction, TransactionInput, TransactionOutput, UtxoEntry};
     use kaspa_hashes::Hash;
-    use kaspa_stealth::{create_stealth_output_with_blinding, derive_spending_key, StealthSecretKey};
+    use kaspa_stealth::{StealthSecretKey, create_stealth_output_with_blinding, derive_spending_key};
     use kaspa_txscript::pay_to_stealth;
     use secp256k1::rand::rngs::OsRng;
 

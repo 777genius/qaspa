@@ -225,7 +225,7 @@ impl MlDsaKeypair {
 pub fn try_generate_keypair(level: MlDsaLevel) -> Result<MlDsaKeypair> {
     // Generate 32 bytes of randomness using getrandom
     let mut seed = [0u8; 32];
-    getrandom::fill(&mut seed).map_err(|e| MlDsaError::KeyGenerationFailed(format!("getrandom failed: {e}")))?;
+    getrandom::getrandom(&mut seed).map_err(|e| MlDsaError::KeyGenerationFailed(format!("getrandom failed: {e}")))?;
     let keypair = keypair_from_seed_bytes(&seed, level);
     seed.zeroize();
     Ok(keypair)
@@ -244,19 +244,22 @@ pub(crate) fn keypair_from_seed_bytes(seed: &[u8; 32], level: MlDsaLevel) -> MlD
         MlDsaLevel::Level2 => {
             let keypair = ml_dsa::MlDsa44::from_seed((&seed_bytes).into());
             let pk_encoded = keypair.verifying_key().encode();
-            let sk_encoded = keypair.signing_key().encode();
+            #[allow(deprecated)]
+            let sk_encoded = keypair.signing_key().to_expanded();
             (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
         MlDsaLevel::Level3 => {
             let keypair = ml_dsa::MlDsa65::from_seed((&seed_bytes).into());
             let pk_encoded = keypair.verifying_key().encode();
-            let sk_encoded = keypair.signing_key().encode();
+            #[allow(deprecated)]
+            let sk_encoded = keypair.signing_key().to_expanded();
             (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
         MlDsaLevel::Level5 => {
             let keypair = ml_dsa::MlDsa87::from_seed((&seed_bytes).into());
             let pk_encoded = keypair.verifying_key().encode();
-            let sk_encoded = keypair.signing_key().encode();
+            #[allow(deprecated)]
+            let sk_encoded = keypair.signing_key().to_expanded();
             (pk_encoded[..].to_vec(), sk_encoded[..].to_vec())
         }
     };

@@ -3,7 +3,7 @@ use crate::error::Error;
 use crate::result::Result;
 use blake2b_simd::Params;
 use borsh::{BorshDeserialize, BorshSerialize};
-use kaspa_mldsa::{sign, verify, MlDsaLevel, PublicKey as MlDsaPublicKey};
+use kaspa_mldsa::{MlDsaLevel, PublicKey as MlDsaPublicKey, sign, verify};
 use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use serde::{Deserialize, Serialize};
 

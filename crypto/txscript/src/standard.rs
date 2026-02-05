@@ -1,8 +1,8 @@
 use crate::{
+    STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION,
     opcodes::codes::{OpBlake2b, OpCheckSig, OpCheckSigECDSA, OpCheckSigMLDSA, OpData32, OpData33, OpEqual, OpPushData2},
     script_builder::{ScriptBuilder, ScriptBuilderResult},
     script_class::ScriptClass,
-    STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION,
 };
 use blake2b_simd::Params;
 use kaspa_addresses::{Address, Prefix, Version};
@@ -14,7 +14,7 @@ use std::iter::once;
 
 mod multisig;
 
-pub use multisig::{multisig_redeem_script, multisig_redeem_script_ecdsa, Error as MultisigCreateError};
+pub use multisig::{Error as MultisigCreateError, multisig_redeem_script, multisig_redeem_script_ecdsa};
 
 /// Creates a new script to pay a transaction output to a 32-byte pubkey.
 fn pay_to_pub_key(address_payload: &[u8]) -> Result<ScriptVec, TxScriptError> {
@@ -170,7 +170,7 @@ pub fn extract_script_pub_key_address(script_public_key: &ScriptPublicKey, prefi
 
 pub mod test_helpers {
     use super::*;
-    use crate::{opcodes::codes::OpTrue, MAX_TX_IN_SEQUENCE_NUM};
+    use crate::{MAX_TX_IN_SEQUENCE_NUM, opcodes::codes::OpTrue};
     use kaspa_consensus_core::{
         constants::TX_VERSION,
         subnets::SUBNETWORK_ID_NATIVE,

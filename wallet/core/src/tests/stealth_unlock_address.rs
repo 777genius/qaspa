@@ -1,8 +1,8 @@
 use crate::api::traits::WalletApi;
 use crate::encryption::EncryptionKind;
 use crate::storage::keydata::PrvKeyData;
-use crate::wallet::args::WalletCreateArgs;
 use crate::wallet::Wallet;
+use crate::wallet::args::WalletCreateArgs;
 use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_bip32::{Language, Mnemonic, WordCount};
 use kaspa_consensus_core::network::{NetworkId, NetworkType};

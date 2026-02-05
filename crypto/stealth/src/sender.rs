@@ -24,7 +24,7 @@ use crate::error::{Result, StealthError};
 use crate::hash::{BlindingFactorHash, ViewTagHash};
 use crate::keys::{EphemeralOutput, StealthAddress};
 use rand_core::CryptoRngCore;
-use secp256k1::{Scalar, SecretKey, SECP256K1};
+use secp256k1::{SECP256K1, Scalar, SecretKey};
 use zeroize::Zeroize;
 
 fn try_generate_secret_key() -> Result<SecretKey> {
@@ -32,7 +32,7 @@ fn try_generate_secret_key() -> Result<SecretKey> {
 
     for _ in 0..MAX_ATTEMPTS {
         let mut bytes = [0u8; 32];
-        getrandom::fill(&mut bytes).map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
+        getrandom::getrandom(&mut bytes).map_err(|e| StealthError::RandomnessFailed(format!("getrandom failed: {e}")))?;
 
         let secret = match SecretKey::from_slice(&bytes) {
             Ok(sk) => {

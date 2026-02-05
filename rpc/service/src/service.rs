@@ -13,10 +13,10 @@ use kaspa_consensus_core::utxo::utxo_inquirer::UtxoInquirerError;
 use kaspa_consensus_core::{
     block::Block,
     coinbase::MinerData,
-    config::{params::ForkActivation, Config},
+    config::{Config, params::ForkActivation},
     constants::MAX_SOMPI,
     network::NetworkType,
-    tx::{Transaction, COINBASE_TRANSACTION_INDEX},
+    tx::{COINBASE_TRANSACTION_INDEX, Transaction},
 };
 use kaspa_consensus_notify::{
     notifier::ConsensusNotifier,
@@ -48,7 +48,7 @@ use kaspa_notify::subscription::{MutationPolicies, UtxosChangedMutationPolicy};
 use kaspa_notify::{
     collector::DynCollector,
     connection::ChannelType,
-    events::{EventSwitches, EventType, EVENT_TYPE_ARRAY},
+    events::{EVENT_TYPE_ARRAY, EventSwitches, EventType},
     listener::ListenerId,
     notifier::Notifier,
     scope::Scope,
@@ -57,21 +57,21 @@ use kaspa_notify::{
 use kaspa_p2p_flows::flow_context::FlowContext;
 use kaspa_p2p_lib::common::ProtocolError;
 use kaspa_p2p_mining::rule_engine::MiningRuleEngine;
-use kaspa_perf_monitor::{counters::CountersSnapshot, Monitor as PerfMonitor};
+use kaspa_perf_monitor::{Monitor as PerfMonitor, counters::CountersSnapshot};
 use kaspa_rpc_core::RpcTransactionId;
 use kaspa_rpc_core::{
+    Notification, RpcError, RpcResult,
     api::{
         connection::DynRpcConnection,
         ops::{RPC_API_REVISION, RPC_API_VERSION},
-        rpc::{RpcApi, MAX_SAFE_WINDOW_SIZE},
+        rpc::{MAX_SAFE_WINDOW_SIZE, RpcApi},
     },
     model::*,
     notify::connection::ChannelConnection,
-    Notification, RpcError, RpcResult,
 };
-use kaspa_stealth::{try_create_stealth_output, StealthAddress};
+use kaspa_stealth::{StealthAddress, try_create_stealth_output};
 use kaspa_txscript::{
-    extract_script_pub_key_address, extract_stealth_output, pay_to_address_script, pay_to_stealth, STEALTH_SCRIPT_VERSION,
+    STEALTH_SCRIPT_VERSION, extract_script_pub_key_address, extract_stealth_output, pay_to_address_script, pay_to_stealth,
 };
 use kaspa_utils::sysinfo::SystemInfo;
 use kaspa_utils::{channel::Channel, triggers::SingleTrigger};
@@ -82,9 +82,9 @@ use log::{error, info};
 use once_cell::sync::OnceCell;
 use std::time::Duration;
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     iter::once,
-    sync::{atomic::Ordering, Arc, Mutex},
+    sync::{Arc, Mutex, atomic::Ordering},
     vec,
 };
 use tokio::join;
@@ -714,7 +714,9 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
     ) -> RpcResult<SubmitTransactionResponse> {
         let allow_orphan = self.config.unsafe_rpc && request.allow_orphan;
         if !self.config.unsafe_rpc && request.allow_orphan {
-            debug!("SubmitTransaction RPC command called with AllowOrphan enabled while node in safe RPC mode -- switching to ForbidOrphan.");
+            debug!(
+                "SubmitTransaction RPC command called with AllowOrphan enabled while node in safe RPC mode -- switching to ForbidOrphan."
+            );
         }
 
         let transaction: Transaction = request.transaction.try_into()?;
@@ -1716,7 +1718,7 @@ impl AsyncService for RpcCoreService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kaspa_consensus_core::config::params::{ForkActivation, DEVNET_PARAMS};
+    use kaspa_consensus_core::config::params::{DEVNET_PARAMS, ForkActivation};
 
     #[test]
     fn anchor_hint_cache_roundtrip() {

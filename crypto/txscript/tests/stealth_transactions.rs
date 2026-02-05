@@ -7,7 +7,7 @@
 
 use kaspa_consensus_core::{
     constants::TX_VERSION,
-    hashing::sighash::{calc_schnorr_signature_hash, SigHashReusedValuesUnsync},
+    hashing::sighash::{SigHashReusedValuesUnsync, calc_schnorr_signature_hash},
     hashing::sighash_type::SIG_HASH_ALL,
     subnets::SUBNETWORK_ID_NATIVE,
     tx::{
@@ -15,12 +15,12 @@ use kaspa_consensus_core::{
         VerifiableTransaction,
     },
 };
-use kaspa_stealth::{create_stealth_output, derive_spending_key, scan_output, StealthSecretKey};
+use kaspa_stealth::{StealthSecretKey, create_stealth_output, derive_spending_key, scan_output};
 use kaspa_txscript::{
-    caches::Cache, pay_to_stealth, TxScriptEngine, MAX_SCRIPT_ELEMENT_SIZE, STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION,
+    MAX_SCRIPT_ELEMENT_SIZE, STEALTH_OUTPUT_SIZE, STEALTH_SCRIPT_VERSION, TxScriptEngine, caches::Cache, pay_to_stealth,
 };
 use rand::rngs::OsRng;
-use secp256k1::{Message, SecretKey, SECP256K1};
+use secp256k1::{Message, SECP256K1, SecretKey};
 
 /// Creates a mock transaction with a stealth input for testing
 fn create_stealth_test_transaction(

@@ -6,11 +6,11 @@ use crate::model::message::*;
 use derive_more::Display;
 use kaspa_notify::{
     events::EventType,
-    notification::{full_featured, Notification as NotificationTrait},
+    notification::{Notification as NotificationTrait, full_featured},
     subscription::{
+        Subscription,
         context::SubscriptionContext,
         single::{BlockAddedSubscription, OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
-        Subscription,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -92,7 +92,7 @@ impl NotificationTrait for Notification {
     fn apply_block_added_subscription(&self, subscription: &BlockAddedSubscription, _context: &SubscriptionContext) -> Option<Self> {
         match subscription.active() {
             true => {
-                if let Notification::BlockAdded(ref payload) = self {
+                if let Notification::BlockAdded(payload) = self {
                     // If subscriber doesn't want stealth outputs, strip them
                     if !subscription.include_stealth_outputs() && payload.stealth_outputs.is_some() {
                         return Some(Notification::BlockAdded(BlockAddedNotification {
@@ -114,7 +114,7 @@ impl NotificationTrait for Notification {
     ) -> Option<Self> {
         match subscription.active() {
             true => {
-                if let Notification::VirtualChainChanged(ref payload) = self {
+                if let Notification::VirtualChainChanged(payload) = self {
                     if !subscription.include_accepted_transaction_ids() && !payload.accepted_transaction_ids.is_empty() {
                         return Some(Notification::VirtualChainChanged(VirtualChainChangedNotification {
                             removed_chain_block_hashes: payload.removed_chain_block_hashes.clone(),

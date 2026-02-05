@@ -2,11 +2,11 @@ use kaspa_addresses::Address;
 use kaspa_consensus_core::header::Header;
 use kaspa_grpc_client::GrpcClient;
 use kaspa_pow::State as PowState;
-use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::RpcExtraData;
+use kaspa_rpc_core::api::rpc::RpcApi;
 use rayon::prelude::*;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
@@ -141,13 +141,14 @@ impl Miner {
             }
 
             // Rate limiting (skip if target_bps is invalid to avoid division issues)
-            if let Some(target_bps) = self.config.target_bps {
-                if target_bps > 0.0 && target_bps.is_finite() {
-                    // Clamp to safe range: 0.001..1000 BPS to prevent Duration overflow
-                    let safe_bps = target_bps.clamp(0.001, 1000.0);
-                    let delay = Duration::from_secs_f64(1.0 / safe_bps);
-                    sleep(delay).await;
-                }
+            if let Some(target_bps) = self.config.target_bps
+                && target_bps > 0.0
+                && target_bps.is_finite()
+            {
+                // Clamp to safe range: 0.001..1000 BPS to prevent Duration overflow
+                let safe_bps = target_bps.clamp(0.001, 1000.0);
+                let delay = Duration::from_secs_f64(1.0 / safe_bps);
+                sleep(delay).await;
             }
         }
 

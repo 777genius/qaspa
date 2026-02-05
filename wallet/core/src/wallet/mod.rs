@@ -14,7 +14,7 @@ pub mod args;
 pub mod maps;
 pub use args::*;
 
-use crate::account::delegation::{delegation_message_hash, DelegationId, DelegationRecordV1, DelegationStatus};
+use crate::account::delegation::{DelegationId, DelegationRecordV1, DelegationStatus, delegation_message_hash};
 use crate::account::delegation_watch::DelegationExpiryWatcher;
 use crate::account::variants::mldsa_master::{MasterStatus, MldsaMasterAccount, MldsaMasterAccountPayloadV1};
 use crate::account::{Account, AccountKind, ScanNotifier};
@@ -24,18 +24,18 @@ use crate::api::message::{
 };
 use crate::api::traits::WalletApi;
 use crate::compat::gen1::decrypt_mnemonic;
-use crate::encryption::{encrypt_xchacha20poly1305, Decrypted};
+use crate::encryption::{Decrypted, encrypt_xchacha20poly1305};
 use crate::error::Error::{self, Custom};
 use crate::factory::try_load_account;
 use crate::imports::*;
 use crate::message::{
-    calc_request_id, hash_delegation_header, DelegationRecordHeaderV1, MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1,
+    DelegationRecordHeaderV1, MasterDelegationRequestBodyV1, MasterDelegationResponseBodyV1, calc_request_id, hash_delegation_header,
 };
 use crate::settings::{SettingsStore, WalletSettings};
 use crate::storage::interface::{OpenArgs, StorageDescriptor};
 use crate::storage::keydata::MlDsaMasterPayload;
-use crate::storage::local::interface::LocalStore;
 use crate::storage::local::Storage;
+use crate::storage::local::interface::LocalStore;
 use crate::storage::{self, AccountStorage, PrvKeyDataId, PrvKeyDataInfo};
 use crate::wallet::keydata::PrvKeyDataVariantKind;
 use crate::wallet::maps::ActiveAccountMap;
@@ -1710,8 +1710,8 @@ impl Wallet {
         new_master_seed: Option<MasterSeed>,
     ) -> Result<()> {
         use crate::encryption::encrypt_xchacha20poly1305;
-        use crate::storage::keydata::data::{MlDsaMasterPayload, PrvKeyDataPayload};
         use crate::storage::keydata::PrvKeyData;
+        use crate::storage::keydata::data::{MlDsaMasterPayload, PrvKeyDataPayload};
 
         let account_store = self.inner.store.clone().as_account_store()?;
         let (stored_account, _meta) = account_store.load_single(account_id).await?.ok_or(Error::AccountNotFound(*account_id))?;

@@ -1,9 +1,9 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use tracing::info;
 
-use crate::api::dto::{SuccessResponse, TxGenStatusResponse};
 use crate::api::AppState;
+use crate::api::dto::{SuccessResponse, TxGenStatusResponse};
 use crate::error::{ControllerError, Result};
 
 /// GET /api/v1/txgen/status

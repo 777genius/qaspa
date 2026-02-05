@@ -1,9 +1,9 @@
+use bollard::Docker;
 use bollard::container::{
     Config, CreateContainerOptions, ListContainersOptions, LogOutput, LogsOptions, RemoveContainerOptions, StartContainerOptions,
     StopContainerOptions,
 };
 use bollard::network::CreateNetworkOptions;
-use bollard::Docker;
 use futures::StreamExt;
 use regex::Regex;
 use std::collections::HashMap;

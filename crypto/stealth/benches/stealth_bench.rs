@@ -2,8 +2,8 @@
 //!
 //! Run with: cargo bench -p kaspa-stealth
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use kaspa_stealth::{check_view_tag, create_stealth_output, derive_spending_key, scan_output, EphemeralOutput, StealthSecretKey};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use kaspa_stealth::{EphemeralOutput, StealthSecretKey, check_view_tag, create_stealth_output, derive_spending_key, scan_output};
 use rand::rngs::OsRng;
 
 fn bench_key_generation(c: &mut Criterion) {

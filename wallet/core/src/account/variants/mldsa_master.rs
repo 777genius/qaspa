@@ -5,7 +5,7 @@ use crate::serializer::StorageHeader;
 use crate::storage::account::{AccountSettings, AccountStorable, AccountStorage};
 use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use kaspa_addresses::{Address, Version};
-use kaspa_mldsa::{try_sign as mldsa_try_sign, MasterSeed, MlDsaLevel, Signature as MlDsaSignature, MASTER_SIGN_DOMAIN_DELEGATION};
+use kaspa_mldsa::{MASTER_SIGN_DOMAIN_DELEGATION, MasterSeed, MlDsaLevel, Signature as MlDsaSignature, try_sign as mldsa_try_sign};
 use kaspa_utils::hex::ToHex;
 use kaspa_wallet_keys::keypair_mldsa::{MasterAnchor, MlDsaKeypair};
 use std::borrow::Cow;

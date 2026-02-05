@@ -6,11 +6,11 @@ use kaspa_addresses::{Address, PayloadVec, Prefix, Version};
 use kaspa_consensus::params::{ForkActivation, OverrideParams, Params, SIMNET_GENESIS};
 use kaspa_consensus_core::{
     constants::{MAX_SOMPI, TX_VERSION},
-    hashing::sighash::{calc_schnorr_signature_hash, SigHashReusedValuesUnsync},
+    hashing::sighash::{SigHashReusedValuesUnsync, calc_schnorr_signature_hash},
     hashing::sighash_type::SIG_HASH_ALL,
     header::Header,
     network::NetworkType,
-    subnets::{SubnetworkId, SUBNETWORK_ID_NATIVE},
+    subnets::{SUBNETWORK_ID_NATIVE, SubnetworkId},
     tx::{MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry},
 };
 use kaspa_core::{assert_match, info};
@@ -23,11 +23,11 @@ use kaspa_notify::{
         SinkBlueScoreChangedScope, UtxosChangedScope, VirtualChainChangedScope, VirtualDaaScoreChangedScope,
     },
 };
-use kaspa_rpc_core::{api::rpc::RpcApi, model::*, Notification};
+use kaspa_rpc_core::{Notification, api::rpc::RpcApi, model::*};
 use kaspa_stealth::{
-    check_view_tag, derive_spending_key, scan_output, try_create_stealth_output, verify_derived_key, StealthSecretKey,
+    StealthSecretKey, check_view_tag, derive_spending_key, scan_output, try_create_stealth_output, verify_derived_key,
 };
-use kaspa_txscript::{extract_stealth_output, pay_to_address_script, pay_to_stealth, STEALTH_SCRIPT_VERSION};
+use kaspa_txscript::{STEALTH_SCRIPT_VERSION, extract_stealth_output, pay_to_address_script, pay_to_stealth};
 use kaspa_utils::{fd_budget, networking::ContextualNetAddress};
 use kaspad_lib::args::Args;
 use secp256k1::{Keypair, Message, SECP256K1};

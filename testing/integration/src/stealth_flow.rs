@@ -29,12 +29,12 @@ use kaspa_consensus_core::{
 use kaspa_core::info;
 use kaspa_grpc_client::GrpcClient;
 use kaspa_notify::scope::{BlockAddedScope, VirtualDaaScoreChangedScope};
-use kaspa_rpc_core::{api::rpc::RpcApi, Notification, RpcRawBlock};
-use kaspa_stealth::{create_stealth_output, StealthAddress};
+use kaspa_rpc_core::{Notification, RpcRawBlock, api::rpc::RpcApi};
+use kaspa_stealth::{StealthAddress, create_stealth_output};
 use kaspa_txscript::{pay_to_address_script, pay_to_stealth};
 use kaspa_wallet_core::{
-    account::variants::stealth::StealthAccount,
     account::Account,
+    account::variants::stealth::StealthAccount,
     api::WalletApi,
     encryption::EncryptionKind,
     events::Events,
@@ -52,7 +52,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 
 // ============================================================================
 // TEST INFRASTRUCTURE
@@ -97,7 +97,9 @@ impl StealthTestEnv {
     async fn from_args(args: Args) -> Self {
         init_allocator_with_default_settings();
         kaspa_core::log::try_init_logger("INFO");
-        std::env::set_var("KASPA_DISABLE_STEALTH_POLICY", "1");
+        unsafe {
+            std::env::set_var("KASPA_DISABLE_STEALTH_POLICY", "1");
+        }
 
         let total_fd_limit = 10;
 
@@ -1492,8 +1494,8 @@ async fn test_block_added_without_stealth_outputs() {
 /// 3. Verification that change is spendable (critical test!)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_stealth_to_stealth_full_send() {
-    use kaspa_wallet_core::tx::payment::{PaymentOutput, PaymentOutputs};
     use kaspa_wallet_core::tx::Fees;
+    use kaspa_wallet_core::tx::payment::{PaymentOutput, PaymentOutputs};
     use workflow_core::abortable::Abortable;
 
     let env = StealthTestEnv::new().await;
@@ -1715,8 +1717,8 @@ async fn test_stealth_to_stealth_full_send() {
 /// 5. Ephemeral keys correctly managed on both sides
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_stealth_to_stealth_full_flow() {
-    use kaspa_wallet_core::tx::payment::{PaymentOutput, PaymentOutputs};
     use kaspa_wallet_core::tx::Fees;
+    use kaspa_wallet_core::tx::payment::{PaymentOutput, PaymentOutputs};
     use workflow_core::abortable::Abortable;
 
     let env = StealthTestEnv::new().await;
@@ -1973,8 +1975,8 @@ async fn test_stealth_sweep_stores_change_ephemeral_key() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore]
 async fn test_stealth_stress() {
-    use kaspa_wallet_core::tx::payment::{PaymentOutput, PaymentOutputs};
     use kaspa_wallet_core::tx::Fees;
+    use kaspa_wallet_core::tx::payment::{PaymentOutput, PaymentOutputs};
     use rand::seq::SliceRandom;
     use workflow_core::abortable::Abortable;
 

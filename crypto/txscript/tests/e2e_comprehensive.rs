@@ -21,11 +21,11 @@ use kaspa_consensus_core::tx::{
     MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry, VerifiableTransaction,
 };
 use kaspa_hashes::Hash;
-use kaspa_mldsa::{generate_keypair, sign, MlDsaLevel};
+use kaspa_mldsa::{MlDsaLevel, generate_keypair, sign};
+use kaspa_txscript::TxScriptEngine;
 use kaspa_txscript::caches::Cache;
 use kaspa_txscript::pay_to_address_script;
 use kaspa_txscript::script_builder::ScriptBuilder;
-use kaspa_txscript::TxScriptEngine;
 use std::time::Instant;
 
 /// Helper function to create and verify an ML-DSA transaction

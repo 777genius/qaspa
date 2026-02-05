@@ -626,7 +626,7 @@ impl<'de> Deserialize<'de> for Address {
                         }
                         "version" => continue,
                         unknown_field => {
-                            return Err(serde::de::Error::unknown_field(unknown_field, &["prefix", "payload", "version"]))
+                            return Err(serde::de::Error::unknown_field(unknown_field, &["prefix", "payload", "version"]));
                         }
                     }
                     if prefix.is_some() && payload.is_some() {
@@ -835,7 +835,7 @@ mod tests {
     #[cfg(target_arch = "wasm32")]
     use js_sys::Object;
     #[cfg(target_arch = "wasm32")]
-    use wasm_bindgen::{JsValue, __rt::IntoJsResult};
+    use wasm_bindgen::{__rt::IntoJsResult, JsValue};
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
     #[cfg(target_arch = "wasm32")]

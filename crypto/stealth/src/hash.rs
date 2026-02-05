@@ -4,7 +4,7 @@
 //! cross-protocol attacks. This follows the principle of domain separation
 //! where Hash(domain1, x) != Hash(domain2, x) for any x.
 
-use kaspa_hashes::{Hash, HasherBase, HASH_SIZE};
+use kaspa_hashes::{HASH_SIZE, Hash, HasherBase};
 
 /// Domain separator for computing the blinding factor (tweak scalar)
 /// Used in: t = Hash(domain, shared_secret) where P_dest = P_spend + t*G

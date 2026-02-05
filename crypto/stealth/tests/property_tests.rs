@@ -5,8 +5,8 @@
 //! cryptographic code where edge cases can lead to security vulnerabilities.
 
 use kaspa_stealth::{
-    check_view_tag, create_stealth_output, derive_spending_key, scan_output, try_scan_output, verify_derived_key, EphemeralOutput,
-    StealthAddress, StealthSecretKey, EPHEMERAL_OUTPUT_SIZE, STEALTH_ADDRESS_SIZE,
+    EPHEMERAL_OUTPUT_SIZE, EphemeralOutput, STEALTH_ADDRESS_SIZE, StealthAddress, StealthSecretKey, check_view_tag,
+    create_stealth_output, derive_spending_key, scan_output, try_scan_output, verify_derived_key,
 };
 use proptest::prelude::*;
 use rand::rngs::OsRng;

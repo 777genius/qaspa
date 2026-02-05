@@ -9,8 +9,8 @@ pub use kaspa_wallet_keys::derivation::traits::*;
 use kaspa_wallet_keys::publickey::{PublicKey, PublicKeyArrayT, PublicKeyT};
 pub use kaspa_wallet_keys::types::*;
 
-use crate::account::create_private_keys;
 use crate::account::AccountKind;
+use crate::account::create_private_keys;
 use crate::error::Error;
 use crate::imports::*;
 use crate::result::Result;
@@ -591,7 +591,7 @@ mod tests {
     use crate::wallet::Wallet;
     use kaspa_consensus_core::network::{NetworkId, NetworkType};
     use kaspa_wallet_keys::derivation::traits::PubkeyDerivationManagerTrait;
-    use secp256k1::{PublicKey, SecretKey, SECP256K1};
+    use secp256k1::{PublicKey, SECP256K1, SecretKey};
     use std::sync::Mutex as StdMutex;
 
     struct MockPubkeyManager {

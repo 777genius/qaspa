@@ -3,8 +3,8 @@
 //!
 
 use crate::imports::*;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Metrics posted by the wallet subsystem.
 /// See [`UtxoProcessor::start_metrics`] to enable metrics processing.

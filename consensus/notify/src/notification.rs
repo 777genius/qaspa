@@ -6,9 +6,9 @@ use kaspa_notify::{
     full_featured,
     notification::Notification as NotificationTrait,
     subscription::{
+        Subscription,
         context::SubscriptionContext,
         single::{BlockAddedSubscription, OverallSubscription, UtxosChangedSubscription, VirtualChainChangedSubscription},
-        Subscription,
     },
 };
 use std::sync::Arc;
@@ -70,7 +70,7 @@ impl NotificationTrait for Notification {
             true => {
                 // If the subscription excludes accepted transaction ids and the notification includes some
                 // then we must re-create the object and drop the ids, otherwise we can clone it as is.
-                if let Notification::VirtualChainChanged(ref payload) = self {
+                if let Notification::VirtualChainChanged(payload) = self {
                     if !subscription.include_accepted_transaction_ids() && !payload.added_chain_blocks_acceptance_data.is_empty() {
                         return Some(Notification::VirtualChainChanged(VirtualChainChangedNotification {
                             removed_chain_block_hashes: payload.removed_chain_block_hashes.clone(),

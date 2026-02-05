@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use kaspa_addresses::Address;
 use kaspa_consensus_core::{
+    ChainPath,
     acceptance_data::{AcceptanceData, MergesetBlockAcceptanceData},
     block::Block,
     config::Config,
@@ -10,13 +11,12 @@ use kaspa_consensus_core::{
         MutableTransaction, SignableTransaction, Transaction, TransactionId, TransactionInput, TransactionOutput,
         TransactionQueryResult, TransactionType, UtxoEntry,
     },
-    ChainPath,
 };
 use kaspa_consensus_notify::notification::{self as consensus_notify, Notification as ConsensusNotification};
 use kaspa_consensusmanager::{ConsensusManager, ConsensusProxy};
 use kaspa_hashes::Hash;
 use kaspa_math::Uint256;
-use kaspa_mining::model::{owner_txs::OwnerTransactions, TransactionIdSet};
+use kaspa_mining::model::{TransactionIdSet, owner_txs::OwnerTransactions};
 use kaspa_notify::converter::Converter;
 use kaspa_rpc_core::{
     BlockAddedNotification, Notification, RpcAcceptanceDataVerbosity, RpcAcceptedTransactionIds, RpcBlock, RpcBlockVerboseData,
@@ -29,7 +29,7 @@ use kaspa_rpc_core::{
     RpcTransactionVerboseData, RpcTransactionVerboseDataVerbosity, RpcTransactionVerbosity, RpcUtxoEntryVerboseDataVerbosity,
     RpcUtxoEntryVerbosity,
 };
-use kaspa_txscript::{extract_script_pub_key_address, extract_stealth_output, script_class::ScriptClass, STEALTH_SCRIPT_VERSION};
+use kaspa_txscript::{STEALTH_SCRIPT_VERSION, extract_script_pub_key_address, extract_stealth_output, script_class::ScriptClass};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 /// Conversion of consensus_core to rpc_core structures
 pub struct ConsensusConverter {
@@ -628,11 +628,7 @@ impl ConsensusConverter {
             let accepting_chain_header_with_verbosity: RpcOptionalHeader =
                 if let Some(verbosity) = verbosity.accepting_chain_header_verbosity.as_ref() {
                     let header = self.adapt_header_to_header_with_verbosity(verbosity, &accepting_chain_header)?;
-                    if header.is_empty() {
-                        Default::default()
-                    } else {
-                        header
-                    }
+                    if header.is_empty() { Default::default() } else { header }
                 } else {
                     Default::default()
                 };

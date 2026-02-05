@@ -1,8 +1,8 @@
-use crate::{error::*, keypair::keypair_from_seed_bytes, params::MlDsaLevel, MlDsaKeypair, Result};
+use crate::{MlDsaKeypair, Result, error::*, keypair::keypair_from_seed_bytes, params::MlDsaLevel};
 #[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSerialize};
 use hkdf::Hkdf;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha3::Sha3_512;
 use zeroize::Zeroize;
 

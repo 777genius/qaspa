@@ -1,4 +1,4 @@
-use crate::account::delegation::{select_active, verify_against_anchor, DelegationRecordV1, DelegationStatus};
+use crate::account::delegation::{DelegationRecordV1, DelegationStatus, select_active, verify_against_anchor};
 use kaspa_hashes::Hash;
 use kaspa_mldsa::MlDsaLevel;
 use kaspa_wallet_keys::keypair_mldsa::MlDsaKeypair;

@@ -1,8 +1,8 @@
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 
-use crate::api::dto::{ClusterSummaryResponse, MinerSummaryResponse, NodeSummaryResponse};
 use crate::api::AppState;
+use crate::api::dto::{ClusterSummaryResponse, MinerSummaryResponse, NodeSummaryResponse};
 use crate::error::Result;
 
 /// GET /api/v1/cluster

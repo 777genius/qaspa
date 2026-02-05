@@ -8,7 +8,7 @@
 
 use crate::account::delegation::{DelegationId, DelegationRecordV1, DelegationStatus};
 use crate::account::{Account, AccountKind, GenerationNotifier, Inner};
-use crate::deterministic::{make_account_hashes, AccountId};
+use crate::deterministic::{AccountId, make_account_hashes};
 use crate::events::Events;
 use crate::imports::*;
 use crate::serializer::StorageHeader;
@@ -18,8 +18,8 @@ use crate::storage::{AccountMetadata, PrvKeyDataId, Storable};
 use crate::tx::generator::stealth_change::{DynStealthChangeCreator, PendingStealthChange, StealthChangeCreator};
 use crate::tx::generator::stealth_signer::StealthSigner;
 use crate::tx::{Fees, GeneratorSettings, GeneratorSummary, PaymentDestination, RandomFeeSettings};
-use crate::utxo::stealth_handler::StealthUtxoHandler;
 use crate::utxo::UtxoContext;
+use crate::utxo::stealth_handler::StealthUtxoHandler;
 use dashmap::DashMap;
 use kaspa_addresses::{Address, Version};
 use kaspa_bip32::ExtendedPrivateKey;
@@ -33,15 +33,15 @@ use kaspa_rpc_core::RpcTransactionOutpoint;
 use kaspa_rpc_core::{RpcBlock, RpcHash, RpcTransactionId, RpcUtxoEntry, RpcUtxosByAddressesEntry};
 #[cfg(test)]
 use kaspa_stealth::EPHEMERAL_OUTPUT_SIZE;
-use kaspa_stealth::{check_view_tag, derive_spending_key, scan_output, StealthAddress};
-use kaspa_txscript::{extract_stealth_output, STEALTH_SCRIPT_VERSION};
+use kaspa_stealth::{StealthAddress, check_view_tag, derive_spending_key, scan_output};
+use kaspa_txscript::{STEALTH_SCRIPT_VERSION, extract_stealth_output};
 use kaspa_utils::hex::ToHex;
 use kaspa_wallet_keys::keypair_mldsa::MasterAnchor;
-use secp256k1::{PublicKey, SecretKey, XOnlyPublicKey, SECP256K1};
+use secp256k1::{PublicKey, SECP256K1, SecretKey, XOnlyPublicKey};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use workflow_core::time::Instant;
 
 // ============================================================================
@@ -478,11 +478,7 @@ impl StealthAccount {
 
     fn effective_creation_daa_score(&self) -> Option<u64> {
         let override_val = self.creation_daa_score_override.load(Ordering::Relaxed);
-        if override_val != CREATION_DAA_OVERRIDE_NONE {
-            Some(override_val)
-        } else {
-            self.creation_daa_score
-        }
+        if override_val != CREATION_DAA_OVERRIDE_NONE { Some(override_val) } else { self.creation_daa_score }
     }
 
     /// Creates a new stealth account
@@ -746,11 +742,7 @@ impl StealthAccount {
     /// Returns settings optionally пропуская фильтрацию orphan-UTXO.
     /// По умолчанию (allow_orphans = false) orphan-выходы скрываются.
     pub fn apply_orphan_filter_with_override(&self, settings: GeneratorSettings, allow_orphans: bool) -> GeneratorSettings {
-        if allow_orphans {
-            settings
-        } else {
-            self.apply_orphan_filter(settings)
-        }
+        if allow_orphans { settings } else { self.apply_orphan_filter(settings) }
     }
 
     fn select_delegation_for_utxo(&self, block_daa: u64) -> (Option<DelegationId>, Option<DelegationRecordV1>, Option<OrphanReason>) {
@@ -1950,12 +1942,12 @@ mod tests {
     use super::*;
     use crate::account::delegation::DelegationId;
     use crate::deterministic::AccountId;
+    use crate::storage::Hint;
     use crate::storage::ephemeral_keys::{EphemeralKeyData, EphemeralKeyStore};
     use crate::storage::interface::{
         AccountStore, AddressBookStore, CreateArgs, Interface, OpenArgs, PrvKeyDataStore, StorageDescriptor, TransactionRecordStore,
         WalletDescriptor, WalletExportOptions,
     };
-    use crate::storage::Hint;
     use async_trait::async_trait;
     use kaspa_consensus_core::network::{NetworkId, NetworkType};
     use kaspa_consensus_core::subnets;
@@ -1965,7 +1957,7 @@ mod tests {
     use kaspa_stealth::create_stealth_output;
     use kaspa_txscript::pay_to_stealth;
     use kaspa_wallet_keys::secret::Secret;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{SeedableRng, rngs::StdRng};
     use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
     use tempfile::tempdir;
@@ -2354,14 +2346,16 @@ mod tests {
         assert_eq!(tx.outputs[0].script_public_key.version(), STEALTH_SCRIPT_VERSION);
         assert_eq!(tx.outputs[0].script_public_key.script().len(), EPHEMERAL_OUTPUT_SIZE);
         assert!(extract_stealth_output(&tx.outputs[0].script_public_key).is_ok());
-        assert!(StealthAccount::stealth_entry_from_transaction_output(
-            tx.verbose_data.as_ref().map(|v| v.transaction_id).unwrap(),
-            0,
-            &tx.outputs[0],
-            block.header.daa_score,
-            true
-        )
-        .is_some());
+        assert!(
+            StealthAccount::stealth_entry_from_transaction_output(
+                tx.verbose_data.as_ref().map(|v| v.transaction_id).unwrap(),
+                0,
+                &tx.outputs[0],
+                block.header.daa_score,
+                true
+            )
+            .is_some()
+        );
         let live_entries = StealthAccount::collect_live_stealth_utxos(&block);
         assert_eq!(live_entries.len(), 1);
         let expected: TransactionOutpoint = expected_outpoint.into();

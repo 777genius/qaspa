@@ -12,9 +12,9 @@ use kaspa_hashes::{Hash, PowHash};
 use kaspa_math::Uint256;
 use kaspa_pow::matrix::Matrix;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use serde_json::{Value, json};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
@@ -134,11 +134,7 @@ impl StratumMiner {
         debug!("Subscribe response: {:?}", subscribe_resp);
 
         let extranonce1 = if let Some(Value::Array(arr)) = subscribe_resp.result {
-            if arr.len() >= 2 {
-                arr[1].as_str().unwrap_or("00000000").to_string()
-            } else {
-                "00000000".to_string()
-            }
+            if arr.len() >= 2 { arr[1].as_str().unwrap_or("00000000").to_string() } else { "00000000".to_string() }
         } else {
             "00000000".to_string()
         };
@@ -199,20 +195,20 @@ impl StratumMiner {
                         if let Ok(msg) = serde_json::from_str::<JsonRpcMessage>(&buf) {
                             match msg.method.as_deref() {
                                 Some("mining.set_difficulty") => {
-                                    if let Some(params) = msg.params {
-                                        if let Some(diff) = params.first().and_then(|v| v.as_f64()) {
-                                            let diff_u64 = diff as u64;
-                                            difficulty_clone.store(diff_u64, Ordering::Release);
-                                            info!("Difficulty set to {}", diff_u64);
-                                        }
+                                    if let Some(params) = msg.params
+                                        && let Some(diff) = params.first().and_then(|v| v.as_f64())
+                                    {
+                                        let diff_u64 = diff as u64;
+                                        difficulty_clone.store(diff_u64, Ordering::Release);
+                                        info!("Difficulty set to {}", diff_u64);
                                     }
                                 }
                                 Some("mining.notify") => {
-                                    if let Some(params) = msg.params {
-                                        if let Some(job) = parse_notify_params(&params) {
-                                            debug!("New job: {}", job.job_id);
-                                            let _ = job_tx.try_send(job);
-                                        }
+                                    if let Some(params) = msg.params
+                                        && let Some(job) = parse_notify_params(&params)
+                                    {
+                                        debug!("New job: {}", job.job_id);
+                                        let _ = job_tx.try_send(job);
                                     }
                                 }
                                 _ => {
@@ -346,11 +342,11 @@ impl StratumMiner {
             }
 
             // Check for new jobs
-            if let Ok(new_job) = job_rx.try_recv() {
-                if new_job.clean_jobs || new_job.job_id != job.job_id {
-                    debug!("New job received, abandoning current work");
-                    return None;
-                }
+            if let Ok(new_job) = job_rx.try_recv()
+                && (new_job.clean_jobs || new_job.job_id != job.job_id)
+            {
+                debug!("New job received, abandoning current work");
+                return None;
             }
 
             let end_nonce = start_nonce.wrapping_add(batch_size);
