@@ -20,15 +20,11 @@ pub async fn get_aggregate_history(
     let mut q = aggregate_metrics_history::Entity::find().order_by_desc(aggregate_metrics_history::Column::RecordedAt);
 
     // Apply time filters
-    if let Some(from_ts) = query.from {
-        if let Some(from_dt) = Utc.timestamp_opt(from_ts, 0).single() {
-            q = q.filter(aggregate_metrics_history::Column::RecordedAt.gte(from_dt));
-        }
+    if let Some(from_dt) = query.from.and_then(|from_ts| Utc.timestamp_opt(from_ts, 0).single()) {
+        q = q.filter(aggregate_metrics_history::Column::RecordedAt.gte(from_dt));
     }
-    if let Some(to_ts) = query.to {
-        if let Some(to_dt) = Utc.timestamp_opt(to_ts, 0).single() {
-            q = q.filter(aggregate_metrics_history::Column::RecordedAt.lte(to_dt));
-        }
+    if let Some(to_dt) = query.to.and_then(|to_ts| Utc.timestamp_opt(to_ts, 0).single()) {
+        q = q.filter(aggregate_metrics_history::Column::RecordedAt.lte(to_dt));
     }
 
     // Apply limit
@@ -68,15 +64,11 @@ pub async fn get_node_history(
         .order_by_desc(node_metrics_history::Column::RecordedAt);
 
     // Apply time filters
-    if let Some(from_ts) = query.from {
-        if let Some(from_dt) = Utc.timestamp_opt(from_ts, 0).single() {
-            q = q.filter(node_metrics_history::Column::RecordedAt.gte(from_dt));
-        }
+    if let Some(from_dt) = query.from.and_then(|from_ts| Utc.timestamp_opt(from_ts, 0).single()) {
+        q = q.filter(node_metrics_history::Column::RecordedAt.gte(from_dt));
     }
-    if let Some(to_ts) = query.to {
-        if let Some(to_dt) = Utc.timestamp_opt(to_ts, 0).single() {
-            q = q.filter(node_metrics_history::Column::RecordedAt.lte(to_dt));
-        }
+    if let Some(to_dt) = query.to.and_then(|to_ts| Utc.timestamp_opt(to_ts, 0).single()) {
+        q = q.filter(node_metrics_history::Column::RecordedAt.lte(to_dt));
     }
 
     // Apply limit
@@ -114,15 +106,11 @@ pub async fn get_miner_history(
         .order_by_desc(miner_metrics_history::Column::RecordedAt);
 
     // Apply time filters
-    if let Some(from_ts) = query.from {
-        if let Some(from_dt) = Utc.timestamp_opt(from_ts, 0).single() {
-            q = q.filter(miner_metrics_history::Column::RecordedAt.gte(from_dt));
-        }
+    if let Some(from_dt) = query.from.and_then(|from_ts| Utc.timestamp_opt(from_ts, 0).single()) {
+        q = q.filter(miner_metrics_history::Column::RecordedAt.gte(from_dt));
     }
-    if let Some(to_ts) = query.to {
-        if let Some(to_dt) = Utc.timestamp_opt(to_ts, 0).single() {
-            q = q.filter(miner_metrics_history::Column::RecordedAt.lte(to_dt));
-        }
+    if let Some(to_dt) = query.to.and_then(|to_ts| Utc.timestamp_opt(to_ts, 0).single()) {
+        q = q.filter(miner_metrics_history::Column::RecordedAt.lte(to_dt));
     }
 
     // Apply limit
