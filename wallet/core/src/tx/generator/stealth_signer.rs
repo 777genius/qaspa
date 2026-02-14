@@ -121,11 +121,9 @@ impl StealthSigner {
             // Format signature script: optional TLV + [64 bytes sig][1 byte sighash_type]
             // Note: NO OP_DATA_65 prefix for Native SegWit style (stealth)
             let mut sig_script = Vec::with_capacity(74);
-            if include_delegation_id {
-                if let Some(id) = delegation_id {
-                    sig_script.push(0xA1);
-                    sig_script.extend_from_slice(&id.to_le_bytes());
-                }
+            if include_delegation_id && let Some(id) = delegation_id {
+                sig_script.push(0xA1);
+                sig_script.extend_from_slice(&id.to_le_bytes());
             }
             sig_script.extend_from_slice(&signature.serialize());
             sig_script.push(SIG_HASH_ALL.to_u8());

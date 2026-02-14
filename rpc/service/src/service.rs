@@ -890,10 +890,10 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
             .map_err(|e| RpcError::General(format!("Database error: {}", e)))?;
 
         let mut next_cursor_raw: Option<(RpcTransactionOutpoint, Vec<u8>)> = None;
-        if raw_entries.len() == fetch_limit {
-            if let Some((_, outpoint, _, raw_key)) = raw_entries.pop() {
-                next_cursor_raw = Some((RpcTransactionOutpoint::from(outpoint), raw_key));
-            }
+        if raw_entries.len() == fetch_limit
+            && let Some((_, outpoint, _, raw_key)) = raw_entries.pop()
+        {
+            next_cursor_raw = Some((RpcTransactionOutpoint::from(outpoint), raw_key));
         }
 
         let mut entries = Vec::with_capacity(raw_entries.len());
@@ -1502,10 +1502,10 @@ NOTE: This error usually indicates an RPC conversion error between the node and 
         // Idempotent insert into in-memory set.
         let RegisterMldsaAnchorRequest { anchor, metadata } = request;
         let anchor_key = anchor;
-        if let Some(ref meta) = metadata {
-            if meta.len() > MAX_MLDSA_METADATA_LEN {
-                return Err(RpcError::General(format!("metadata is too long (max {MAX_MLDSA_METADATA_LEN} bytes)")));
-            }
+        if let Some(ref meta) = metadata
+            && meta.len() > MAX_MLDSA_METADATA_LEN
+        {
+            return Err(RpcError::General(format!("metadata is too long (max {MAX_MLDSA_METADATA_LEN} bytes)")));
         }
         let anchor_hex = anchor.as_slice().to_hex();
         let mut anchors = self.mldsa_anchors.lock().unwrap_or_else(|e| e.into_inner());

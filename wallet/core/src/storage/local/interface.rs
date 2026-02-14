@@ -175,12 +175,12 @@ impl LocalStoreInner {
 
                 // Rename wallet file first; if moving the auxiliary data dir fails, rollback.
                 storage.rename_sync(target_wallet_path.to_string_lossy().as_ref())?;
-                if fs::exists_sync(&old_data_root)? {
-                    if let Err(err) = fs::rename_sync(&old_data_root, &new_data_root) {
-                        // Best-effort rollback: move wallet file back.
-                        let _ = storage.rename_sync(current.to_string_lossy().as_ref());
-                        return Err(err.into());
-                    }
+                if fs::exists_sync(&old_data_root)?
+                    && let Err(err) = fs::rename_sync(&old_data_root, &new_data_root)
+                {
+                    // Best-effort rollback: move wallet file back.
+                    let _ = storage.rename_sync(current.to_string_lossy().as_ref());
+                    return Err(err.into());
                 }
                 *self.store.write().unwrap() = Arc::new(Store::Storage(storage));
                 Ok(())

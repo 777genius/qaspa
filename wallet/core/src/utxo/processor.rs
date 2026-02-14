@@ -1206,10 +1206,10 @@ impl UtxoProcessor {
     }
 
     pub async fn stop_fee_rate_poller(&self) -> Result<()> {
-        if self.inner.fee_rate_task_is_running.load(Ordering::SeqCst) {
-            if let Err(err) = self.inner.fee_rate_task_ctl.signal(()).await {
-                log_warn!("UtxoProcessor::stop_fee_rate_poller() `signal` error: {err}");
-            }
+        if self.inner.fee_rate_task_is_running.load(Ordering::SeqCst)
+            && let Err(err) = self.inner.fee_rate_task_ctl.signal(()).await
+        {
+            log_warn!("UtxoProcessor::stop_fee_rate_poller() `signal` error: {err}");
         }
         Ok(())
     }

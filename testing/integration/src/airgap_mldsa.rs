@@ -525,13 +525,12 @@ async fn test_airgap_delegation_expiring_soon_event() {
                     current_daa_score,
                     ..
                 } = &*evt
+                    && *account_id == expected_id
                 {
-                    if *account_id == expected_id {
-                        *seen_clone.lock().await = true;
-                        *warn_clone.lock().await = *warn_window_daa;
-                        *daa_clone.lock().await = *current_daa_score;
-                        break;
-                    }
+                    *seen_clone.lock().await = true;
+                    *warn_clone.lock().await = *warn_window_daa;
+                    *daa_clone.lock().await = *current_daa_score;
+                    break;
                 }
             }
         })
@@ -686,11 +685,11 @@ async fn test_airgap_delegation_revocation_event_emitted() {
                 msg = event_channel.recv() => {
                     match msg {
                         Ok(evt) => {
-                            if let kaspa_wallet_core::events::Events::MasterDelegationRevoked { account_id, .. } = &*evt {
-                                if *account_id == expected_id {
-                                    *seen_clone.lock().await = true;
-                                    break;
-                                }
+                            if let kaspa_wallet_core::events::Events::MasterDelegationRevoked { account_id, .. } = &*evt
+                                && *account_id == expected_id
+                            {
+                                *seen_clone.lock().await = true;
+                                break;
                             }
                         }
                         Err(_) => break,

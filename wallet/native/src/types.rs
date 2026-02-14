@@ -47,10 +47,11 @@ impl KaspaMasterAnchorInfo {
         let mut ffi_info =
             KaspaMasterAnchorInfo { is_encrypted: info.is_encrypted, level: info.level.unwrap_or_default(), ..Default::default() };
         ffi_info.id = decode_id(info.id);
-        if let Some(anchor_hex) = info.anchor.as_deref() {
-            if anchor_hex.len() == MASTER_ANCHOR_LEN * 2 && hex_decode(anchor_hex.as_bytes(), &mut ffi_info.anchor).is_ok() {
-                ffi_info.has_anchor = true;
-            }
+        if let Some(anchor_hex) = info.anchor.as_deref()
+            && anchor_hex.len() == MASTER_ANCHOR_LEN * 2
+            && hex_decode(anchor_hex.as_bytes(), &mut ffi_info.anchor).is_ok()
+        {
+            ffi_info.has_anchor = true;
         }
         ffi_info
     }

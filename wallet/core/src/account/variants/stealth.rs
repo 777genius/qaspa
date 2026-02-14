@@ -420,16 +420,14 @@ fn select_delegation_from_records(
     // Если самая свежая (по nonce) запись — revoked, то она перекрывает все предыдущие
     // активные делегации: UTXO должны считаться orphaned (revoked), а не «валидными» по старым
     // активным записям.
-    if let Some((_id, latest)) = candidates.iter().max_by_key(|(_, r)| r.nonce) {
-        if matches!(latest.status, DelegationStatus::Revoked { .. }) {
-            let max_until = candidates.iter().filter_map(|(_, r)| r.valid_until_daa).max();
-            if let Some(limit) = max_until {
-                if block_daa > limit {
-                    return (None, None, Some(OrphanReason::DelegationExpired));
-                }
-            }
-            return (None, Some(latest.clone()), Some(OrphanReason::DelegationRevoked));
+    if let Some((_id, latest)) = candidates.iter().max_by_key(|(_, r)| r.nonce)
+        && matches!(latest.status, DelegationStatus::Revoked { .. })
+    {
+        let max_until = candidates.iter().filter_map(|(_, r)| r.valid_until_daa).max();
+        if max_until.is_some_and(|limit| block_daa > limit) {
+            return (None, None, Some(OrphanReason::DelegationExpired));
         }
+        return (None, Some(latest.clone()), Some(OrphanReason::DelegationRevoked));
     }
 
     let mut covering: Option<(DelegationId, DelegationRecordV1)> = None;
@@ -449,10 +447,8 @@ fn select_delegation_from_records(
     }
 
     let max_until = candidates.iter().filter_map(|(_, r)| r.valid_until_daa).max();
-    if let Some(limit) = max_until {
-        if block_daa > limit {
-            return (None, None, Some(OrphanReason::DelegationExpired));
-        }
+    if max_until.is_some_and(|limit| block_daa > limit) {
+        return (None, None, Some(OrphanReason::DelegationExpired));
     }
 
     (None, None, Some(OrphanReason::NoDelegation))
@@ -642,12 +638,11 @@ impl StealthAccount {
         *cached = Some(wallet_secret.clone());
 
         // Load ephemeral keys from storage
-        if let Ok(descriptor) = self.wallet().store().location() {
-            if let Some(wallet_folder) = descriptor.data_root() {
-                if let Ok(network_id) = self.wallet().network_id() {
-                    let _ = self.ephemeral_keys.load_from_storage(&wallet_folder, network_id, wallet_secret).await;
-                }
-            }
+        if let Ok(descriptor) = self.wallet().store().location()
+            && let Some(wallet_folder) = descriptor.data_root()
+            && let Ok(network_id) = self.wallet().network_id()
+        {
+            let _ = self.ephemeral_keys.load_from_storage(&wallet_folder, network_id, wallet_secret).await;
         }
         self.rebuild_orphan_overlay_from_store();
 
@@ -813,24 +808,23 @@ impl StealthAccount {
         let current_daa = self.wallet().utxo_processor().current_daa_score().unwrap_or(0);
 
         // Try explicit delegation id first
-        if let Some(id) = self.delegation_id() {
-            if let Some(record) = store.by_id(id) {
-                if matches!(record.status, crate::account::delegation::DelegationStatus::Active)
-                    && self.delegation_window_ok(&record, current_daa)
-                    && self.validate_delegation_record(&record, Some(anchor)).is_ok()
-                {
-                    return Ok((Some(anchor), Some(id)));
-                }
-            }
+        if let Some(id) = self.delegation_id()
+            && let Some(record) = store.by_id(id)
+            && matches!(record.status, crate::account::delegation::DelegationStatus::Active)
+            && self.delegation_window_ok(&record, current_daa)
+            && self.validate_delegation_record(&record, Some(anchor)).is_ok()
+        {
+            return Ok((Some(anchor), Some(id)));
         }
 
         // Fallback to active record from store
-        if let Some((id, record)) = store.active_for_account(&anchor, self.id()) {
-            if self.delegation_window_ok(&record, current_daa) && self.validate_delegation_record(&record, Some(anchor)).is_ok() {
-                let mut slot = self.delegation_id.lock().unwrap();
-                *slot = Some(id);
-                return Ok((Some(anchor), Some(id)));
-            }
+        if let Some((id, record)) = store.active_for_account(&anchor, self.id())
+            && self.delegation_window_ok(&record, current_daa)
+            && self.validate_delegation_record(&record, Some(anchor)).is_ok()
+        {
+            let mut slot = self.delegation_id.lock().unwrap();
+            *slot = Some(id);
+            return Ok((Some(anchor), Some(id)));
         }
 
         Ok((Some(anchor), None))
@@ -939,7 +933,7 @@ impl StealthAccount {
 
     fn should_emit_fallback_progress(processed_blocks: usize, elapsed_secs_since_last_emit: u64) -> bool {
         processed_blocks > 0
-            && (processed_blocks % FALLBACK_PROGRESS_REPORT_INTERVAL == 0
+            && (processed_blocks.is_multiple_of(FALLBACK_PROGRESS_REPORT_INTERVAL)
                 || elapsed_secs_since_last_emit >= FALLBACK_PROGRESS_REPORT_INTERVAL_SECS)
     }
 
@@ -1152,10 +1146,10 @@ impl StealthAccount {
                         continue;
                     }
 
-                    if let Some(min_daa) = min_daa_score {
-                        if block.header.daa_score < min_daa {
-                            continue;
-                        }
+                    if let Some(min_daa) = min_daa_score
+                        && block.header.daa_score < min_daa
+                    {
+                        continue;
                     }
 
                     encountered_full_blocks = true;
@@ -1199,13 +1193,14 @@ impl StealthAccount {
             ));
         }
         if header_only_before_first_full && total_claimed == 0 {
-            if let Some(header_daa) = earliest_header_daa {
-                if creation_daa_score > 0 && creation_daa_score < header_daa {
-                    return Err(Error::Custom(
-                        "Stealth fallback detected missing historical block bodies before account creation; please use archival node"
-                            .into(),
-                    ));
-                }
+            if let Some(header_daa) = earliest_header_daa
+                && creation_daa_score > 0
+                && creation_daa_score < header_daa
+            {
+                return Err(Error::Custom(
+                    "Stealth fallback detected missing historical block bodies before account creation; please use archival node"
+                        .into(),
+                ));
             }
             return Err(Error::Custom(
                 "Stealth fallback detected missing historical block bodies before available data (node pruned too aggressively)"
@@ -1643,23 +1638,23 @@ impl StealthUtxoHandler for StealthAccount {
                     Some(reason) => {
                         let reason_for_overlay = reason.clone();
                         self.mark_orphan_overlay(outpoint, reason_for_overlay, current_daa);
-                        if matches!(reason, OrphanReason::AnchorMismatch) {
-                            if let Some(expected) = self.master_anchor() {
-                                let _ = self
-                                    .wallet()
-                                    .notify(Events::MasterAnchorMismatch {
-                                        account_id: *self.id(),
-                                        expected_anchor: expected,
-                                        actual_anchor: [0u8; 32],
-                                    })
-                                    .await;
-                                MasterMetrics::global().inc_anchor_mismatch();
-                                log_error!(
-                                    "Master anchor mismatch: master_anchor_expected={} master_anchor_actual=00000000 account_id={}",
-                                    crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(expected)),
-                                    self.id()
-                                );
-                            }
+                        if matches!(reason, OrphanReason::AnchorMismatch)
+                            && let Some(expected) = anchor
+                        {
+                            let _ = self
+                                .wallet()
+                                .notify(Events::MasterAnchorMismatch {
+                                    account_id: *self.id(),
+                                    expected_anchor: expected,
+                                    actual_anchor: [0u8; 32],
+                                })
+                                .await;
+                            MasterMetrics::global().inc_anchor_mismatch();
+                            log_error!(
+                                "Master anchor mismatch: master_anchor_expected={} master_anchor_actual=00000000 account_id={}",
+                                crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(expected)),
+                                self.id()
+                            );
                         }
                         EphemeralKeyStatus::Orphaned { reason }
                     }
@@ -1719,29 +1714,29 @@ impl StealthUtxoHandler for StealthAccount {
 
             // 1) Истечение по valid_until для активных записей (per-id).
             for (id, rec) in records.iter() {
-                if matches!(rec.status, DelegationStatus::Active) {
-                    if let Some(until) = rec.valid_until_daa {
-                        // `valid_until_daa` включительно: делегация считается истёкшей только когда DAA > until.
-                        if current_daa_score > until
-                            && self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationExpired, current_daa_score)
-                        {
-                            let _ = self
-                                .wallet()
-                                .notify(Events::MasterDelegationExpired {
-                                    account_id: *self.id(),
-                                    delegation_id: id.0,
-                                    anchor,
-                                    valid_until_daa: until,
-                                })
-                                .await;
-                            log_warn!(
-                                "Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}",
-                                crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)),
-                                id.0,
-                                until,
-                                current_daa_score
-                            );
-                        }
+                if matches!(rec.status, DelegationStatus::Active)
+                    && let Some(until) = rec.valid_until_daa
+                {
+                    // `valid_until_daa` включительно: делегация считается истёкшей только когда DAA > until.
+                    if current_daa_score > until
+                        && self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationExpired, current_daa_score)
+                    {
+                        let _ = self
+                            .wallet()
+                            .notify(Events::MasterDelegationExpired {
+                                account_id: *self.id(),
+                                delegation_id: id.0,
+                                anchor,
+                                valid_until_daa: until,
+                            })
+                            .await;
+                        log_warn!(
+                            "Master delegation expired: master_anchor={} delegation_id={} valid_until_daa={} current_daa_score={}",
+                            crate::account::variants::mldsa_master::format_master_anchor_short(&MasterAnchor::new(anchor)),
+                            id.0,
+                            until,
+                            current_daa_score
+                        );
                     }
                 }
             }
@@ -1749,18 +1744,18 @@ impl StealthUtxoHandler for StealthAccount {
             // 2) Revoked: если самая свежая запись (по nonce) — revoked, то она перекрывает
             // предыдущие active-делегации. Помечаем UTXO, которые были получены под такими
             // делегациями, как orphaned (DelegationRevoked).
-            if let Some((_latest_id, latest_rec)) = records.iter().max_by_key(|(_, r)| r.nonce) {
-                if matches!(latest_rec.status, DelegationStatus::Revoked { .. }) {
-                    for (id, rec) in records.iter() {
-                        if rec.nonce < latest_rec.nonce
-                            && matches!(rec.status, DelegationStatus::Active)
-                            && self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationRevoked, current_daa_score)
-                        {
-                            let _ = self
-                                .wallet()
-                                .notify(Events::MasterDelegationRevoked { account_id: *self.id(), delegation_id: id.0, anchor })
-                                .await;
-                        }
+            if let Some((_latest_id, latest_rec)) = records.iter().max_by_key(|(_, r)| r.nonce)
+                && matches!(latest_rec.status, DelegationStatus::Revoked { .. })
+            {
+                for (id, rec) in records.iter() {
+                    if rec.nonce < latest_rec.nonce
+                        && matches!(rec.status, DelegationStatus::Active)
+                        && self.mark_delegation_as_orphaned(*id, OrphanReason::DelegationRevoked, current_daa_score)
+                    {
+                        let _ = self
+                            .wallet()
+                            .notify(Events::MasterDelegationRevoked { account_id: *self.id(), delegation_id: id.0, anchor })
+                            .await;
                     }
                 }
             }

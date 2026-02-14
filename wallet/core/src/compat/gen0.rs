@@ -94,7 +94,7 @@ fn get_v0_parts(data: &str) -> Result<CipherData> {
             return Err(Error::custom("Unable to decrypt wallet - invalid data"));
         }
         let len: usize = ptr[0..5].parse().map_err(|_| Error::custom("Unable to decrypt wallet - invalid data"))?;
-        if len % 2 != 0 {
+        if !len.is_multiple_of(2) {
             return Err(Error::custom("Unable to decrypt wallet - invalid data"));
         }
         let end = 5usize.checked_add(len).ok_or_else(|| Error::custom("Unable to decrypt wallet - invalid data"))?;
