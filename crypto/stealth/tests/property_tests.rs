@@ -275,7 +275,7 @@ mod edge_cases {
     #[test]
     fn test_debug_output_safety() {
         let keys = StealthSecretKey::generate().unwrap();
-        let debug = format!("{:?}", keys);
+        let debug = format!("{keys:?}");
 
         // Must contain redaction
         assert!(debug.contains("<redacted>"));

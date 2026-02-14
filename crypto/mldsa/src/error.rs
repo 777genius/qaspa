@@ -120,7 +120,7 @@ mod tests {
             // All errors should have a string representation
             let _string = err.to_string();
             // All errors should be debug formattable
-            let _debug = format!("{:?}", err);
+            let _debug = format!("{err:?}");
         }
     }
 }

@@ -377,9 +377,7 @@ impl StratumMiner {
             start_nonce = end_nonce;
 
             // Yield periodically
-            // Note: clippy prefers `is_multiple_of`, but that method is unstable on our MSRV (1.85).
-            #[allow(clippy::manual_is_multiple_of)]
-            if start_nonce % (batch_size * 10) == 0 {
+            if start_nonce.is_multiple_of(batch_size * 10) {
                 tokio::task::yield_now().await;
             }
         }

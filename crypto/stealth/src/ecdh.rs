@@ -116,7 +116,7 @@ mod tests {
             let receiver_shared = compute_shared_secret(&sk, &other_pk);
 
             // These MUST be equal regardless of parity, because we use x-only result
-            assert_eq!(sender_shared, receiver_shared, "ECDH must be symmetric even with parity difference (parity={:?})", parity);
+            assert_eq!(sender_shared, receiver_shared, "ECDH must be symmetric even with parity difference (parity={parity:?})");
         }
     }
 

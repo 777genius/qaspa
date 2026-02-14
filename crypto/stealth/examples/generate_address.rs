@@ -9,7 +9,7 @@ fn main() {
     let address = Address::new(Prefix::StealthTestnet, Version::Stealth, &bytes);
 
     println!("# Stealth Address for miner payout (devnet/testnet)");
-    println!("export MINER_PAYOUT_ADDRESS='{}'", address);
+    println!("export MINER_PAYOUT_ADDRESS='{address}'");
     println!();
     println!("# Secret keys (keep safe!)");
     let mut scan_hex = [0u8; 64];
