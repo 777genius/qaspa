@@ -905,8 +905,8 @@ fn test_generator_inputs_250k_outputs_2_sweep() -> Result<()> {
     // With new mass parameters, fewer stages needed (~2315 instead of 2875)
     // Using validate() for robustness
     let f = 130.0;
-    let generator =
-        make_generator(test_network_id(), &[f; 250_000], &[], None, Fees::None, change_address, PaymentDestination::Change);
+    let head = vec![f; 250_000];
+    let generator = make_generator(test_network_id(), &head, &[], None, Fees::None, change_address, PaymentDestination::Change);
     generator.unwrap().harness().validate().finalize();
     Ok(())
 }
