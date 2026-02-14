@@ -439,9 +439,9 @@ impl StealthAwareIndexCollector {
 
                 // If it was UtxosChanged, also generate StealthUtxosChanged
                 if is_utxos_changed && let Notification::UtxosChanged(ref utxos_notification) = converted {
-                    // Debug: log script versions of all added UTXOs
+                    // Trace-level diagnostics for stealth UTXO debugging
                     for entry in utxos_notification.added.iter() {
-                        info!(
+                        trace!(
                             "[Collector {}] UTXO added: script version = {}, has_address = {}",
                             self.name,
                             entry.utxo_entry.script_public_key.version(),
