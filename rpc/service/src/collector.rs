@@ -1,7 +1,7 @@
 use crate::converter::{consensus::ConsensusConverter, index::IndexConverter};
 use async_trait::async_trait;
 use kaspa_consensus_notify::notification::Notification as ConsensusNotification;
-use kaspa_core::{debug, info, trace};
+use kaspa_core::{debug, trace};
 use kaspa_index_core::notification::Notification as IndexNotification;
 use kaspa_notify::{
     collector::{Collector, CollectorNotificationReceiver},
