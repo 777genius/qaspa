@@ -19,16 +19,8 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Set up cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Run cargo check
         run: cargo check --tests --workspace --benches
@@ -106,34 +98,23 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Run cargo build with devnet-prealloc feature
-        run: cargo build --release --features devnet-prealloc --workspace --all --tests --benches
+        run: cargo build --features devnet-prealloc --workspace --all --tests --benches
 
       - name: Run cargo test regular features
-        run: cargo nextest run --release --workspace
+        run: cargo nextest run --workspace
 
       - name: Run cargo doc tests
-        run: cargo test --doc --release --workspace
+        run: cargo test --doc --workspace
 
       - name: Run cargo test on kaspa-hashes without asm
-        run: cargo nextest run --release -p kaspa-hashes --features=no-asm --benches
+        run: cargo nextest run -p kaspa-hashes --features=no-asm --benches
 
       - name: Run cargo doc tests with features=no-asm on kaspa-hashes
-        run: cargo test --doc --release -p kaspa-hashes --features=no-asm
+        run: cargo test --doc -p kaspa-hashes --features=no-asm
 
       - name: Run cargo doc
-        run: cargo doc --release --no-deps --workspace
+        run: cargo doc --no-deps --workspace
       - name: Run kip-10 example
         run: cargo run --example kip-10
 
@@ -205,16 +186,8 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Set up cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
@@ -250,16 +223,8 @@ jobs:
           components: clippy
           targets: wasm32-unknown-unknown
 
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Set up cache
+        uses: Swatinem/rust-cache@v2
 
       # append here any new wasm32 crate not already covered by the existing checks
 
@@ -315,16 +280,8 @@ jobs:
       - name: Install NodeJS dependencies
         run: npm install --global typedoc typescript
 
-      - name: Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Set up cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Build wasm release
         run: |
@@ -388,19 +345,9 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Cargo Build Outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-        
+      - name: Set up Rust cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Cache Toolchain
         uses: actions/cache@v4
         with:

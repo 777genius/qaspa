@@ -93,10 +93,10 @@ impl DelegationStore {
         // порядок `list` может быть нарушен после загрузки из стора (dashmap итерация/сериализация не гарантирует порядок).
         // Поэтому проверяем против максимального nonce среди уже известных записей.
         let current_max = list.iter().filter_map(|id| self.by_id.get(id).map(|e| e.record.nonce)).max();
-        if let Some(current) = current_max {
-            if record.nonce <= current {
-                return Err(Error::MasterDelegationStaleNonce { account_id: record.account_id, current, received: record.nonce });
-            }
+        if let Some(current) = current_max
+            && record.nonce <= current
+        {
+            return Err(Error::MasterDelegationStaleNonce { account_id: record.account_id, current, received: record.nonce });
         }
 
         let id_val = self.next_id.fetch_add(1, Ordering::SeqCst);

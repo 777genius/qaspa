@@ -445,7 +445,7 @@ mod tests {
     #[test]
     fn test_debug_does_not_leak_secrets() {
         let sk = StealthSecretKey::generate().unwrap();
-        let debug_str = format!("{:?}", sk);
+        let debug_str = format!("{sk:?}");
 
         let mut scan_hex = [0u8; 64];
         let mut spend_hex = [0u8; 64];

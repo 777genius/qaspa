@@ -239,7 +239,7 @@ async fn fetch_spendable_utxos_via_blocks(
                     break;
                 }
                 processed_blocks += 1;
-                if processed_blocks % progress_interval == 0 {
+                if processed_blocks.is_multiple_of(progress_interval) {
                     info!(
                         "fallback miner scan: processed {} blocks (daa {}), collected {} entries",
                         processed_blocks,
@@ -277,10 +277,10 @@ async fn fetch_spendable_utxos_via_blocks(
                                 tx.subnetwork_id == SUBNETWORK_ID_COINBASE,
                             );
                             let outpoint = TransactionOutpoint::new(tx_id, output_index as u32);
-                            if let Some(replaced) = utxo_map.insert(outpoint, entry.clone()) {
-                                if is_utxo_spendable(&replaced, virtual_daa_score, coinbase_maturity) {
-                                    spendable_acc = spendable_acc.saturating_sub(replaced.amount);
-                                }
+                            if let Some(replaced) = utxo_map.insert(outpoint, entry.clone())
+                                && is_utxo_spendable(&replaced, virtual_daa_score, coinbase_maturity)
+                            {
+                                spendable_acc = spendable_acc.saturating_sub(replaced.amount);
                             }
                             if is_utxo_spendable(&entry, virtual_daa_score, coinbase_maturity) {
                                 spendable_acc = spendable_acc.saturating_add(entry.amount);
@@ -290,18 +290,18 @@ async fn fetch_spendable_utxos_via_blocks(
 
                     for input in tx.inputs.iter() {
                         let prev = TransactionOutpoint::from(input.previous_outpoint);
-                        if let Some(removed) = utxo_map.remove(&prev) {
-                            if is_utxo_spendable(&removed, virtual_daa_score, coinbase_maturity) {
-                                spendable_acc = spendable_acc.saturating_sub(removed.amount);
-                            }
+                        if let Some(removed) = utxo_map.remove(&prev)
+                            && is_utxo_spendable(&removed, virtual_daa_score, coinbase_maturity)
+                        {
+                            spendable_acc = spendable_acc.saturating_sub(removed.amount);
                         }
                     }
                 }
-                if let Some(target) = target_amount {
-                    if spendable_acc >= target {
-                        satisfied_target = true;
-                        break;
-                    }
+                if let Some(target) = target_amount
+                    && spendable_acc >= target
+                {
+                    satisfied_target = true;
+                    break;
                 }
             }
         }

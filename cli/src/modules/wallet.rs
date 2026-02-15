@@ -367,14 +367,14 @@ impl Wallet {
 
         if enabled {
             // Попробуем прочитать сетевой флаг, чтобы сразу предупредить пользователя
-            if let Ok(info) = ctx.wallet().rpc_api().get_server_info().await {
-                if !info.mldsa_master_enabled {
-                    tprintln!(
-                        ctx,
-                        "Внимание: сеть ещё не активировала MLDSA master root (activation_daa={:?}). Операции будут локальными.",
-                        info.mldsa_master_activation_daa
-                    );
-                }
+            if let Ok(info) = ctx.wallet().rpc_api().get_server_info().await
+                && !info.mldsa_master_enabled
+            {
+                tprintln!(
+                    ctx,
+                    "Внимание: сеть ещё не активировала MLDSA master root (activation_daa={:?}). Операции будут локальными.",
+                    info.mldsa_master_activation_daa
+                );
             }
         }
         Ok(())

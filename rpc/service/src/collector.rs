@@ -1,7 +1,7 @@
 use crate::converter::{consensus::ConsensusConverter, index::IndexConverter};
 use async_trait::async_trait;
 use kaspa_consensus_notify::notification::Notification as ConsensusNotification;
-use kaspa_core::{debug, info, trace};
+use kaspa_core::{debug, trace};
 use kaspa_index_core::notification::Notification as IndexNotification;
 use kaspa_notify::{
     collector::{Collector, CollectorNotificationReceiver},
@@ -438,50 +438,48 @@ impl StealthAwareIndexCollector {
                 let converted = converter.convert(notification).await;
 
                 // If it was UtxosChanged, also generate StealthUtxosChanged
-                if is_utxos_changed {
-                    if let Notification::UtxosChanged(ref utxos_notification) = converted {
-                        // Debug: log script versions of all added UTXOs
-                        for entry in utxos_notification.added.iter() {
-                            info!(
-                                "[Collector {}] UTXO added: script version = {}, has_address = {}",
-                                self.name,
-                                entry.utxo_entry.script_public_key.version(),
-                                entry.address.is_some()
-                            );
-                        }
+                if is_utxos_changed && let Notification::UtxosChanged(ref utxos_notification) = converted {
+                    // Trace-level diagnostics for stealth UTXO debugging
+                    for entry in utxos_notification.added.iter() {
+                        trace!(
+                            "[Collector {}] UTXO added: script version = {}, has_address = {}",
+                            self.name,
+                            entry.utxo_entry.script_public_key.version(),
+                            entry.address.is_some()
+                        );
+                    }
 
-                        // Filter for stealth UTXOs (script version 16)
-                        let stealth_added: Vec<RpcUtxosByAddressesEntry> = utxos_notification
-                            .added
-                            .iter()
-                            .filter(|entry| entry.utxo_entry.script_public_key.version() == STEALTH_SCRIPT_VERSION)
-                            .cloned()
-                            .collect();
+                    // Filter for stealth UTXOs (script version 16)
+                    let stealth_added: Vec<RpcUtxosByAddressesEntry> = utxos_notification
+                        .added
+                        .iter()
+                        .filter(|entry| entry.utxo_entry.script_public_key.version() == STEALTH_SCRIPT_VERSION)
+                        .cloned()
+                        .collect();
 
-                        let stealth_removed: Vec<RpcUtxosByAddressesEntry> = utxos_notification
-                            .removed
-                            .iter()
-                            .filter(|entry| entry.utxo_entry.script_public_key.version() == STEALTH_SCRIPT_VERSION)
-                            .cloned()
-                            .collect();
+                    let stealth_removed: Vec<RpcUtxosByAddressesEntry> = utxos_notification
+                        .removed
+                        .iter()
+                        .filter(|entry| entry.utxo_entry.script_public_key.version() == STEALTH_SCRIPT_VERSION)
+                        .cloned()
+                        .collect();
 
-                        // Only send StealthUtxosChanged if there are stealth UTXOs
-                        if !stealth_added.is_empty() || !stealth_removed.is_empty() {
-                            debug!(
-                                "[Collector {}] generated StealthUtxosChanged: {} added, {} removed",
-                                self.name,
-                                stealth_added.len(),
-                                stealth_removed.len(),
-                            );
+                    // Only send StealthUtxosChanged if there are stealth UTXOs
+                    if !stealth_added.is_empty() || !stealth_removed.is_empty() {
+                        debug!(
+                            "[Collector {}] generated StealthUtxosChanged: {} added, {} removed",
+                            self.name,
+                            stealth_added.len(),
+                            stealth_removed.len(),
+                        );
 
-                            let stealth_notification = Notification::StealthUtxosChanged(StealthUtxosChangedNotification {
-                                added: Arc::new(stealth_added),
-                                removed: Arc::new(stealth_removed),
-                            });
+                        let stealth_notification = Notification::StealthUtxosChanged(StealthUtxosChangedNotification {
+                            added: Arc::new(stealth_added),
+                            removed: Arc::new(stealth_removed),
+                        });
 
-                            if let Err(err) = notifier.notify(stealth_notification) {
-                                trace!("[Collector {}] stealth notification sender error: {}", self.name, err);
-                            }
+                        if let Err(err) = notifier.notify(stealth_notification) {
+                            trace!("[Collector {}] stealth notification sender error: {}", self.name, err);
                         }
                     }
                 }

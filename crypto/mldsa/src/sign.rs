@@ -213,11 +213,11 @@ mod tests {
         assert_eq!(hex.len(), 2420 * 2); // 2 chars per byte
 
         // Test Display trait
-        let display_str = format!("{}", sig);
+        let display_str = format!("{sig}");
         assert_eq!(display_str, hex);
 
         // Test Debug trait
-        let debug_str = format!("{:?}", sig);
+        let debug_str = format!("{sig:?}");
         assert!(debug_str.contains("Signature"));
         assert!(debug_str.contains("2420 bytes"));
         assert!(debug_str.contains("Level2"));

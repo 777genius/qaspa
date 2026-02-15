@@ -659,10 +659,10 @@ async fn test_stealth_fallback_progress_events() {
                 msg = listener_channel.recv() => {
                     match msg {
                         Ok(event) => {
-                            if let Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed } = *event {
-                                if account_id == receiver_id {
-                                    progress_clone.lock().await.push(ProgressSnapshot { processed_blocks, last_daa_score, claimed });
-                                }
+                            if let Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed } = *event
+                                && account_id == receiver_id
+                            {
+                                progress_clone.lock().await.push(ProgressSnapshot { processed_blocks, last_daa_score, claimed });
                             }
                         }
                         Err(_) => break,
@@ -684,10 +684,10 @@ async fn test_stealth_fallback_progress_events() {
     while tokio::time::Instant::now() < drain_deadline {
         match tokio::time::timeout(Duration::from_millis(150), drain_channel.recv()).await {
             Ok(Ok(event)) => {
-                if let Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed } = *event {
-                    if account_id == receiver_id {
-                        progress_events.lock().await.push(ProgressSnapshot { processed_blocks, last_daa_score, claimed });
-                    }
+                if let Events::StealthScanProgress { account_id, processed_blocks, last_daa_score, claimed } = *event
+                    && account_id == receiver_id
+                {
+                    progress_events.lock().await.push(ProgressSnapshot { processed_blocks, last_daa_score, claimed });
                 }
             }
             _ => break,

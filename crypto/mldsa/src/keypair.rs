@@ -325,11 +325,11 @@ mod tests {
         assert_eq!(hex.len(), 1312 * 2);
 
         // Test Display trait
-        let display_str = format!("{}", pk);
+        let display_str = format!("{pk}");
         assert_eq!(display_str, hex);
 
         // Test Debug trait
-        let debug_str = format!("{:?}", pk);
+        let debug_str = format!("{pk:?}");
         assert!(debug_str.contains("PublicKey"));
         assert!(debug_str.contains("1312 bytes"));
     }
@@ -380,7 +380,7 @@ mod tests {
     #[test]
     fn test_keypair_debug() {
         let kp = generate_keypair(MlDsaLevel::Level2).unwrap();
-        let debug_str = format!("{:?}", kp);
+        let debug_str = format!("{kp:?}");
 
         // Debug should show public key but redact secret key
         assert!(debug_str.contains("MlDsaKeypair"));

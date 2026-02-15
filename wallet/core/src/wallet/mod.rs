@@ -291,10 +291,10 @@ impl Wallet {
         };
 
         let mut current_daa = self.current_daa_score();
-        if current_daa.is_none() {
-            if let Ok(info) = self.rpc_api().get_server_info().await {
-                current_daa = Some(info.virtual_daa_score);
-            }
+        if current_daa.is_none()
+            && let Ok(info) = self.rpc_api().get_server_info().await
+        {
+            current_daa = Some(info.virtual_daa_score);
         }
         let current_daa = current_daa.ok_or(Error::MissingDaaScore("build_master_delegation_request"))?;
 
@@ -349,10 +349,10 @@ impl Wallet {
                 status: target.status.unwrap_or(DelegationStatus::Active),
             };
 
-            if let Some(until) = header.valid_until_daa {
-                if until <= header.valid_from_daa {
-                    return Err(Error::InvalidRange(header.valid_from_daa, until));
-                }
+            if let Some(until) = header.valid_until_daa
+                && until <= header.valid_from_daa
+            {
+                return Err(Error::InvalidRange(header.valid_from_daa, until));
             }
 
             let previous_nonce = delegation_store.latest_nonce(&anchor_bytes, &header.account_id).unwrap_or(0);
@@ -677,11 +677,11 @@ impl Wallet {
                 return Err(Error::MasterDelegationNonceConflict { account_id: record.account_id, nonce: record.nonce });
             }
 
-            if let Some(current_nonce) = store.latest_nonce(&response.master_anchor, &record.account_id) {
-                if record.nonce <= current_nonce {
-                    skipped += 1;
-                    continue;
-                }
+            if let Some(current_nonce) = store.latest_nonce(&response.master_anchor, &record.account_id)
+                && record.nonce <= current_nonce
+            {
+                skipped += 1;
+                continue;
             }
 
             let Some(account) = self.get_account_by_id(&record.account_id, &guard).await? else {
@@ -720,12 +720,11 @@ impl Wallet {
     }
 
     async fn save_delegations(&self, wallet_secret: &Secret) -> Result<()> {
-        if let Ok(descriptor) = self.store().location() {
-            if let Some(wallet_folder) = descriptor.data_root() {
-                if let Ok(network_id) = self.network_id() {
-                    self.delegation_store().save_to_storage(&wallet_folder, network_id, wallet_secret).await?;
-                }
-            }
+        if let Ok(descriptor) = self.store().location()
+            && let Some(wallet_folder) = descriptor.data_root()
+            && let Ok(network_id) = self.network_id()
+        {
+            self.delegation_store().save_to_storage(&wallet_folder, network_id, wallet_secret).await?;
         }
         Ok(())
     }
@@ -739,34 +738,31 @@ impl Wallet {
     }
 
     async fn save_delegation_request(&self, request: &MasterDelegationRequestBodyV1) -> Result<()> {
-        if let Ok(descriptor) = self.store().location() {
-            if let Some(wallet_folder) = descriptor.data_root() {
-                if let Ok(network_id) = self.network_id() {
-                    let path = Self::delegation_request_path(&wallet_folder, network_id, &request.request_id);
-                    if let Some(parent) = path.parent() {
-                        fs::create_dir_all(parent).await?;
-                    }
-                    let json =
-                        serde_json::to_vec_pretty(request).map_err(|e| Error::Custom(format!("serialize delegation request: {e}")))?;
-                    fs::write(&path, json.as_slice()).await?;
-                }
+        if let Ok(descriptor) = self.store().location()
+            && let Some(wallet_folder) = descriptor.data_root()
+            && let Ok(network_id) = self.network_id()
+        {
+            let path = Self::delegation_request_path(&wallet_folder, network_id, &request.request_id);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).await?;
             }
+            let json = serde_json::to_vec_pretty(request).map_err(|e| Error::Custom(format!("serialize delegation request: {e}")))?;
+            fs::write(&path, json.as_slice()).await?;
         }
         Ok(())
     }
 
     pub async fn load_cached_master_delegation_request(&self, request_id: &[u8; 32]) -> Result<Option<MasterDelegationRequestBodyV1>> {
-        if let Ok(descriptor) = self.store().location() {
-            if let Some(wallet_folder) = descriptor.data_root() {
-                if let Ok(network_id) = self.network_id() {
-                    let path = Self::delegation_request_path(&wallet_folder, network_id, request_id);
-                    if fs::exists(&path).await? {
-                        let data = fs::read(&path).await?;
-                        let request = serde_json::from_slice(&data)
-                            .map_err(|e| Error::Custom(format!("read cached delegation request: {e}")))?;
-                        return Ok(Some(request));
-                    }
-                }
+        if let Ok(descriptor) = self.store().location()
+            && let Some(wallet_folder) = descriptor.data_root()
+            && let Ok(network_id) = self.network_id()
+        {
+            let path = Self::delegation_request_path(&wallet_folder, network_id, request_id);
+            if fs::exists(&path).await? {
+                let data = fs::read(&path).await?;
+                let request =
+                    serde_json::from_slice(&data).map_err(|e| Error::Custom(format!("read cached delegation request: {e}")))?;
+                return Ok(Some(request));
             }
         }
         Ok(None)
@@ -927,12 +923,11 @@ impl Wallet {
         }
 
         // Load delegations storage (best-effort; ignore if storage is non-internal)
-        if let Ok(descriptor) = self.store().location() {
-            if let Some(wallet_folder) = descriptor.data_root() {
-                if let Ok(network_id) = self.network_id() {
-                    let _ = self.delegation_store().load_from_storage(&wallet_folder, network_id, wallet_secret).await;
-                }
-            }
+        if let Ok(descriptor) = self.store().location()
+            && let Some(wallet_folder) = descriptor.data_root()
+            && let Ok(network_id) = self.network_id()
+        {
+            let _ = self.delegation_store().load_from_storage(&wallet_folder, network_id, wallet_secret).await;
         }
 
         let wallet_name = self.store().descriptor();
@@ -973,10 +968,10 @@ impl Wallet {
                     self.legacy_accounts().insert(account.clone());
                 }
                 // Auto-unlock stealth accounts on wallet open
-                if account.account_kind().as_ref() == stealth::STEALTH_ACCOUNT_KIND {
-                    if let Ok(stealth_account) = account.clone().as_stealth_account() {
-                        stealth_account.unlock(wallet_secret, None).await?;
-                    }
+                if account.account_kind().as_ref() == stealth::STEALTH_ACCOUNT_KIND
+                    && let Ok(stealth_account) = account.clone().as_stealth_account()
+                {
+                    stealth_account.unlock(wallet_secret, None).await?;
                 }
             }
         }
@@ -1174,10 +1169,10 @@ impl Wallet {
             self.set_network_id(&network_id).unwrap_or_else(|_| log_error!("Unable to select network type: `{}`", network_id));
         }
 
-        if let Some(url) = settings.get::<String>(WalletSettings::Server) {
-            if let Some(wrpc_client) = self.try_wrpc_client() {
-                wrpc_client.set_url(Some(url.as_str())).unwrap_or_else(|_| log_error!("Unable to set rpc url: `{}`", url));
-            }
+        if let Some(url) = settings.get::<String>(WalletSettings::Server)
+            && let Some(wrpc_client) = self.try_wrpc_client()
+        {
+            wrpc_client.set_url(Some(url.as_str())).unwrap_or_else(|_| log_error!("Unable to set rpc url: `{}`", url));
         }
 
         Ok(())
@@ -1467,12 +1462,11 @@ impl Wallet {
 
         // Get current DAA score for account creation timestamp
         let mut creation_daa_score = self.utxo_processor().current_daa_score();
-        if creation_daa_score.is_none() {
-            if let Some(rpc) = self.utxo_processor().try_rpc_api() {
-                if let Ok(info) = rpc.get_server_info().await {
-                    creation_daa_score = Some(info.virtual_daa_score);
-                }
-            }
+        if creation_daa_score.is_none()
+            && let Some(rpc) = self.utxo_processor().try_rpc_api()
+            && let Ok(info) = rpc.get_server_info().await
+        {
+            creation_daa_score = Some(info.virtual_daa_score);
         }
 
         // Create account
@@ -1815,10 +1809,8 @@ impl Wallet {
         let stealth_account = self.get_account_by_id(&stealth_id, &guard).await?.ok_or(Error::AccountNotFound(stealth_id))?;
         let stealth = stealth_account.as_stealth_account()?;
 
-        if let Some(existing_anchor) = stealth.master_anchor() {
-            if existing_anchor != master_anchor {
-                return Err(Error::Custom("stealth already attached to another master anchor".to_string()));
-            }
+        if stealth.master_anchor().is_some_and(|existing_anchor| existing_anchor != master_anchor) {
+            return Err(Error::Custom("stealth already attached to another master anchor".to_string()));
         }
 
         let master = self.find_active_master_by_anchor(&anchor).ok_or_else(|| Error::Custom("master anchor not found".to_string()))?;
@@ -2087,10 +2079,10 @@ impl Wallet {
         let prv_key_data_store = self.inner.store.as_prv_key_data_store()?;
         prv_key_data_store.store(wallet_secret, prv_key_data).await?;
 
-        if let Some(mnemonic) = master_mnemonic.as_ref() {
-            if let Err(err) = self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, mnemonic, payment_secret.as_ref()).await {
-                log_error!("Unable to derive MLDSA master seed: {err}");
-            }
+        if let Some(mnemonic) = master_mnemonic.as_ref()
+            && let Err(err) = self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, mnemonic, payment_secret.as_ref()).await
+        {
+            log_error!("Unable to derive MLDSA master seed: {err}");
         }
 
         self.inner.store.commit(wallet_secret).await?;
@@ -2128,10 +2120,10 @@ impl Wallet {
         let prv_key_data_store = self.inner.store.as_prv_key_data_store()?;
         prv_key_data_store.store(wallet_secret, prv_key_data).await?;
 
-        if self.is_mldsa_master_enabled() {
-            if let Err(err) = self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, &mnemonic, payment_secret.as_ref()).await {
-                log_error!("Unable to derive MLDSA master seed: {err}");
-            }
+        if self.is_mldsa_master_enabled()
+            && let Err(err) = self.maybe_create_mldsa_master_from_mnemonic(wallet_secret, &mnemonic, payment_secret.as_ref()).await
+        {
+            log_error!("Unable to derive MLDSA master seed: {err}");
         }
         self.inner.store.clone().as_account_store()?.store_single(&account.to_storage()?, None).await?;
         self.inner.store.commit(wallet_secret).await?;
@@ -2253,10 +2245,10 @@ impl Wallet {
                     msg = watcher_events.receiver.recv().fuse() => {
                         match msg {
                             Ok(event) => {
-                                if let Events::DaaScoreChange { current_daa_score } = *event {
-                                    if let Err(e) = watcher.on_daa_score_change(current_daa_score).await {
-                                        log_error!("DelegationExpiryWatcher error: {}", e);
-                                    }
+                                if let Events::DaaScoreChange { current_daa_score } = *event
+                                    && let Err(e) = watcher.on_daa_score_change(current_daa_score).await
+                                {
+                                    log_error!("DelegationExpiryWatcher error: {e}");
                                 }
                             }
                             Err(_) => break,
