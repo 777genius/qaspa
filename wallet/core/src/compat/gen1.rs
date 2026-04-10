@@ -19,16 +19,18 @@ pub fn decrypt_mnemonic<T: AsRef<[u8]>>(
         .build()
         .map_err(|e| Error::Custom(format!("argon2 params error: {e}")))?;
     let mut key = [0u8; 32];
-    argon2::Argon2::new(argon2::Algorithm::Argon2id, Default::default(), params)
-        .hash_password_into(pass, salt.as_ref(), &mut key[..])
-        .map_err(|e| Error::Custom(format!("argon2 error: {e}")))?;
+    argon2::Argon2::new(argon2::Algorithm::Argon2id, Default::default(), params).hash_password_into(
+        pass,
+        salt.as_ref(),
+        &mut key[..],
+    )?;
     let mut aead = chacha20poly1305::XChaCha20Poly1305::new(Key::from_slice(&key));
     let nonce = cipher_bytes.get(..24).ok_or_else(|| Error::Custom("invalid encrypted mnemonic: missing nonce".to_owned()))?;
     let ciphertext =
         cipher_bytes.get(24..).ok_or_else(|| Error::Custom("invalid encrypted mnemonic: missing ciphertext".to_owned()))?;
 
     let decrypted = aead.decrypt(nonce.into(), ciphertext)?;
-    String::from_utf8(decrypted).map_err(|_| Error::Custom("invalid decrypted mnemonic: non-UTF8".to_owned()))
+    Ok(String::from_utf8(decrypted)?)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
 use clap::{Arg, ArgAction, Command};
 use itertools::Itertools;
@@ -6,6 +6,7 @@ use kaspa_addresses::{Address, Prefix, Version};
 use kaspa_consensus_core::{
     config::params::{DEVNET_PARAMS, MAINNET_PARAMS, SIMNET_PARAMS, TESTNET_PARAMS},
     constants::{SOMPI_PER_KASPA, TX_VERSION},
+    network::NetworkType,
     sign::sign,
     subnets::SUBNETWORK_ID_NATIVE,
     tx::{MutableTransaction, Transaction, TransactionInput, TransactionOutpoint, TransactionOutput, UtxoEntry},
@@ -28,7 +29,6 @@ use tokio::time::{Instant, MissedTickBehavior, interval};
 const DEFAULT_SEND_AMOUNT: u64 = 10 * SOMPI_PER_KASPA;
 const FEE_RATE: u64 = 10;
 const MILLIS_PER_TICK: u64 = 10;
-const ADDRESS_PREFIX: Prefix = Prefix::Devnet;
 const ADDRESS_VERSION: Version = Version::PubKey;
 
 struct Stats {
@@ -50,15 +50,21 @@ pub struct Args {
     pub randomize_fee: bool,
     pub payload_size: usize,
     pub burn_stealth: bool,
+    pub network: NetworkType,
 }
 
 impl Args {
     fn parse() -> Self {
         let m = cli().get_matches();
+        let network = m.get_one::<String>("network").cloned().unwrap();
+        let network_type = NetworkType::from_str(&network).expect("Invalid network type");
+        let default_rpc_server = format!("localhost:{}", network_type.default_rpc_port());
+
         Args {
             private_key: m.get_one::<String>("private-key").cloned(),
             tps: m.get_one::<u64>("tps").cloned().unwrap(),
-            rpc_server: m.get_one::<String>("rpcserver").cloned().unwrap_or("localhost:16210".to_owned()),
+            network: network_type,
+            rpc_server: m.get_one::<String>("rpcserver").cloned().unwrap_or(default_rpc_server),
             threads: m.get_one::<u8>("threads").cloned().unwrap(),
             unleashed: m.get_one::<bool>("unleashed").cloned().unwrap_or(false),
             addr: m.get_one::<String>("addr").cloned(),
@@ -85,12 +91,20 @@ pub fn cli() -> Command {
                 .help("Transactions per second"),
         )
         .arg(
+            Arg::new("network")
+                .long("network")
+                .short('n')
+                .value_name("network")
+                .default_value("testnet")
+                .value_parser(["testnet", "devnet"])
+                .help("Network to use (testnet or devnet)"),
+        )
+        .arg(
             Arg::new("rpcserver")
                 .long("rpcserver")
                 .short('s')
                 .value_name("rpcserver")
-                .default_value("localhost:16210")
-                .help("RPC server"),
+                .help("RPC server (defaults: testnet=16210, devnet=16610"),
         )
         .arg(
             Arg::new("threads")
@@ -179,6 +193,7 @@ async fn main() {
         );
         std::process::exit(1);
     }
+    let address_prefix = Prefix::from(args.network);
 
     let stats = Arc::new(Mutex::new(Stats { num_txs: 0, since: unix_now(), num_utxos: 0, utxos_amount: 0, num_outs: 0 }));
     let subscription_context = SubscriptionContext::new();
@@ -205,7 +220,7 @@ async fn main() {
         Keypair::from_seckey_slice(secp256k1::SECP256K1, &private_key_bytes).unwrap()
     } else {
         let (sk, pk) = &secp256k1::generate_keypair(&mut thread_rng());
-        let kaspa_addr = Address::new(ADDRESS_PREFIX, ADDRESS_VERSION, &pk.x_only_public_key().0.serialize());
+        let kaspa_addr = Address::new(address_prefix, ADDRESS_VERSION, &pk.x_only_public_key().0.serialize());
         info!(
             "Generated private key {} and address {}. Send some funds to this address and rerun rothschild with `--private-key {}`",
             sk.display_secret(),
@@ -215,7 +230,7 @@ async fn main() {
         return;
     };
 
-    let kaspa_addr = Address::new(ADDRESS_PREFIX, ADDRESS_VERSION, &schnorr_key.x_only_public_key().0.serialize());
+    let kaspa_addr = Address::new(address_prefix, ADDRESS_VERSION, &schnorr_key.x_only_public_key().0.serialize());
 
     let burn_stealth_addr: Option<StealthAddress> = if args.burn_stealth {
         let stealth_sk = StealthSecretKey::generate().expect("Failed to generate stealth secret key");
@@ -239,8 +254,10 @@ async fn main() {
 
     let mut log_message = format!(
         "Using Rothschild with:\n\
+        \tnetwork: {}\n\
         \tprivate key: {}\n\
         \tfrom address: {}",
+        args.network,
         schnorr_key.display_secret(),
         String::from(&kaspa_addr)
     );

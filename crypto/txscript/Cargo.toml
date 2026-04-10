@@ -45,12 +45,12 @@ wasm-bindgen.workspace = true
 workflow-wasm.workspace = true
 
 [dev-dependencies]
-criterion.workspace = true
-smallvec.workspace = true
-hex.workspace = true
-serde_json.workspace = true
-reqwest.workspace = true
 bincode.workspace = true
+criterion.workspace = true
+hex.workspace = true
+reqwest.workspace = true
+smallvec.workspace = true
+serde_json.workspace = true
 
 [[bench]]
 name = "bench"
